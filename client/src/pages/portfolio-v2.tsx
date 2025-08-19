@@ -131,11 +131,11 @@ export default function PortfolioV2() {
         portfolioId={selectedPortfolioId}
       />
       
-      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+      <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
         {/* Portfolio Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-4">
+        <div className="mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 sm:mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
               <Select value={selectedPortfolioId} onValueChange={setSelectedPortfolioId}>
                 <SelectTrigger className="w-64">
                   <SelectValue placeholder="Select Portfolio" />
@@ -200,7 +200,7 @@ export default function PortfolioV2() {
               </Dialog>
             </div>
 
-            <Button onClick={() => openCommandPalette(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={() => openCommandPalette(true)} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Add Asset
             </Button>
@@ -208,9 +208,9 @@ export default function PortfolioV2() {
 
           {/* Portfolio KPIs */}
           {selectedPortfolio && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <Card>
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center space-x-2">
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                     <div>
@@ -221,7 +221,7 @@ export default function PortfolioV2() {
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center space-x-2">
                     {portfolioSummary.totalUnrealized >= 0 ? (
                       <TrendingUp className="h-4 w-4 text-green-500" />
@@ -238,7 +238,7 @@ export default function PortfolioV2() {
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center space-x-2">
                     <Activity className="h-4 w-4 text-muted-foreground" />
                     <div>
@@ -251,7 +251,7 @@ export default function PortfolioV2() {
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center space-x-2">
                     <div className="h-4 w-4 rounded-full bg-blue-500" />
                     <div>
@@ -296,28 +296,28 @@ export default function PortfolioV2() {
                   <table className="min-w-full divide-y divide-border">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Asset
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Quantity
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">
                           Avg Cost
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">
                           Last Price
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Value
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider hidden lg:table-cell">
                           Unrealized P&L
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider hidden lg:table-cell">
                           Realized P&L
                         </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
@@ -329,36 +329,38 @@ export default function PortfolioV2() {
                         ))
                       ) : positions.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
+                          <td colSpan={8} className="px-3 sm:px-6 py-8 text-center text-muted-foreground">
                             No positions found. Use the "Add Asset" button to get started.
                           </td>
                         </tr>
                       ) : (
                         positions.map((position) => (
                           <tr key={position.symbol} className="hover:bg-muted/50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-bold">
+                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-2 sm:space-x-3">
+                                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-muted flex items-center justify-center text-xs sm:text-sm font-bold">
                                   {position.symbol.charAt(0)}
                                 </div>
                                 <div>
                                   <div className="text-sm font-medium text-foreground">{position.symbol}</div>
-                                  <Badge className={ASSET_TYPE_COLORS[position.assetType as keyof typeof ASSET_TYPE_COLORS]}>
+                                  <Badge className={`text-xs ${ASSET_TYPE_COLORS[position.assetType as keyof typeof ASSET_TYPE_COLORS]}`}>
                                     {ASSET_TYPE_LABELS[position.assetType as keyof typeof ASSET_TYPE_LABELS]}
                                   </Badge>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                              <div className="sm:hidden text-xs text-muted-foreground">Qty</div>
                               {formatNumber(position.quantity, position.assetType === "crypto" ? 6 : 2)}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm text-foreground hidden sm:table-cell">
                               {formatCurrency(position.avgCost)}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm text-foreground hidden md:table-cell">
                               {position.lastPrice ? formatCurrency(position.lastPrice) : "N/A"}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-foreground">
+                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-foreground">
+                              <div className="sm:hidden text-xs text-muted-foreground">Value</div>
                               {position.value ? formatCurrency(position.value) : "N/A"}
                             </td>
                             <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${
@@ -383,14 +385,14 @@ export default function PortfolioV2() {
                               ) : "N/A"}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <div className="flex items-center justify-center space-x-2">
-                                <Button size="sm" variant="outline">
+                              <div className="flex items-center justify-center space-x-1 sm:space-x-2">
+                                <Button size="sm" variant="outline" className="text-xs px-2 py-1">
                                   Buy
                                 </Button>
-                                <Button size="sm" variant="outline">
+                                <Button size="sm" variant="outline" className="text-xs px-2 py-1">
                                   Sell
                                 </Button>
-                                <Button size="sm" variant="ghost">
+                                <Button size="sm" variant="ghost" className="p-1">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -416,25 +418,25 @@ export default function PortfolioV2() {
                   <table className="min-w-full divide-y divide-border">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">
                           Date
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Asset
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Side
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">
                           Quantity
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider hidden lg:table-cell">
                           Price
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Total
                         </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
@@ -446,7 +448,7 @@ export default function PortfolioV2() {
                         ))
                       ) : transactions.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
+                          <td colSpan={7} className="px-3 sm:px-6 py-8 text-center text-muted-foreground">
                             No transactions found.
                           </td>
                         </tr>
@@ -457,33 +459,39 @@ export default function PortfolioV2() {
                           
                           return (
                             <tr key={transaction.id} className="hover:bg-muted/50">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-foreground hidden sm:table-cell">
                                 {new Date(transaction.occurredAt).toLocaleDateString()}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center space-x-2">
+                              <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                                   <span className="text-sm font-medium">{transaction.symbol}</span>
-                                  <Badge className={ASSET_TYPE_COLORS[transaction.assetType as keyof typeof ASSET_TYPE_COLORS]}>
-                                    {ASSET_TYPE_LABELS[transaction.assetType as keyof typeof ASSET_TYPE_LABELS]}
-                                  </Badge>
+                                  <div className="flex items-center gap-2">
+                                    <Badge className={`text-xs ${ASSET_TYPE_COLORS[transaction.assetType as keyof typeof ASSET_TYPE_COLORS]}`}>
+                                      {ASSET_TYPE_LABELS[transaction.assetType as keyof typeof ASSET_TYPE_LABELS]}
+                                    </Badge>
+                                    <span className="sm:hidden text-xs text-muted-foreground">
+                                      {new Date(transaction.occurredAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <Badge variant={transaction.side === 'buy' ? 'default' : 'secondary'}>
+                              <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                                <Badge variant={transaction.side === 'buy' ? 'default' : 'secondary'} className="text-xs">
                                   {transaction.side.toUpperCase()}
                                 </Badge>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm text-foreground hidden md:table-cell">
                                 {formatNumber(parseFloat(transaction.quantity), transaction.assetType === "crypto" ? 6 : 2)}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm text-foreground hidden lg:table-cell">
                                 {transaction.price ? formatCurrency(parseFloat(transaction.price)) : "N/A"}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                                <div className="md:hidden text-xs text-muted-foreground mb-1">Total</div>
                                 {total > 0 ? formatCurrency(total) : "N/A"}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <Button size="sm" variant="ghost">
+                              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-center">
+                                <Button size="sm" variant="ghost" className="p-1">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </td>

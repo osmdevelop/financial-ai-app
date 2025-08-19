@@ -39,13 +39,13 @@ export default function Dashboard() {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title="Dashboard" subtitle="Overview of your portfolio performance" />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
             <KPICardSkeleton />
             <KPICardSkeleton />
             <KPICardSkeleton />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
             <ChartSkeleton />
             <ChartSkeleton />
           </div>
@@ -86,16 +86,16 @@ export default function Dashboard() {
         portfolioId={demoPortfolioId}
       />
       
-      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+      <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
           {/* Portfolio Value Card */}
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">Total Portfolio Value</p>
-                  <p className="text-3xl font-bold text-foreground">
+                  <p className="text-2xl sm:text-3xl font-bold text-foreground">
                     {formatCurrency(summary?.totalValue || 0)}
                   </p>
                 </div>
@@ -119,7 +119,7 @@ export default function Dashboard() {
 
           {/* Daily P&L Card */}
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">Daily P&L</p>
@@ -144,7 +144,7 @@ export default function Dashboard() {
 
           {/* Top Mover Card */}
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">Top Mover</p>
@@ -177,7 +177,7 @@ export default function Dashboard() {
 
           {/* Market Sentiment Card */}
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">Market Sentiment</p>
@@ -227,7 +227,7 @@ export default function Dashboard() {
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
           {/* Portfolio Performance Chart */}
           <Card>
             <CardHeader className="pb-6">

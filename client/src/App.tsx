@@ -57,14 +57,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="system" storageKey="finance-tracker-theme">
         <TooltipProvider>
-        <div className="min-h-screen bg-background">
-          <DisclaimerBanner />
-          <div className="flex h-[calc(100vh-3rem)] relative">
+        <div className="min-h-screen bg-background flex flex-col">
+          <div className="flex flex-1 relative">
             <Sidebar />
             <div className="flex-1 min-w-0">
               <Router />
             </div>
           </div>
+          <DisclaimerBanner />
         </div>
           <Toaster />
           
