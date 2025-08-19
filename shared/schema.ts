@@ -7,6 +7,7 @@ export const portfolios = pgTable("portfolios", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   baseCurrency: text("base_currency").notNull().default("USD"),
+  archived: text("archived").notNull().default("false"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -42,6 +43,14 @@ export const transactions = pgTable("transactions", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   portfolioSymbolOccurredIdx: index("portfolio_symbol_occurred_idx").on(table.portfolioId, table.symbol, table.occurredAt),
+}));
+
+export const hiddenAssets = pgTable("hidden_assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
+  symbol: text("symbol").notNull(),
+}, (table) => ({
+  portfolioSymbolIdx: index("portfolio_symbol_idx").on(table.portfolioId, table.symbol),
 }));
 
 export const watchlist = pgTable("watchlist", {
@@ -100,23 +109,46 @@ export const insertWatchlistSchema = createInsertSchema(watchlist).pick({
   assetType: true,
 });
 
+export const insertHiddenAssetSchema = createInsertSchema(hiddenAssets).pick({
+  portfolioId: true,
+  symbol: true,
+});
+
 // Types
 export type Portfolio = typeof portfolios.$inferSelect;
 export type Position = typeof positions.$inferSelect;
 export type Price = typeof prices.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type WatchlistItem = typeof watchlist.$inferSelect;
+export type HiddenAsset = typeof hiddenAssets.$inferSelect;
 export type InsertPortfolio = z.infer<typeof insertPortfolioSchema>;
 export type InsertPosition = z.infer<typeof insertPositionSchema>;
 export type InsertPrice = z.infer<typeof insertPriceSchema>;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type InsertWatchlistItem = z.infer<typeof insertWatchlistSchema>;
+export type InsertHiddenAsset = z.infer<typeof insertHiddenAssetSchema>;
 
 // Extended types for API responses
 export type PositionWithPrice = Position & {
   lastPrice?: number;
   pnlAmount?: number;
   pnlPercent?: number;
+};
+
+// Computed position from transactions using WAC method
+export type ComputedPosition = {
+  symbol: string;
+  assetType: string;
+  quantity: number;
+  avgCost: number;
+  lastPrice?: number;
+  value?: number;
+  unrealizedPnl?: number;
+  unrealizedPnlPercent?: number;
+  realizedPnl?: number;
+  totalTransactions: number;
+  firstPurchaseDate?: string;
+  lastTransactionDate?: string;
 };
 
 export type PortfolioSummary = {
@@ -247,17 +279,6 @@ export type EconomicImpact = {
 };
 
 // New types for transaction-based features
-export type ComputedPosition = {
-  symbol: string;
-  assetType: string;
-  quantity: number;
-  avgCost: number;
-  lastPrice?: number;
-  value: number;
-  pnlAmount: number;
-  pnlPercent: number;
-  realizedPnl: number;
-};
 
 export type AssetSearchResult = {
   id: string;

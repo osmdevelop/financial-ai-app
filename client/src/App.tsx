@@ -13,6 +13,7 @@ import { TransactionModal } from "@/components/ui/transaction-modal";
 import type { AssetSearchResult } from "@shared/schema";
 import Dashboard from "@/pages/dashboard";
 import Portfolio from "@/pages/portfolio";
+import PortfolioV2 from "@/pages/portfolio-v2";
 import Insights from "@/pages/insights";
 import Headlines from "@/pages/headlines";
 import Earnings from "@/pages/earnings";
@@ -24,7 +25,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/portfolio" component={Portfolio} />
+      <Route path="/portfolio" component={PortfolioV2} />
+      <Route path="/portfolio-v1" component={Portfolio} />
       <Route path="/insights" component={Insights} />
       <Route path="/headlines" component={Headlines} />
       <Route path="/earnings" component={Earnings} />

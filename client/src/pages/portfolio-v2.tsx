@@ -1,0 +1,547 @@
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { Header } from "@/components/layout/header";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { 
+  Plus, 
+  Search, 
+  Filter, 
+  Download, 
+  Upload, 
+  Eye, 
+  EyeOff, 
+  MoreHorizontal, 
+  ArrowUpDown,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  DollarSign
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
+import { formatCurrency, formatPercent, formatNumber, ASSET_TYPE_COLORS, ASSET_TYPE_LABELS } from "@/lib/constants";
+import { TableRowSkeleton } from "@/components/ui/loading-skeleton";
+import { useCommandPalette } from "@/components/ui/command-palette";
+import type { ComputedPosition, Portfolio, Transaction } from "@shared/schema";
+
+const createPortfolioSchema = z.object({
+  name: z.string().min(1, "Portfolio name is required"),
+  baseCurrency: z.string().default("USD"),
+});
+
+export default function PortfolioV2() {
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>("");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("holdings");
+  const [showHidden, setShowHidden] = useState(false);
+  const { toast } = useToast();
+  const { setOpen: openCommandPalette } = useCommandPalette();
+
+  // Fetch portfolios
+  const { data: portfolios, isLoading: portfoliosLoading } = useQuery({
+    queryKey: ["/api/portfolios"],
+    queryFn: () => api.getPortfolios(),
+  });
+
+  // Auto-select first portfolio if available
+  useEffect(() => {
+    if (!selectedPortfolioId && portfolios && portfolios.length > 0) {
+      setSelectedPortfolioId(portfolios[0].id);
+    }
+  }, [portfolios, selectedPortfolioId]);
+
+  // Fetch computed positions
+  const { data: positions = [], isLoading: positionsLoading } = useQuery({
+    queryKey: ["/api/positions", selectedPortfolioId, showHidden],
+    queryFn: () => api.getComputedPositions(selectedPortfolioId),
+    enabled: !!selectedPortfolioId,
+  });
+
+  // Fetch transactions
+  const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
+    queryKey: ["/api/transactions", selectedPortfolioId],
+    queryFn: () => api.getTransactions(selectedPortfolioId),
+    enabled: !!selectedPortfolioId,
+  });
+
+  const createPortfolioForm = useForm({
+    resolver: zodResolver(createPortfolioSchema),
+    defaultValues: {
+      name: "",
+      baseCurrency: "USD",
+    },
+  });
+
+  const createPortfolioMutation = useMutation({
+    mutationFn: api.createPortfolio,
+    onSuccess: (portfolio) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/portfolios"] });
+      setSelectedPortfolioId(portfolio.id);
+      setIsCreateModalOpen(false);
+      createPortfolioForm.reset();
+      toast({
+        title: "Portfolio created",
+        description: `${portfolio.name} has been created successfully.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to create portfolio",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Calculate portfolio summary
+  const portfolioSummary = positions.reduce(
+    (acc, position) => {
+      const value = position.value || 0;
+      const unrealizedPnl = position.unrealizedPnl || 0;
+      const realizedPnl = position.realizedPnl || 0;
+      
+      acc.totalValue += value;
+      acc.totalUnrealized += unrealizedPnl;
+      acc.totalRealized += realizedPnl;
+      acc.positionCount += 1;
+      
+      return acc;
+    },
+    { totalValue: 0, totalUnrealized: 0, totalRealized: 0, positionCount: 0 }
+  );
+
+  const selectedPortfolio = portfolios?.find(p => p.id === selectedPortfolioId);
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <Header 
+        title="Portfolio 2.0" 
+        subtitle="Full asset management with transaction-based tracking"
+        portfolioId={selectedPortfolioId}
+      />
+      
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        {/* Portfolio Header */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-4">
+              <Select value={selectedPortfolioId} onValueChange={setSelectedPortfolioId}>
+                <SelectTrigger className="w-64">
+                  <SelectValue placeholder="Select Portfolio" />
+                </SelectTrigger>
+                <SelectContent>
+                  {portfolios?.filter(p => !p.archived).map((portfolio) => (
+                    <SelectItem key={portfolio.id} value={portfolio.id}>
+                      {portfolio.name} ({portfolio.baseCurrency})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Portfolio
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Portfolio</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={createPortfolioForm.handleSubmit((data) => createPortfolioMutation.mutate(data))}>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="name">Portfolio Name</Label>
+                        <Input
+                          id="name"
+                          {...createPortfolioForm.register("name")}
+                          placeholder="My Investment Portfolio"
+                        />
+                        {createPortfolioForm.formState.errors.name && (
+                          <p className="text-sm text-red-600 mt-1">
+                            {createPortfolioForm.formState.errors.name.message}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <Label htmlFor="baseCurrency">Base Currency</Label>
+                        <Select
+                          value={createPortfolioForm.watch("baseCurrency")}
+                          onValueChange={(value) => createPortfolioForm.setValue("baseCurrency", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="USD">USD</SelectItem>
+                            <SelectItem value="EUR">EUR</SelectItem>
+                            <SelectItem value="GBP">GBP</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button type="submit" disabled={createPortfolioMutation.isPending} className="w-full">
+                        {createPortfolioMutation.isPending ? "Creating..." : "Create Portfolio"}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <Button onClick={() => openCommandPalette(true)} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Asset
+            </Button>
+          </div>
+
+          {/* Portfolio KPIs */}
+          {selectedPortfolio && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Value</p>
+                      <p className="text-lg font-semibold">{formatCurrency(portfolioSummary.totalValue)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    {portfolioSummary.totalUnrealized >= 0 ? (
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-red-500" />
+                    )}
+                    <div>
+                      <p className="text-sm text-muted-foreground">Unrealized P&L</p>
+                      <p className={`text-lg font-semibold ${portfolioSummary.totalUnrealized >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {portfolioSummary.totalUnrealized >= 0 ? '+' : ''}{formatCurrency(portfolioSummary.totalUnrealized)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Realized P&L</p>
+                      <p className={`text-lg font-semibold ${portfolioSummary.totalRealized >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {portfolioSummary.totalRealized >= 0 ? '+' : ''}{formatCurrency(portfolioSummary.totalRealized)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="h-4 w-4 rounded-full bg-blue-500" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Positions</p>
+                      <p className="text-lg font-semibold">{portfolioSummary.positionCount}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        {/* Main Content Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="holdings">Holdings</TabsTrigger>
+            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="import-export">Import/Export</TabsTrigger>
+          </TabsList>
+
+          {/* Holdings Tab */}
+          <TabsContent value="holdings" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle>Holdings</CardTitle>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowHidden(!showHidden)}
+                    >
+                      {showHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showHidden ? "Hide Archived" : "Show Archived"}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-border">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Asset
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Quantity
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Avg Cost
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Last Price
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Value
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Unrealized P&L
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Realized P&L
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-card divide-y divide-border">
+                      {positionsLoading ? (
+                        Array.from({ length: 3 }).map((_, index) => (
+                          <TableRowSkeleton key={index} />
+                        ))
+                      ) : positions.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
+                            No positions found. Use the "Add Asset" button to get started.
+                          </td>
+                        </tr>
+                      ) : (
+                        positions.map((position) => (
+                          <tr key={position.symbol} className="hover:bg-muted/50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-bold">
+                                  {position.symbol.charAt(0)}
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-foreground">{position.symbol}</div>
+                                  <Badge className={ASSET_TYPE_COLORS[position.assetType as keyof typeof ASSET_TYPE_COLORS]}>
+                                    {ASSET_TYPE_LABELS[position.assetType as keyof typeof ASSET_TYPE_LABELS]}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                              {formatNumber(position.quantity, position.assetType === "crypto" ? 6 : 2)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                              {formatCurrency(position.avgCost)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                              {position.lastPrice ? formatCurrency(position.lastPrice) : "N/A"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-foreground">
+                              {position.value ? formatCurrency(position.value) : "N/A"}
+                            </td>
+                            <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${
+                              (position.unrealizedPnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {position.unrealizedPnl !== undefined ? (
+                                <>
+                                  {position.unrealizedPnl >= 0 ? '+' : ''}{formatCurrency(position.unrealizedPnl)}
+                                  {position.unrealizedPnlPercent !== undefined && (
+                                    <div className="text-xs">
+                                      ({position.unrealizedPnlPercent >= 0 ? '+' : ''}{formatPercent(position.unrealizedPnlPercent)})
+                                    </div>
+                                  )}
+                                </>
+                              ) : "N/A"}
+                            </td>
+                            <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${
+                              (position.realizedPnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {position.realizedPnl !== undefined ? (
+                                `${position.realizedPnl >= 0 ? '+' : ''}${formatCurrency(position.realizedPnl)}`
+                              ) : "N/A"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <div className="flex items-center justify-center space-x-2">
+                                <Button size="sm" variant="outline">
+                                  Buy
+                                </Button>
+                                <Button size="sm" variant="outline">
+                                  Sell
+                                </Button>
+                                <Button size="sm" variant="ghost">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Transactions Tab */}
+          <TabsContent value="transactions" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle>Transaction History</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-border">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Date
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Asset
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Side
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Quantity
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Price
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Total
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-card divide-y divide-border">
+                      {transactionsLoading ? (
+                        Array.from({ length: 5 }).map((_, index) => (
+                          <TableRowSkeleton key={index} />
+                        ))
+                      ) : transactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
+                            No transactions found.
+                          </td>
+                        </tr>
+                      ) : (
+                        transactions.map((transaction) => {
+                          const total = transaction.price && transaction.quantity ? 
+                            parseFloat(transaction.price) * parseFloat(transaction.quantity) + (parseFloat(transaction.fee || "0")) : 0;
+                          
+                          return (
+                            <tr key={transaction.id} className="hover:bg-muted/50">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                                {new Date(transaction.occurredAt).toLocaleDateString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm font-medium">{transaction.symbol}</span>
+                                  <Badge className={ASSET_TYPE_COLORS[transaction.assetType as keyof typeof ASSET_TYPE_COLORS]}>
+                                    {ASSET_TYPE_LABELS[transaction.assetType as keyof typeof ASSET_TYPE_LABELS]}
+                                  </Badge>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <Badge variant={transaction.side === 'buy' ? 'default' : 'secondary'}>
+                                  {transaction.side.toUpperCase()}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                                {formatNumber(parseFloat(transaction.quantity), transaction.assetType === "crypto" ? 6 : 2)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                                {transaction.price ? formatCurrency(parseFloat(transaction.price)) : "N/A"}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
+                                {total > 0 ? formatCurrency(total) : "N/A"}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <Button size="sm" variant="ghost">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Import/Export Tab */}
+          <TabsContent value="import-export" className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Import Transactions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Upload a CSV file with transaction data to bulk import into your portfolio.
+                  </p>
+                  <Button className="w-full">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload CSV
+                  </Button>
+                  <Button variant="outline" className="w-full">
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Template
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Export Data</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Export your transaction history and current positions for backup or analysis.
+                  </p>
+                  <Button className="w-full">
+                    <Download className="mr-2 h-4 w-4" />
+                    Export Transactions
+                  </Button>
+                  <Button variant="outline" className="w-full">
+                    <Download className="mr-2 h-4 w-4" />
+                    Export Positions
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+}

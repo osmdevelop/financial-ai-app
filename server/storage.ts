@@ -105,6 +105,7 @@ export class MemStorage implements IStorage {
       id: "demo-portfolio-1",
       name: "Demo Portfolio",
       baseCurrency: "USD",
+      archived: "false",
       createdAt: new Date(),
     };
     this.portfolios.set(demoPortfolio.id, demoPortfolio);
@@ -176,6 +177,7 @@ export class MemStorage implements IStorage {
       id,
       name: insertPortfolio.name,
       baseCurrency: insertPortfolio.baseCurrency || "USD",
+      archived: "false",
       createdAt: new Date(),
     };
     this.portfolios.set(id, portfolio);
@@ -447,9 +449,12 @@ export class MemStorage implements IStorage {
           quantity: 0,
           avgCost: 0,
           value: 0,
-          pnlAmount: 0,
-          pnlPercent: 0,
+          unrealizedPnl: 0,
+          unrealizedPnlPercent: 0,
           realizedPnl: 0,
+          totalTransactions: 0,
+          firstPurchaseDate: tx.occurredAt,
+          lastTransactionDate: tx.occurredAt,
         };
         positionMap.set(key, position);
       }
@@ -457,6 +462,13 @@ export class MemStorage implements IStorage {
       const quantity = parseFloat(tx.quantity);
       const price = tx.price ? parseFloat(tx.price) : 0;
       const fee = tx.fee ? parseFloat(tx.fee) : 0;
+
+      // Update transaction counts and dates
+      position.totalTransactions += 1;
+      position.lastTransactionDate = tx.occurredAt;
+      if (tx.side === "buy" && !position.firstPurchaseDate) {
+        position.firstPurchaseDate = tx.occurredAt;
+      }
 
       if (tx.side === "buy" || tx.side === "transfer_in" || tx.side === "airdrop") {
         // Increase position using WAC
@@ -468,7 +480,7 @@ export class MemStorage implements IStorage {
         // Decrease position and calculate realized P&L
         const saleProceeds = quantity * price - fee;
         const saleCostBasis = quantity * position.avgCost;
-        position.realizedPnl += saleProceeds - saleCostBasis;
+        position.realizedPnl = (position.realizedPnl || 0) + (saleProceeds - saleCostBasis);
         position.quantity = Math.max(0, position.quantity - quantity);
       } else if (tx.side === "fee") {
         // Adjust cost basis for fees
@@ -489,14 +501,14 @@ export class MemStorage implements IStorage {
         position.lastPrice = currentPrice;
         position.value = position.quantity * currentPrice;
         const costBasis = position.quantity * position.avgCost;
-        position.pnlAmount = position.value - costBasis;
-        position.pnlPercent = costBasis > 0 ? (position.pnlAmount / costBasis) * 100 : 0;
+        position.unrealizedPnl = position.value - costBasis;
+        position.unrealizedPnlPercent = costBasis > 0 ? (position.unrealizedPnl / costBasis) * 100 : 0;
         
         result.push(position);
       }
     }
 
-    return result.sort((a, b) => b.value - a.value);
+    return result.sort((a, b) => (b.value || 0) - (a.value || 0));
   }
 
   async getComputedPosition(portfolioId: string, symbol: string): Promise<ComputedPosition | null> {

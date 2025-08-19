@@ -1,0 +1,171 @@
+You are my senior engineer. Implement **Portfolio 2.0** (full asset management) in the existing app. Outputs are informational only.
+
+========================================
+GOALS
+========================================
+1) Add/manage assets like a modern tracker (CMC/Delta/CMC style).
+2) Compute holdings from transactions; support add/sell/transfer/dividend/split.
+3) Inline edits, remove/archive, bulk import/export.
+4) Multi‑portfolio selector + CRUD.
+
+========================================
+DB (Prisma / SQLite)
+========================================
+Ensure we use transactions as the source of truth:
+
+model Portfolio {
+  id           String        @id @default(cuid())
+  name         String
+  baseCurrency String        @default("USD")
+  createdAt    DateTime      @default(now())
+  archived     Boolean       @default(false)
+  transactions Transaction[]
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  portfolioId  String
+  symbol       String
+  assetType    String   // equity | etf | crypto | fx | commodity
+  side         String   // buy | sell | transfer_in | transfer_out | dividend | split | fee | airdrop
+  quantity     Decimal   // positive
+  price        Decimal?  // USD price per unit; null for dividend/split/airdrop when not applicable
+  fee          Decimal?  // optional
+  occurredAt   DateTime
+  note         String?
+  Portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  @@index([portfolioId, symbol, occurredAt])
+
+// OPTIONAL: soft-archive assets the user no longer holds but wants to hide
+model HiddenAsset {
+  id          String  @id @default(cuid())
+  portfolioId String
+  symbol      String
+  @@unique([portfolioId, symbol])
+}
+
+Run migration and create a script to migrate any old Position rows into one BUY transaction per asset.
+
+========================================
+BACKEND (Next.js API)
+========================================
+1) Search
+- GET /api/search?q=...&types=equity,etf,crypto&limit=10
+  * equities/etfs: /py/search/equity?q=...
+  * crypto: CoinGecko /search (client cache)
+  * Return { id, symbol, name, assetType, exchange?, coingeckoId? }
+
+2) Asset summary
+- GET /api/asset/:symbol?assetType=...
+  * Returns { symbol, name, assetType, price, change24h, miniChart:[{ts,close}], marketCap?, as_of }
+
+3) Transactions
+- POST /api/transactions
+- PATCH /api/transactions/:id
+- DELETE /api/transactions/:id
+- GET /api/transactions?portfolioId=...&symbol=... (list)
+
+4) Positions (computed, WAC method)
+- GET /api/positions?portfolioId=...
+  * For each symbol compute: { symbol, assetType, quantity, avgCost, lastPrice, value, unrealizedPnl$, unrealizedPnl%, realizedPnl$ }
+  * Hide assets in HiddenAsset table unless `includeHidden=true`.
+
+5) Portfolio CRUD
+- POST /api/portfolios { name, baseCurrency }
+- PATCH /api/portfolios/:id { name?, baseCurrency?, archived? }
+- DELETE /api/portfolios/:id (soft‑archive if transactions exist)
+
+6) Import/Export
+- POST /api/transactions/import (CSV/XLSX; columns: symbol,assetType,side,quantity,price,fee,occurredAt,note)
+- GET  /api/transactions/export?portfolioId=... (CSV)
+
+7) Utility
+- POST /api/holdings/recalc?portfolioId=...  (forces recompute; returns summary totals)
+
+========================================
+PYTHON SERVICE (apps/py)
+========================================
+- GET /py/search/equity?q=appl → returns top 10: { symbol, name, exchange }
+- GET /py/price/summary?symbol=SPY → { price, change24h, miniChart }
+Use yfinance; return safe mocks if rate‑limited.
+
+========================================
+FRONTEND (Next.js) – Portfolio page redesign
+========================================
+Layout: Tabs: **Holdings** | **Transactions** | **Import/Export**.
+
+A) Header
+- Portfolio selector (dropdown) with “New Portfolio” button
+- “Add Asset” primary button (opens Command Palette)
+- Quick KPIs: Value, P&L Today, Cash (static 0 for now), Positions count
+
+B) Command Palette (Cmd/Ctrl+K or Add Asset)
+- Autocomplete via /api/search (equity/etf/crypto)
+- Selecting a result opens **Asset Sheet** modal
+
+C) Asset Sheet modal (CMC‑style)
+- Shows name, symbol, price, 7d mini chart, market cap (if available), as_of
+- Buttons:
+  - **Add Transaction** (opens Transaction Modal prefilled with symbol & last price)
+  - **Add to Watchlist**
+
+D) Transaction Modal
+- Fields: side, quantity, price (prefilled), fee, datetime, note
+- Inline validation; subtotal preview (qty*price + fee)
+- On save: POST /api/transactions + optimistic UI update
+
+E) Holdings tab (table)
+Columns: Asset (logo/letter + symbol/name), Type, Qty, Avg Cost, Last Price, Value, Unrealized P&L ($/%), Realized P&L ($), Actions
+Row actions:
+- **Quick Buy/Sell** (opens Transaction Modal)
+- **View Transactions** (opens right‑side drawer with paginated history + edit/delete)
+- **Hide/Unhide** (archives to HiddenAsset)
+- **Remove** → if qty > 0: prompt to Sell or Transfer Out; if qty == 0: just hide/remove
+
+Toolbar:
+- Search filter, asset‑type filter, sort by Value/Change
+- Bulk actions (Hide, Export selected)
+
+F) Transactions tab
+- Global list across assets with filters (date range, type, symbol)
+- Edit/delete in place; totals bar (Buys, Sells, Fees, Dividends)
+
+G) Import/Export tab
+- Download sample CSV
+- Upload parser with column mapper (auto‑detect)
+- Show preview + validation issues before commit
+
+H) Watchlist (keep existing page)
+- Each row: “Add Transaction” shortcut
+
+I) UX polish
+- Toasts for success/error
+- “Last updated” badge on table header (uses latest price as_of)
+- Dark/light support consistent with Settings
+
+========================================
+COMPUTATION RULES
+========================================
+- Use **Weighted Average Cost (WAC)** for avgCost.
+- Realized P&L for a SELL = (sellPrice - current WAC) * quantity - fee.
+- Splits: side="split" with quantity as split ratio (e.g., 2.0 for 2‑for‑1) → adjust historical quantities and avgCost.
+- Dividends: side="dividend" with price=null; store in transactions and add to realizedPnl$ (separate column later).
+
+========================================
+ACCEPTANCE CRITERIA
+========================================
+- I can create multiple portfolios and switch between them.
+- I can add an asset via Command Palette search → Asset Sheet → Add Transaction.
+- Holdings table updates instantly with computed quantity/avgCost/value/P&L.
+- I can edit or delete any transaction; holdings recompute correctly.
+- I can hide/unhide assets; removing an asset with nonzero qty prompts Sell/Transfer‑Out.
+- I can bulk import CSV and export all transactions.
+- Works with live yfinance/CoinGecko or with built‑in mocks when rate‑limited.
+- Existing Position data (if any) is migrated to one BUY transaction per asset.
+
+========================================
+NON‑GOALS (defer)
+========================================
+- Tax lot methods beyond WAC (FIFO/LIFO toggle later).
+- Multi‑currency lots & FX conversion (later).
+- Broker syncing and alerts (later).
