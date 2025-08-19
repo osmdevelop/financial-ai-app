@@ -117,3 +117,77 @@ export type IntradayData = {
   candles: IntradayCandle[];
   source: string;
 };
+
+// Headlines
+export type Headline = {
+  id: string;
+  published: string;
+  title: string;
+  source: string;
+  url: string;
+  symbols: string[];
+  summary?: string;
+  analyzed: boolean;
+  impactJson?: string;
+  createdAt: string;
+};
+
+export type HeadlineImpact = {
+  whyThisMatters: string[];
+  impacts: {
+    symbol: string;
+    direction: 'up' | 'down' | 'neutral';
+    confidence: number;
+  }[];
+  as_of: string;
+};
+
+// Earnings
+export type UpcomingEarning = {
+  symbol: string;
+  date: string;
+  eps_est: number;
+  sector: string;
+};
+
+export type EarningsHistory = {
+  quarter: string;
+  actual: number;
+  estimate: number;
+  surprise: number;
+  surprisePercent: number;
+};
+
+export type EarningsPrediction = {
+  surpriseUpProb: number;
+  surpriseDownProb: number;
+  commentary: string;
+  as_of: string;
+};
+
+// Economic Calendar
+export type EconomicEvent = {
+  id: string;
+  timestamp: string;
+  country: string;
+  event: string;
+  importance: 'low' | 'medium' | 'high';
+  previous?: string;
+  forecast?: string;
+  actual?: string;
+};
+
+export type EconomicImpact = {
+  affectedAssets: string[];
+  directionByAsset: {
+    rates?: 'up' | 'down' | 'mixed';
+    equities?: 'up' | 'down' | 'mixed';
+    usd?: 'up' | 'down' | 'mixed';
+    gold?: 'up' | 'down' | 'mixed';
+    oil?: 'up' | 'down' | 'mixed';
+    crypto?: 'up' | 'down' | 'mixed';
+  };
+  reasoning: string;
+  explanation?: string;
+  as_of: string;
+};

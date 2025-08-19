@@ -6,7 +6,10 @@ import {
   InsertPosition, 
   InsertPrice,
   PositionWithPrice,
-  PortfolioSummary 
+  PortfolioSummary,
+  Headline,
+  UpcomingEarning,
+  EconomicEvent 
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -30,12 +33,29 @@ export interface IStorage {
   // Portfolio analytics
   getPortfolioPositionsWithPrices(portfolioId: string): Promise<PositionWithPrice[]>;
   getPortfolioSummary(portfolioId: string): Promise<PortfolioSummary>;
+  
+  // Headlines
+  getHeadlines(limit?: number): Promise<Headline[]>;
+  createHeadline(headline: Omit<Headline, 'id' | 'createdAt'>): Promise<Headline>;
+  updateHeadline(id: string, updates: Partial<Headline>): Promise<Headline | null>;
+  
+  // Earnings
+  getUpcomingEarnings(limit?: number): Promise<UpcomingEarning[]>;
+  
+  // Economic Events
+  getEconomicEvents(days?: number): Promise<EconomicEvent[]>;
+  
+  // Initialize sample data
+  initializeSampleData(): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
   private portfolios: Map<string, Portfolio>;
   private positions: Map<string, Position>;
   private prices: Map<string, Price>;
+  private headlines: Headline[] = [];
+  private upcomingEarnings: UpcomingEarning[] = [];
+  private economicEvents: EconomicEvent[] = [];
 
   constructor() {
     this.portfolios = new Map();
@@ -288,6 +308,55 @@ export class MemStorage implements IStorage {
       dailyPnLPercent,
       topMover,
     };
+  }
+
+  // Headlines
+  async getHeadlines(limit = 100): Promise<Headline[]> {
+    return this.headlines
+      .sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime())
+      .slice(0, limit);
+  }
+
+  async createHeadline(headline: Omit<Headline, 'id' | 'createdAt'>): Promise<Headline> {
+    const newHeadline: Headline = {
+      ...headline,
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
+    this.headlines.push(newHeadline);
+    // Keep only last 100 headlines
+    if (this.headlines.length > 100) {
+      this.headlines = this.headlines.slice(-100);
+    }
+    return newHeadline;
+  }
+
+  async updateHeadline(id: string, updates: Partial<Headline>): Promise<Headline | null> {
+    const index = this.headlines.findIndex(h => h.id === id);
+    if (index === -1) return null;
+    this.headlines[index] = { ...this.headlines[index], ...updates };
+    return this.headlines[index];
+  }
+
+  // Earnings
+  async getUpcomingEarnings(limit = 50): Promise<UpcomingEarning[]> {
+    return this.upcomingEarnings
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, limit);
+  }
+
+  // Economic Events
+  async getEconomicEvents(days = 7): Promise<EconomicEvent[]> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() + days);
+    return this.economicEvents
+      .filter(e => new Date(e.timestamp) <= cutoff && new Date(e.timestamp) >= new Date())
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  }
+
+  // Initialize sample data
+  async initializeSampleData(): Promise<void> {
+    // This will be implemented to load sample data from files
   }
 }
 

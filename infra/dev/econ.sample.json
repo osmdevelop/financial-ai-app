@@ -1,0 +1,65 @@
+[
+  {
+    "id": "e1",
+    "timestamp": "2025-01-20T13:30:00Z",
+    "country": "US",
+    "event": "Consumer Price Index (CPI)",
+    "importance": "high",
+    "previous": "3.3%",
+    "forecast": "3.2%"
+  },
+  {
+    "id": "e2",
+    "timestamp": "2025-01-21T08:30:00Z",
+    "country": "US",
+    "event": "Initial Jobless Claims",
+    "importance": "medium",
+    "previous": "225K",
+    "forecast": "220K"
+  },
+  {
+    "id": "e3",
+    "timestamp": "2025-01-22T14:00:00Z",
+    "country": "US",
+    "event": "FOMC Meeting Minutes",
+    "importance": "high",
+    "previous": "Hawkish",
+    "forecast": "Dovish"
+  },
+  {
+    "id": "e4",
+    "timestamp": "2025-01-23T08:30:00Z",
+    "country": "US",
+    "event": "Existing Home Sales",
+    "importance": "medium",
+    "previous": "3.96M",
+    "forecast": "4.10M"
+  },
+  {
+    "id": "e5",
+    "timestamp": "2025-01-24T13:30:00Z",
+    "country": "US",
+    "event": "GDP Preliminary",
+    "importance": "high",
+    "previous": "2.8%",
+    "forecast": "3.1%"
+  },
+  {
+    "id": "e6",
+    "timestamp": "2025-01-25T08:30:00Z",
+    "country": "US",
+    "event": "Durable Goods Orders",
+    "importance": "medium",
+    "previous": "0.2%",
+    "forecast": "0.5%"
+  },
+  {
+    "id": "e7",
+    "timestamp": "2025-01-26T08:30:00Z",
+    "country": "US",
+    "event": "Core PCE Price Index",
+    "importance": "high",
+    "previous": "3.5%",
+    "forecast": "3.4%"
+  }
+]

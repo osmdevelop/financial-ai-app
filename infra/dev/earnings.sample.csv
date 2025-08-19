@@ -1,0 +1,21 @@
+symbol,date,eps_est,sector
+AAPL,2025-01-25,2.15,Technology
+MSFT,2025-01-26,2.78,Technology
+TSLA,2025-01-28,0.85,Consumer Discretionary
+AMZN,2025-01-30,1.20,Consumer Discretionary
+GOOGL,2025-02-01,1.65,Communication Services
+META,2025-02-02,4.25,Communication Services
+NVDA,2025-02-05,5.10,Technology
+NFLX,2025-02-08,2.95,Communication Services
+JPM,2025-02-10,4.05,Financials
+V,2025-02-12,2.40,Financials
+JNJ,2025-02-15,2.85,Healthcare
+PG,2025-02-17,1.75,Consumer Staples
+KO,2025-02-20,0.68,Consumer Staples
+WMT,2025-02-22,1.52,Consumer Staples
+HD,2025-02-25,3.85,Consumer Discretionary
+BA,2025-02-28,1.25,Industrials
+CAT,2025-03-02,3.95,Industrials
+XOM,2025-03-05,2.10,Energy
+CVX,2025-03-08,3.25,Energy
+GS,2025-03-10,8.50,Financials

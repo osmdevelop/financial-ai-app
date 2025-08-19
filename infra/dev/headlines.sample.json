@@ -1,0 +1,102 @@
+[
+  {
+    "id": "h1",
+    "published": "2025-01-19T12:00:00Z",
+    "title": "Apple Reports Strong Q4 Earnings, Beating Wall Street Expectations",
+    "source": "MarketWatch",
+    "url": "https://example.com/apple-q4-earnings",
+    "symbols": ["AAPL"],
+    "summary": "Apple Inc. reported quarterly revenue of $95.3 billion, up 6% year-over-year, driven by strong iPhone and services growth.",
+    "analyzed": false
+  },
+  {
+    "id": "h2",
+    "published": "2025-01-19T11:30:00Z",
+    "title": "Fed Officials Signal Potential Rate Cuts as Inflation Moderates",
+    "source": "Reuters",
+    "url": "https://example.com/fed-rate-cuts",
+    "symbols": ["SPY", "QQQ"],
+    "summary": "Federal Reserve officials hinted at possible interest rate reductions following recent inflation data showing continued moderation.",
+    "analyzed": false
+  },
+  {
+    "id": "h3",
+    "published": "2025-01-19T11:00:00Z",
+    "title": "Bitcoin Surges Past $70,000 as Institutional Adoption Accelerates",
+    "source": "CoinDesk",
+    "url": "https://example.com/bitcoin-surge",
+    "symbols": ["BTC-USD"],
+    "summary": "Bitcoin reached new highs above $70,000 as major corporations continue to add cryptocurrency to their balance sheets.",
+    "analyzed": false
+  },
+  {
+    "id": "h4",
+    "published": "2025-01-19T10:30:00Z",
+    "title": "Tesla Announces New Gigafactory in India, Stock Rises 5%",
+    "source": "CNBC",
+    "url": "https://example.com/tesla-india-factory",
+    "symbols": ["TSLA"],
+    "summary": "Tesla revealed plans for a new manufacturing facility in India to serve the growing Asian market, boosting investor confidence.",
+    "analyzed": false
+  },
+  {
+    "id": "h5",
+    "published": "2025-01-19T10:00:00Z",
+    "title": "Microsoft Azure Cloud Revenue Growth Slows, Shares Dip",
+    "source": "Bloomberg",
+    "url": "https://example.com/microsoft-azure-slow",
+    "symbols": ["MSFT"],
+    "summary": "Microsoft reported slower growth in Azure cloud services, raising concerns about increased competition in the cloud computing space.",
+    "analyzed": false
+  },
+  {
+    "id": "h6",
+    "published": "2025-01-19T09:30:00Z",
+    "title": "S&P 500 Opens Higher Following Strong Economic Data",
+    "source": "Financial Times",
+    "url": "https://example.com/sp500-opens-higher",
+    "symbols": ["SPY"],
+    "summary": "The S&P 500 index opened 0.8% higher after positive employment and consumer confidence data boosted market sentiment.",
+    "analyzed": false
+  },
+  {
+    "id": "h7",
+    "published": "2025-01-19T09:00:00Z",
+    "title": "Amazon Prime Membership Hits 250 Million Subscribers Worldwide",
+    "source": "TechCrunch",
+    "url": "https://example.com/amazon-prime-250m",
+    "symbols": ["AMZN"],
+    "summary": "Amazon announced that Prime membership has reached 250 million subscribers globally, driving strong recurring revenue growth.",
+    "analyzed": false
+  },
+  {
+    "id": "h8",
+    "published": "2025-01-19T08:30:00Z",
+    "title": "Oil Prices Jump 3% on Middle East Supply Concerns",
+    "source": "Wall Street Journal",
+    "url": "https://example.com/oil-prices-jump",
+    "symbols": ["XOM", "CVX"],
+    "summary": "Crude oil prices surged following reports of potential supply disruptions in the Middle East, benefiting energy stocks.",
+    "analyzed": false
+  },
+  {
+    "id": "h9",
+    "published": "2025-01-19T08:00:00Z",
+    "title": "Nvidia Forecasts Record Revenue from AI Chip Demand",
+    "source": "The Verge",
+    "url": "https://example.com/nvidia-ai-revenue",
+    "symbols": ["NVDA"],
+    "summary": "Nvidia projected record quarterly revenue driven by unprecedented demand for AI processing chips from tech giants.",
+    "analyzed": false
+  },
+  {
+    "id": "h10",
+    "published": "2025-01-19T07:30:00Z",
+    "title": "European Markets Rally on ECB Dovish Stance",
+    "source": "MarketWatch",
+    "url": "https://example.com/europe-markets-rally",
+    "symbols": ["EFA", "VGK"],
+    "summary": "European equity markets surged after the ECB signaled a more accommodative monetary policy stance in coming months.",
+    "analyzed": false
+  }
+]

@@ -5,6 +5,8 @@ import { insertPortfolioSchema, insertPositionSchema, insertPriceSchema } from "
 import { spawn } from "child_process";
 import { z } from "zod";
 import OpenAI from "openai";
+import fs from 'fs/promises';
+import path from 'path';
 
 // Schema for CSV upload
 const csvUploadSchema = z.object({
@@ -31,6 +33,26 @@ const intradaySchema = z.object({
   symbol: z.string(),
   interval: z.string().optional().default("1m"),
   lookback: z.string().optional().default("1d")
+});
+
+// Schema for headlines
+const headlineAnalyzeSchema = z.object({
+  title: z.string(),
+  summary: z.string().optional(),
+  symbols: z.array(z.string()).default([])
+});
+
+// Schema for earnings prediction
+const earningsPredictSchema = z.object({
+  symbol: z.string()
+});
+
+// Schema for economic impact analysis
+const econAnalyzeSchema = z.object({
+  event: z.string(),
+  previous: z.string().optional(),
+  forecast: z.string().optional(),
+  importance: z.enum(["low", "medium", "high"]).default("medium")
 });
 
 // Initialize OpenAI client
@@ -223,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/sentiment", async (req, res) => {
     try {
       const symbols = ["^VIX", "^TNX", "SPY"];
-      const sentimentData = [];
+      const sentimentData: Array<{ symbol: string; data: any }> = [];
       
       // Fetch intraday data for sentiment indicators
       for (const symbol of symbols) {
@@ -268,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process VIX (volatility index)
       const vixData = sentimentData.find(d => d.symbol === "^VIX");
-      if (vixData?.data?.candles?.length > 0) {
+      if (vixData && vixData.data && vixData.data.candles && vixData.data.candles.length > 0) {
         const latestVix = vixData.data.candles[vixData.data.candles.length - 1].close;
         if (latestVix < 20) {
           sentimentScore += 15;
@@ -295,7 +317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process TNX (10-year treasury)
       const tnxData = sentimentData.find(d => d.symbol === "^TNX");
-      if (tnxData?.data?.candles?.length > 1) {
+      if (tnxData && tnxData.data && tnxData.data.candles && tnxData.data.candles.length > 1) {
         const candles = tnxData.data.candles;
         const latestYield = candles[candles.length - 1].close;
         const previousYield = candles[candles.length - 2].close;
@@ -320,7 +342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process SPY (S&P 500)
       const spyData = sentimentData.find(d => d.symbol === "SPY");
-      if (spyData?.data?.candles?.length > 0) {
+      if (spyData && spyData.data && spyData.data.candles && spyData.data.candles.length > 0) {
         const candles = spyData.data.candles;
         const latestPrice = candles[candles.length - 1].close;
         const openPrice = candles[0].open;
@@ -469,6 +491,358 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch price history" });
     }
   });
+
+  // Headlines routes
+  app.get("/api/headlines", async (req, res) => {
+    try {
+      const symbols = req.query.symbols as string;
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      // Try to get live headlines from NewsAPI
+      if (process.env.NEWSAPI_KEY) {
+        try {
+          const response = await fetch(`https://newsapi.org/v2/everything?q=stock market OR economy OR earnings&sortBy=publishedAt&pageSize=${limit}&apiKey=${process.env.NEWSAPI_KEY}`);
+          
+          if (response.ok) {
+            const newsData = await response.json();
+            const headlines = [];
+            
+            // Known symbols to detect in headlines
+            const knownSymbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'SPY', 'QQQ', 'BTC-USD', 'ETH-USD'];
+            
+            for (const article of newsData.articles || []) {
+              // Simple symbol detection in title
+              const detectedSymbols = knownSymbols.filter(symbol => 
+                article.title?.toLowerCase().includes(symbol.toLowerCase()) ||
+                article.title?.toLowerCase().includes(symbol.replace('-USD', '').toLowerCase())
+              );
+              
+              const headline = await storage.createHeadline({
+                published: article.publishedAt || new Date().toISOString(),
+                title: article.title || '',
+                source: article.source?.name || 'Unknown',
+                url: article.url || '',
+                symbols: detectedSymbols,
+                summary: article.description,
+                analyzed: false
+              });
+              headlines.push(headline);
+            }
+            
+            return res.json(headlines);
+          }
+        } catch (error) {
+          console.error('NewsAPI error:', error);
+        }
+      }
+      
+      // Fallback to sample data
+      try {
+        const sampleData = await fs.readFile(path.join(process.cwd(), 'infra/dev/headlines.sample.json'), 'utf-8');
+        const headlines = JSON.parse(sampleData);
+        
+        // Store in memory for future requests
+        for (const headline of headlines) {
+          await storage.createHeadline({
+            published: headline.published,
+            title: headline.title,
+            source: headline.source,
+            url: headline.url,
+            symbols: headline.symbols || [],
+            summary: headline.summary,
+            analyzed: headline.analyzed || false
+          });
+        }
+        
+        res.json(headlines.slice(0, limit));
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to load sample headlines' });
+      }
+      
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch headlines" });
+    }
+  });
+
+  app.post("/api/headlines/analyze", async (req, res) => {
+    try {
+      const { title, summary, symbols } = headlineAnalyzeSchema.parse(req.body);
+      const as_of = new Date().toISOString();
+      
+      // Check if OpenAI API key is available
+      if (!process.env.OPENAI_API_KEY) {
+        // Return mock analysis using keyword rules
+        const whyThisMatters = [];
+        const impacts: Array<{ symbol: string; direction: 'up' | 'down' | 'neutral'; confidence: number }> = [];
+        
+        // Simple keyword-based analysis
+        const text = `${title} ${summary || ''}`.toLowerCase();
+        
+        if (text.includes('beats') || text.includes('strong') || text.includes('growth')) {
+          whyThisMatters.push('Strong earnings typically drive stock price appreciation');
+          symbols.forEach(symbol => {
+            impacts.push({ symbol, direction: 'up' as const, confidence: 0.7 });
+          });
+        } else if (text.includes('miss') || text.includes('weak') || text.includes('decline')) {
+          whyThisMatters.push('Disappointing results may pressure stock valuation');
+          symbols.forEach(symbol => {
+            impacts.push({ symbol, direction: 'down' as const, confidence: 0.6 });
+          });
+        } else {
+          whyThisMatters.push('Market impact depends on broader context and investor sentiment');
+          symbols.forEach(symbol => {
+            impacts.push({ symbol, direction: 'neutral' as const, confidence: 0.5 });
+          });
+        }
+        
+        return res.json({ whyThisMatters, impacts, as_of });
+      }
+      
+      // Use OpenAI for analysis
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a financial analyst. Today is ${new Date().toLocaleDateString()}. Analyze the provided headline and return JSON with: { 'whyThisMatters': string[], 'impacts': [{ 'symbol': string, 'direction': 'up'|'down'|'neutral', 'confidence': number }], 'as_of': string }. Only use the provided headline content.`
+          },
+          {
+            role: "user",
+            content: `Title: ${title}\nSummary: ${summary || 'Not provided'}\nSymbols: ${symbols.join(', ')}\n\nAnalyze potential market impact.`
+          }
+        ],
+        response_format: { type: "json_object" },
+      });
+      
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+      result.as_of = as_of;
+      res.json(result);
+      
+    } catch (error) {
+      res.status(500).json({ error: "Failed to analyze headline" });
+    }
+  });
+
+  // Earnings routes
+  app.get("/api/earnings/upcoming", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      // Load sample earnings data
+      const csvData = await fs.readFile(path.join(process.cwd(), 'infra/dev/earnings.sample.csv'), 'utf-8');
+      const lines = csvData.trim().split('\n');
+      const headers = lines[0].split(',');
+      
+      const earnings = lines.slice(1).map(line => {
+        const values = line.split(',');
+        return {
+          symbol: values[0],
+          date: values[1],
+          eps_est: parseFloat(values[2]),
+          sector: values[3]
+        };
+      });
+      
+      res.json(earnings.slice(0, limit));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch upcoming earnings" });
+    }
+  });
+
+  app.get("/api/earnings/history", async (req, res) => {
+    try {
+      const symbol = req.query.symbol as string;
+      
+      if (!symbol) {
+        return res.status(400).json({ error: "Symbol parameter is required" });
+      }
+      
+      // Mock earnings history (in real implementation, would use yfinance)
+      const mockHistory = [
+        {
+          quarter: "Q3 2024",
+          actual: 2.18,
+          estimate: 2.10,
+          surprise: 0.08,
+          surprisePercent: 3.8
+        },
+        {
+          quarter: "Q2 2024",
+          actual: 1.95,
+          estimate: 2.05,
+          surprise: -0.10,
+          surprisePercent: -4.9
+        },
+        {
+          quarter: "Q1 2024",
+          actual: 2.33,
+          estimate: 2.20,
+          surprise: 0.13,
+          surprisePercent: 5.9
+        },
+        {
+          quarter: "Q4 2023",
+          actual: 2.87,
+          estimate: 2.75,
+          surprise: 0.12,
+          surprisePercent: 4.4
+        }
+      ];
+      
+      res.json(mockHistory);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch earnings history" });
+    }
+  });
+
+  app.post("/api/earnings/predict", async (req, res) => {
+    try {
+      const { symbol } = earningsPredictSchema.parse(req.body);
+      const as_of = new Date().toISOString();
+      
+      // Simple heuristic prediction based on mock history
+      const mockHistory = [
+        { surprise: 0.08, surprisePercent: 3.8 },
+        { surprise: -0.10, surprisePercent: -4.9 },
+        { surprise: 0.13, surprisePercent: 5.9 },
+        { surprise: 0.12, surprisePercent: 4.4 }
+      ];
+      
+      const positiveCount = mockHistory.filter(h => h.surprise > 0).length;
+      const totalCount = mockHistory.length;
+      
+      const surpriseUpProb = positiveCount / totalCount;
+      const surpriseDownProb = 1 - surpriseUpProb;
+      
+      const commentary = surpriseUpProb > 0.6 
+        ? `${symbol} has beaten estimates in ${positiveCount} of the last ${totalCount} quarters, suggesting potential for positive surprise.`
+        : surpriseUpProb < 0.4
+        ? `${symbol} has missed estimates in ${totalCount - positiveCount} of the last ${totalCount} quarters, indicating elevated risk.`
+        : `${symbol} shows mixed earnings history with balanced surprise probability.`;
+      
+      res.json({
+        surpriseUpProb,
+        surpriseDownProb,
+        commentary,
+        as_of
+      });
+      
+    } catch (error) {
+      res.status(500).json({ error: "Failed to predict earnings" });
+    }
+  });
+
+  // Economic Calendar routes
+  app.get("/api/econ/upcoming", async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 7;
+      
+      // Try Trading Economics API if key available
+      if (process.env.TRADING_ECONOMICS_KEY) {
+        // In a real implementation, would call Trading Economics API
+        // For now, fall through to sample data
+      }
+      
+      // Load sample economic data
+      const sampleData = await fs.readFile(path.join(process.cwd(), 'infra/dev/econ.sample.json'), 'utf-8');
+      const events = JSON.parse(sampleData);
+      
+      // Filter events within the requested days
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() + days);
+      
+      const filteredEvents = events.filter((event: any) => {
+        const eventDate = new Date(event.timestamp);
+        return eventDate >= new Date() && eventDate <= cutoff;
+      });
+      
+      res.json(filteredEvents);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch economic events" });
+    }
+  });
+
+  app.post("/api/econ/analyze", async (req, res) => {
+    try {
+      const { event, previous, forecast, importance } = econAnalyzeSchema.parse(req.body);
+      const as_of = new Date().toISOString();
+      
+      // Rule-based impact analysis
+      const affectedAssets = [];
+      const directionByAsset: any = {};
+      let reasoning = "";
+      
+      const eventLower = event.toLowerCase();
+      
+      if (eventLower.includes('cpi') || eventLower.includes('inflation')) {
+        affectedAssets.push('rates', 'usd', 'gold');
+        directionByAsset.rates = 'up';
+        directionByAsset.usd = 'up';
+        directionByAsset.gold = 'down';
+        reasoning = 'Inflation data typically drives rate expectations and currency strength';
+      } else if (eventLower.includes('employment') || eventLower.includes('jobless')) {
+        affectedAssets.push('equities', 'usd');
+        directionByAsset.equities = 'up';
+        directionByAsset.usd = 'up';
+        reasoning = 'Employment data reflects economic health and consumer spending power';
+      } else if (eventLower.includes('gdp')) {
+        affectedAssets.push('equities', 'usd');
+        directionByAsset.equities = 'up';
+        directionByAsset.usd = 'up';
+        reasoning = 'GDP growth data drives broad market sentiment and currency strength';
+      } else if (eventLower.includes('fomc') || eventLower.includes('fed')) {
+        affectedAssets.push('rates', 'equities', 'usd', 'gold');
+        directionByAsset.rates = 'mixed';
+        directionByAsset.equities = 'mixed';
+        directionByAsset.usd = 'mixed';
+        directionByAsset.gold = 'mixed';
+        reasoning = 'Federal Reserve decisions impact all major asset classes';
+      } else {
+        affectedAssets.push('equities');
+        directionByAsset.equities = 'mixed';
+        reasoning = 'Economic event may have moderate impact on market sentiment';
+      }
+      
+      let explanation = reasoning;
+      
+      // Add OpenAI explanation if available
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          const response = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+              {
+                role: "system",
+                content: "You are an economic analyst. Provide a concise explanation of how this economic event might impact markets. Keep response under 100 words."
+              },
+              {
+                role: "user",
+                content: `Event: ${event}\nPrevious: ${previous || 'N/A'}\nForecast: ${forecast || 'N/A'}\nImportance: ${importance}`
+              }
+            ],
+          });
+          
+          explanation = response.choices[0].message.content || reasoning;
+        } catch (error) {
+          console.error('OpenAI error in econ analysis:', error);
+        }
+      }
+      
+      res.json({
+        affectedAssets,
+        directionByAsset,
+        reasoning,
+        explanation,
+        as_of
+      });
+      
+    } catch (error) {
+      res.status(500).json({ error: "Failed to analyze economic event" });
+    }
+  });
+
+  // Initialize sample data on startup
+  await storage.initializeSampleData();
 
   const httpServer = createServer(app);
   return httpServer;

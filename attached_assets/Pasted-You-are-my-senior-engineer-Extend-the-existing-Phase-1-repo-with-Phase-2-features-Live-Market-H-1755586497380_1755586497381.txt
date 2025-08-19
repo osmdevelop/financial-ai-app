@@ -1,0 +1,124 @@
+You are my senior engineer. Extend the existing Phase 1 repo with Phase 2 features:
+- Live Market Headlines with AI impact analysis
+- Earnings calendar + light predictions
+- Basic Economic Calendar with impact tags
+All outputs are informational only (not investment advice). Keep services minimal and provide mocks when keys are missing.
+
+========================================
+ENV VARS
+========================================
+Add to .env.example:
+NEWSAPI_KEY=fd14f1a5b80749269b1dca315f02d9b5
+TRADING_ECONOMICS_KEY=   # optional; if absent, use sample JSON
+OPENAI_API_KEY=          # already present
+
+========================================
+DATA SOURCES (tiered)
+========================================
+- Headlines: use NewsAPI if NEWSAPI_KEY present; otherwise serve from /infra/dev/headlines.sample.json
+- Earnings: yfinance for history + /infra/dev/earnings.sample.csv for upcoming
+- Economic calendar: Trading Economics API if key present; otherwise /infra/dev/econ.sample.json
+
+========================================
+BACKEND (Next.js API unless stated)
+========================================
+1) Headlines
+   - GET /api/headlines?symbols=TSLA,SPY&limit=50
+     * If NEWSAPI_KEY exists: query recent market/business headlines; enrich with detected tickers via a simple symbol regex list (SPY,AAPL,TSLA,MSFT,AMZN,BTC-USD,ETH-USD etc.) stored in code.
+     * Else read /infra/dev/headlines.sample.json
+     * Always return: [{ id, published, title, source, url, symbols[], summary? }]
+   - POST /api/headlines/analyze
+     * Body: { title, summary?, symbols: string[] }
+     * If OPENAI_API_KEY: call OpenAI to produce:
+       { whyThisMatters: string[], impacts: [{symbol, direction: "up"|"down"|"neutral", confidence: 0..1}], as_of }
+     * Else return deterministic mock using keyword rules (e.g., "beats", "miss", "tariff", "rate hike").
+   - Persist last 100 headlines to SQLite table Headline(id, published, title, source, url, tags, analyzed, impactJson)
+
+2) Earnings
+   - GET /api/earnings/upcoming?limit=50
+     * Serve from /infra/dev/earnings.sample.csv (columns: symbol,date,eps_est,sector)
+   - GET /api/earnings/history?symbol=AAPL
+     * Use yfinance to fetch last 4 EPS surprises (or mock if unavailable)
+   - POST /api/earnings/predict
+     * Body: { symbol }
+     * Return a lightweight heuristic prediction:
+       { surpriseUpProb, surpriseDownProb, commentary, as_of }
+       where probs are derived from last 4 surprises and revenue trend (yfinance)
+
+3) Economic Calendar
+   - GET /api/econ/upcoming?days=7
+     * If TRADING_ECONOMICS_KEY present: fetch next 7 days; map to normalized fields:
+       { timestamp, country, event, importance: "low|med|high", previous, forecast, actual? }
+     * Else serve from /infra/dev/econ.sample.json
+   - POST /api/econ/analyze
+     * Body: { event, previous, forecast, importance }
+     * Return rule-based impact tags:
+       { affectedAssets: string[], directionByAsset: { "rates":"up|down|mixed", "equities":"up|down|mixed" }, reasoning, as_of }
+     * If OPENAI_API_KEY present, append a concise natural-language explanation using only provided fields.
+
+========================================
+DATABASE (Prisma/SQLite)
+========================================
+Add models:
+model Headline {
+  id        String   @id
+  published DateTime
+  title     String
+  source    String
+  url       String
+  tags      String   // comma-separated
+  analyzed  Boolean  @default(false)
+  impactJson String? // JSON text from analyze
+  createdAt DateTime @default(now())
+}
+
+(No schema changes needed for earnings/econ in Phase 2.)
+
+========================================
+FRONTEND (Next.js)
+========================================
+Routes and UI:
+
+1) /modules/headlines
+   - Left: list of latest headlines (time, source, title, detected symbols as chips)
+   - Right: detail panel with "Analyze" button → POST /api/headlines/analyze
+   - Show Impact badges per symbol (up/down/neutral) + confidence
+   - “Last updated hh:mm:ss” at top; auto-refresh list every 60s
+
+2) /modules/earnings
+   - Tabs: Upcoming | History & Prediction
+   - Upcoming table: symbol, date, est EPS, sector, “Predict” button
+   - History card: last 4 surprises (bar chart) + yfinance revenue sparkline (if available)
+   - Prediction card: surpriseUpProb/surpriseDownProb + short commentary
+
+3) /modules/econ
+   - List for next 7 days with importance pills
+   - “Analyze Impact” button per event → POST /api/econ/analyze
+   - Show asset-class impact chips (Rates, USD, Equities, Gold, Oil, Crypto)
+   - “Subscribe” toggle (UI only for now; no alerts yet)
+
+Global:
+- Add "Headlines", "Earnings", "Economic Calendar" to sidebar.
+- Reuse your “Last Updated” pattern; show as_of in cards/tooltips.
+- Keep dark/light themes consistent with existing dashboard.
+
+========================================
+OPENAI PROMPTING (guardrails)
+========================================
+System: "Today is {now}. Only use the supplied context payloads (headlines/events/earnings). If data is missing, respond 'not in context'. Return compact, factual bullet points. No advice."
+Require the model to echo `as_of` time provided by backend.
+
+========================================
+SAMPLE DATA FILES (put under /infra/dev)
+========================================
+- headlines.sample.json (20–40 items; fields above)
+- earnings.sample.csv (symbol,date,eps_est,sector)
+- econ.sample.json (CPI, NFP, FOMC, Retail Sales with timestamps, previous, forecast, importance)
+
+========================================
+ACCEPTANCE CRITERIA
+========================================
+- /modules/headlines shows a live list (NewsAPI when key present, else sample). Analyze yields impacts with confidence.
+- /modules/earnings displays upcoming table and a working predict flow; history chart renders with last 4 surprises (mock ok if yfinance lacks data).
+- /modules/econ lists next 7 days and impact analysis per event.
+- All features show “Last updated” timestamps and work with or without API keys (mock data supplied).

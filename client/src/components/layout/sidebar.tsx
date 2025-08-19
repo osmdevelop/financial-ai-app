@@ -1,11 +1,14 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { BarChart3, Briefcase, Brain, Settings, HelpCircle } from "lucide-react";
+import { BarChart3, Briefcase, Brain, Newspaper, Calendar, TrendingUp, Settings, HelpCircle } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: BarChart3 },
   { name: "Portfolio", href: "/portfolio", icon: Briefcase },
   { name: "AI Insights", href: "/insights", icon: Brain },
+  { name: "Headlines", href: "/headlines", icon: Newspaper },
+  { name: "Earnings", href: "/earnings", icon: TrendingUp },
+  { name: "Economic Calendar", href: "/economic-calendar", icon: Calendar },
 ];
 
 const secondaryNavigation = [

@@ -7,7 +7,14 @@ import type {
   AIInsightResponse,
   PriceData,
   MarketSentiment,
-  IntradayData
+  IntradayData,
+  Headline,
+  HeadlineImpact,
+  UpcomingEarning,
+  EarningsHistory,
+  EarningsPrediction,
+  EconomicEvent,
+  EconomicImpact
 } from "@shared/schema";
 
 export const api = {
@@ -63,6 +70,47 @@ export const api = {
   // Intraday Data
   async getIntradayData(symbol: string, interval = "1m", lookback = "1d"): Promise<IntradayData> {
     const res = await apiRequest("GET", `/api/price/intraday?symbol=${symbol}&interval=${interval}&lookback=${lookback}`);
+    return res.json();
+  },
+
+  // Headlines
+  async getHeadlines(symbols?: string, limit = 50): Promise<Headline[]> {
+    const params = new URLSearchParams();
+    if (symbols) params.set('symbols', symbols);
+    params.set('limit', limit.toString());
+    const res = await apiRequest("GET", `/api/headlines?${params}`);
+    return res.json();
+  },
+
+  async analyzeHeadline(title: string, summary?: string, symbols: string[] = []): Promise<HeadlineImpact> {
+    const res = await apiRequest("POST", "/api/headlines/analyze", { title, summary, symbols });
+    return res.json();
+  },
+
+  // Earnings
+  async getUpcomingEarnings(limit = 50): Promise<UpcomingEarning[]> {
+    const res = await apiRequest("GET", `/api/earnings/upcoming?limit=${limit}`);
+    return res.json();
+  },
+
+  async getEarningsHistory(symbol: string): Promise<EarningsHistory[]> {
+    const res = await apiRequest("GET", `/api/earnings/history?symbol=${symbol}`);
+    return res.json();
+  },
+
+  async predictEarnings(symbol: string): Promise<EarningsPrediction> {
+    const res = await apiRequest("POST", "/api/earnings/predict", { symbol });
+    return res.json();
+  },
+
+  // Economic Calendar
+  async getEconomicEvents(days = 7): Promise<EconomicEvent[]> {
+    const res = await apiRequest("GET", `/api/econ/upcoming?days=${days}`);
+    return res.json();
+  },
+
+  async analyzeEconomicEvent(event: string, previous?: string, forecast?: string, importance: string = "medium"): Promise<EconomicImpact> {
+    const res = await apiRequest("POST", "/api/econ/analyze", { event, previous, forecast, importance });
     return res.json();
   }
 };
