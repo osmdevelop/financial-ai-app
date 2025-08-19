@@ -2,9 +2,31 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Settings as SettingsIcon, Key, Database, Palette, Bell } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTheme } from "@/components/providers/theme-provider";
+import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, Sun } from "lucide-react";
 
 export default function Settings() {
+  const { theme, setTheme, actualTheme } = useTheme();
+
+  const getThemeIcon = (themeValue: string) => {
+    switch (themeValue) {
+      case "light": return <Sun className="h-4 w-4" />;
+      case "dark": return <Moon className="h-4 w-4" />;
+      case "system": return <Monitor className="h-4 w-4" />;
+      default: return <Monitor className="h-4 w-4" />;
+    }
+  };
+
+  const getThemeLabel = (themeValue: string) => {
+    switch (themeValue) {
+      case "light": return "Light";
+      case "dark": return "Dark";
+      case "system": return `System (${actualTheme === "dark" ? "Dark" : "Light"})`;;
+      default: return "System";
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header 
@@ -118,14 +140,39 @@ export default function Settings() {
               <div className="p-4 border rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-medium">Theme</h3>
-                  <Badge variant="outline">System</Badge>
+                  <div className="flex items-center gap-2">
+                    {getThemeIcon(theme)}
+                    <Badge variant="outline">{getThemeLabel(theme)}</Badge>
+                  </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  The application automatically adapts to your system's dark/light mode preference.
+                  Choose your preferred theme or let the system decide automatically.
                 </p>
-                <Button variant="outline" size="sm" disabled>
-                  Coming Soon
-                </Button>
+                <Select value={theme} onValueChange={setTheme}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="system">
+                      <div className="flex items-center gap-2">
+                        <Monitor className="h-4 w-4" />
+                        System
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="light">
+                      <div className="flex items-center gap-2">
+                        <Sun className="h-4 w-4" />
+                        Light
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="dark">
+                      <div className="flex items-center gap-2">
+                        <Moon className="h-4 w-4" />
+                        Dark
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>

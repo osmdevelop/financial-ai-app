@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { RefreshCw, User } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -80,6 +81,7 @@ export function Header({ title, subtitle, portfolioId }: HeaderProps) {
             </Button>
           )}
           <div className="flex items-center space-x-2">
+            <ThemeToggle />
             <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
               <User className="text-muted-foreground text-sm" />
             </div>

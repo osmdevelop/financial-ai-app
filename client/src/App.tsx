@@ -3,6 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "@/components/providers/theme-provider";
 import { DisclaimerBanner } from "@/components/layout/disclaimer-banner";
 import { Sidebar } from "@/components/layout/sidebar";
 import Dashboard from "@/pages/dashboard";
@@ -32,7 +33,8 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
+      <ThemeProvider defaultTheme="system" storageKey="finance-tracker-theme">
+        <TooltipProvider>
         <div className="min-h-screen bg-background">
           <DisclaimerBanner />
           <div className="flex h-[calc(100vh-3rem)] relative">
@@ -42,8 +44,9 @@ function App() {
             </div>
           </div>
         </div>
-        <Toaster />
-      </TooltipProvider>
+          <Toaster />
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
