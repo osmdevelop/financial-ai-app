@@ -1,0 +1,124 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(248, 50%, 98%);
+  --foreground: hsl(229, 25%, 7%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(229, 25%, 7%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(229, 25%, 7%);
+  --primary: hsl(222, 84%, 35%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(210, 40%, 98%);
+  --secondary-foreground: hsl(222, 84%, 35%);
+  --muted: hsl(210, 40%, 90%);
+  --muted-foreground: hsl(215, 16%, 47%);
+  --accent: hsl(210, 40%, 92%);
+  --accent-foreground: hsl(222, 84%, 35%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(214, 32%, 91%);
+  --input: hsl(214, 32%, 91%);
+  --ring: hsl(222, 84%, 35%);
+  --success: hsl(158, 64%, 52%);
+  --success-foreground: hsl(0, 0%, 100%);
+  --warning: hsl(43, 96%, 56%);
+  --warning-foreground: hsl(0, 0%, 100%);
+  --danger: hsl(0, 84%, 60%);
+  --danger-foreground: hsl(0, 0%, 100%);
+  --purple: hsl(258, 90%, 66%);
+  --purple-foreground: hsl(0, 0%, 100%);
+  --chart-1: hsl(222, 84%, 35%);
+  --chart-2: hsl(158, 64%, 52%);
+  --chart-3: hsl(43, 96%, 56%);
+  --chart-4: hsl(258, 90%, 66%);
+  --chart-5: hsl(0, 84%, 60%);
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: hsl(229, 25%, 7%);
+  --foreground: hsl(210, 40%, 98%);
+  --card: hsl(229, 25%, 10%);
+  --card-foreground: hsl(210, 40%, 98%);
+  --popover: hsl(229, 25%, 10%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  --primary: hsl(222, 84%, 45%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(229, 25%, 15%);
+  --secondary-foreground: hsl(210, 40%, 98%);
+  --muted: hsl(229, 25%, 15%);
+  --muted-foreground: hsl(215, 16%, 65%);
+  --accent: hsl(229, 25%, 18%);
+  --accent-foreground: hsl(210, 40%, 98%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(229, 25%, 18%);
+  --input: hsl(229, 25%, 18%);
+  --ring: hsl(222, 84%, 45%);
+  --success: hsl(158, 64%, 52%);
+  --warning: hsl(43, 96%, 56%);
+  --danger: hsl(0, 84%, 60%);
+  --purple: hsl(258, 90%, 66%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+  }
+}
+
+@layer utilities {
+  .text-success {
+    color: hsl(var(--success));
+  }
+  
+  .text-danger {
+    color: hsl(var(--danger));
+  }
+  
+  .text-warning {
+    color: hsl(var(--warning));
+  }
+  
+  .text-purple {
+    color: hsl(var(--purple));
+  }
+  
+  .bg-success {
+    background-color: hsl(var(--success));
+  }
+  
+  .bg-danger {
+    background-color: hsl(var(--danger));
+  }
+  
+  .bg-warning {
+    background-color: hsl(var(--warning));
+  }
+  
+  .bg-purple {
+    background-color: hsl(var(--purple));
+  }
+  
+  .border-success {
+    border-color: hsl(var(--success));
+  }
+  
+  .border-danger {
+    border-color: hsl(var(--danger));
+  }
+}
