@@ -1,0 +1,190 @@
+You are my senior full‑stack engineer. Scaffold a **Lite MVP** for a next‑gen market intelligence + portfolio tracker that uses minimal external services. It is NOT a broker or investment advisor; outputs are informational only.
+
+========================================
+TECH CHOICES (LOCK THESE IN)
+========================================
+- Monorepo with:
+  - apps/web → Next.js 14 (App Router) + TypeScript + TailwindCSS + TanStack Query + Recharts
+  - apps/py  → FastAPI (Python 3.11) with `yfinance` + `requests`
+  - packages/core → Prisma schema + generated client + shared types
+- Database: **SQLite** via Prisma (zero infra)
+- Data sources: **yfinance** (equities/ETFs), **CoinGecko** (crypto) — no API keys required
+- AI (optional): OpenAI `gpt-4o-mini` for a single summarize endpoint (mock if no key)
+
+========================================
+REPO LAYOUT
+========================================
+/apps
+  /web
+  /py
+/packages
+  /core
+/infra
+  dev/ (optional seed data)
+/README.md
+/.env.example
+
+========================================
+ENV VARS
+========================================
+Create `.env.example` at root (copy to `.env` for local):
+OPENAI_API_KEY=
+
+========================================
+PRISMA SCHEMA (packages/core/prisma/schema.prisma)
+========================================
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "sqlite"; url = env("DATABASE_URL") }
+
+model Portfolio {
+  id           String     @id @default(cuid())
+  name         String
+  baseCurrency String     @default("USD")
+  createdAt    DateTime   @default(now())
+  positions    Position[]
+}
+
+model Position {
+  id          String   @id @default(cuid())
+  portfolioId String
+  symbol      String
+  assetType   String   // "equity" | "etf" | "crypto"
+  quantity    Decimal
+  avgCost     Decimal
+  Portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+}
+
+model Price {
+  id        String   @id @default(cuid())
+  symbol    String
+  assetType String
+  date      DateTime
+  close     Decimal
+  source    String
+  @@unique([symbol, assetType, date])
+  @@index([symbol, assetType, date])
+}
+
+========================================
+PACKAGES/CORE
+========================================
+- Export Prisma client instance and shared TypeScript types (Portfolio, Position, Price).
+- Provide small helpers to compute P&L and portfolio totals.
+
+========================================
+APPS/PY (FastAPI)
+========================================
+Dependencies: fastapi, uvicorn, yfinance, requests, pydantic
+
+Routes:
+- GET /py/price/equity?symbol=AAPL
+  - Use yfinance to fetch latest daily close and most recent date.
+  - Return: { symbol, assetType:"equity", close, date, source:"yfinance" }
+- GET /py/price/crypto?id=bitcoin
+  - Use CoinGecko simple price endpoint (USD).
+  - Return: { symbol:"BTC-USD" (map from id), assetType:"crypto", close, date: now, source:"coingecko" }
+- POST /py/price/batch
+  - Body: { equities: string[], cryptos: string[] (coingecko ids) }
+  - Return array of price objects (as above) for all requested items.
+
+Run script:
+- `uvicorn main:app --reload --port 5000`
+
+========================================
+APPS/WEB (Next.js 14 + TS)
+========================================
+Install: next, react, react-dom, typescript, tailwindcss, postcss, autoprefixer, @prisma/client, zod, recharts, @tanstack/react-query
+
+Global UI:
+- Tailwind configured
+- Disclaimer banner on all pages:
+  "Informational purposes only. Not investment advice. No brokerage services."
+
+Pages (App Router):
+1) `/` (Dashboard)
+   - KPIs: Portfolio value, Daily P&L, Top mover
+   - 30‑day line chart from cached `Price` table (fallback to last close if <30 days)
+
+2) `/portfolio`
+   - Create/select portfolio
+   - CSV upload (columns: symbol, quantity, avgCost, assetType)
+   - Table: symbol, qty, avgCost, lastClose, P&L$, P&L%
+   - Button “Refresh prices” → server action calls `/py/price/batch`, then upserts to `Price`
+
+3) `/insights`
+   - Textarea + button “Explain”
+   - POST `/api/insights/explain` with { text }
+   - If OPENAI key exists → call GPT‑4o‑mini to return:
+     { summary: string, whyThisMatters: string[] }
+   - Else return deterministic mock:
+     { summary: "Mock summary...", whyThisMatters: ["Mock reason 1", "Mock reason 2"] }
+
+API routes (Next.js /api):
+- POST `/api/portfolio` { name } → create portfolio
+- GET  `/api/portfolio/:id` → return portfolio, positions, and joined latest prices
+- POST `/api/portfolio/:id/positions/upload` → parse CSV, upsert positions
+- POST `/api/refresh-prices` { portfolioId } → server action:
+    * Read positions
+    * Split equity/etf vs crypto
+    * Map crypto symbols to CoinGecko ids (BTC-USD→bitcoin, ETH-USD→ethereum; keep simple map in code)
+    * Call `/py/price/batch`
+    * Upsert into `Price`
+
+========================================
+SCRIPTS & TOOLING
+========================================
+Root `package.json` scripts (pnpm preferred):
+- "dev": concurrently run:
+   * web on 3000
+   * py on 5000
+- "prisma:generate": prisma generate
+- "prisma:migrate": set DATABASE_URL="file:./dev.db" then prisma migrate dev
+- "seed": ts-node script to create demo data and run price refresh once
+
+apps/web scripts:
+- "dev", "build", "start", "typecheck", "lint"
+
+apps/py scripts:
+- "dev": uvicorn main:app --reload --port 5000
+- "start": uvicorn main:app --port 5000
+
+========================================
+SEED DATA
+========================================
+Seed a portfolio named "Demo" with positions:
+- SPY 5 @ 500 (etf)
+- AAPL 10 @ 180 (equity)
+- BTC-USD 0.05 @ 60000 (crypto)
+Then call the refresh‑prices action once to populate `Price`.
+
+========================================
+UX DETAILS
+========================================
+- CSV uploader with sample template download.
+- Loading skeletons on data fetches.
+- Errors surfaced as toast notifications.
+- Numbers formatted with Intl.NumberFormat; show currency = portfolio.baseCurrency.
+
+========================================
+ACCEPTANCE CRITERIA (SELF‑CHECK)
+========================================
+- `pnpm install` at root succeeds.
+- `pnpm run prisma:migrate` creates SQLite DB and tables.
+- `pnpm run dev`:
+  - FastAPI runs on :5000 responding to equity/crypto and batch endpoints.
+  - Next.js runs on :3000.
+- `/portfolio`:
+  - Uploading CSV inserts/updates positions.
+  - Clicking “Refresh prices” writes to `Price`.
+- `/` Dashboard:
+  - Shows total portfolio value and 30‑day chart (or last close if limited).
+- `/insights`:
+  - Returns real AI summary when `OPENAI_API_KEY` is set, otherwise returns a mock.
+- Disclaimer visible on all pages.
+
+========================================
+NON‑GOALS (PHASE 0)
+========================================
+- No auth, no billing, no schedulers, no realtime websockets, no alerts.
+- No paid data feeds; only yfinance + CoinGecko.
+- Keep code clean, typed, and minimal.
