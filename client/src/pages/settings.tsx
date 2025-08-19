@@ -29,14 +29,14 @@ export default function Settings() {
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-medium">OpenAI API</h3>
                     <Badge variant="secondary">
-                      {process.env.OPENAI_API_KEY ? "Connected" : "Not Connected"}
+                      Configured
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground mb-3">
                     Powers AI insights, market sentiment analysis, and earnings predictions.
                   </p>
                   <Button variant="outline" size="sm" disabled>
-                    {process.env.OPENAI_API_KEY ? "Configured" : "Configure"}
+                    Configured
                   </Button>
                 </div>
 
