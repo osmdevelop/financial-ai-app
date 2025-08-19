@@ -3,7 +3,9 @@ import { api } from "@/lib/api";
 import { Header } from "@/components/layout/header";
 import { KPICardSkeleton, ChartSkeleton } from "@/components/ui/loading-skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, TrendingUp, Rocket } from "lucide-react";
+import { SentimentGauge } from "@/components/ui/sentiment-gauge";
+import { Badge } from "@/components/ui/badge";
+import { DollarSign, TrendingUp, Rocket, Activity } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/constants";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
@@ -25,6 +27,12 @@ export default function Dashboard() {
     queryKey: ["/api/portfolios", demoPortfolioId, "price-history"],
     queryFn: () => api.getPortfolioPriceHistory(demoPortfolioId!, 30),
     enabled: !!demoPortfolioId,
+  });
+
+  const { data: marketSentiment, isLoading: sentimentLoading } = useQuery({
+    queryKey: ["/api/sentiment"],
+    queryFn: () => api.getMarketSentiment(),
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   });
 
   if (isLoading) {
@@ -80,7 +88,7 @@ export default function Dashboard() {
       
       <main className="flex-1 overflow-y-auto p-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Portfolio Value Card */}
           <Card>
             <CardContent className="p-6">
@@ -95,11 +103,16 @@ export default function Dashboard() {
                   <DollarSign className="text-primary text-xl" />
                 </div>
               </div>
-              <div className="mt-4 flex items-center">
-                <span className={`text-sm font-medium ${(summary?.dailyPnLPercent || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {formatPercent(summary?.dailyPnLPercent || 0)}
+              <div className="mt-4 flex items-center justify-between">
+                <div className="flex items-center">
+                  <span className={`text-sm font-medium ${(summary?.dailyPnLPercent || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {formatPercent(summary?.dailyPnLPercent || 0)}
+                  </span>
+                  <span className="text-muted-foreground text-sm ml-2">vs yesterday</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  Last Updated: {new Date().toLocaleTimeString()}
                 </span>
-                <span className="text-muted-foreground text-sm ml-2">vs yesterday</span>
               </div>
             </CardContent>
           </Card>
@@ -148,11 +161,66 @@ export default function Dashboard() {
                   <Rocket className="text-success text-xl" />
                 </div>
               </div>
-              <div className="mt-4 flex items-center">
-                <span className={`text-sm font-medium ${(summary?.topMover?.changePercent || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {summary?.topMover?.changePercent ? formatPercent(summary.topMover.changePercent) : "0%"}
+              <div className="mt-4 flex items-center justify-between">
+                <div className="flex items-center">
+                  <span className={`text-sm font-medium ${(summary?.topMover?.changePercent || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {summary?.topMover?.changePercent ? formatPercent(summary.topMover.changePercent) : "0%"}
+                  </span>
+                  <span className="text-muted-foreground text-sm ml-2">change</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  Last Updated: {new Date().toLocaleTimeString()}
                 </span>
-                <span className="text-muted-foreground text-sm ml-2">change</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Market Sentiment Card */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Market Sentiment</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {sentimentLoading ? "Loading..." : marketSentiment ? `${marketSentiment.score}/100` : "N/A"}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <Activity className="text-primary text-xl" />
+                </div>
+              </div>
+              
+              {!sentimentLoading && marketSentiment && (
+                <div className="mb-4">
+                  <SentimentGauge score={marketSentiment.score} size="sm" />
+                </div>
+              )}
+              
+              <div className="mt-4">
+                {!sentimentLoading && marketSentiment ? (
+                  <div className="space-y-2">
+                    {marketSentiment.drivers.slice(0, 2).map((driver, index) => (
+                      <Badge 
+                        key={index} 
+                        variant="outline" 
+                        className={`text-xs ${
+                          driver.weight > 0 ? 'border-success text-success' : 
+                          driver.weight < 0 ? 'border-danger text-danger' : 
+                          'border-muted text-muted-foreground'
+                        }`}
+                      >
+                        {driver.label}
+                      </Badge>
+                    ))}
+                    <div className="text-xs text-muted-foreground mt-2">
+                      Last Updated: {marketSentiment.lastUpdated}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    Loading sentiment data...
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

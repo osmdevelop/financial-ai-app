@@ -1,0 +1,72 @@
+You are my senior engineer. Extend the existing MVP repo (Dashboard + Portfolio + AI Insights) with **Phase 1 features** for real-time data and sentiment.
+
+========================================
+GOALS
+========================================
+1. Add live intraday market data (same-day freshness).
+2. Create Market Sentiment module (gauge + drivers).
+3. Update Insights API to always use fresh context, not model cutoff knowledge.
+4. Show “Last Updated” timestamps across dashboard widgets.
+
+========================================
+BACKEND CHANGES
+========================================
+1) Update FastAPI service (apps/py):
+- Add /py/price/intraday?symbol=AAPL&interval=1m&lookback=1d
+  - Use Polygon.io if POLYGON_API_KEY exists
+  - Else fallback to yfinance (intraday if available; else latest close)
+  - Return {symbol, interval, candles:[{ts,open,high,low,close,volume}]}
+
+2) Next.js API (apps/web):
+- Add /api/sentiment (GET)
+  - Fetch from /py/price/intraday for:
+    - ^VIX (volatility)
+    - ^TNX (10yr yield)
+    - SPY (S&P500)
+  - Compute normalized metrics:
+    - VIX <20 → bullish, 20–30 neutral, >30 bearish
+    - 10yr yield rising → bearish for growth
+    - SPY intraday % change
+  - Combine into score 0–100
+  - Return {score, drivers:[{label,weight,explanation}]}
+
+- Update /api/insights/explain:
+  - Always add “context” param: latest portfolio P&L, top movers, market sentiment (from /api/sentiment)
+  - Pass context + user query to OpenAI.
+  - Instruction: “Only use supplied context + today’s date {now}. If missing data, say ‘not in context’.”
+
+========================================
+FRONTEND (apps/web)
+========================================
+1) Dashboard:
+- Add “Last Updated: hh:mm:ss” text under Total Value + Top Mover.
+- Add new tile “Market Sentiment”
+  - Circular gauge (0–100)
+  - Below: 3 driver chips (e.g., “VIX low → bullish”, “Rates rising → cautious”)
+- On refresh, dashboard calls /api/sentiment and updates tile.
+
+2) AI Insights:
+- Prepend context panel above answer:
+  - Show “Portfolio: P&L Today”, “Sentiment Score”, “Top Mover”.
+- Ensure LLM answer cites these context values.
+
+========================================
+DATABASE (SQLite / Prisma)
+========================================
+No schema changes required for Phase 1.
+Cache intraday data in memory only.
+
+========================================
+SCRIPTS
+========================================
+.env.example additions:
+POLYGON_API_KEY=
+
+========================================
+ACCEPTANCE CRITERIA
+========================================
+- /api/sentiment returns live score + drivers with timestamp.
+- Dashboard shows new “Market Sentiment” tile with gauge and drivers.
+- All dashboard cards show “Last Updated”.
+- AI Insights now reasons using fresh context (portfolio P&L, sentiment, top movers).
+- Works with Polygon API if key exists; otherwise falls back to yfinance.

@@ -88,3 +88,32 @@ export type AIInsightResponse = {
   summary: string;
   whyThisMatters: string[];
 };
+
+export type SentimentDriver = {
+  label: string;
+  weight: number;
+  explanation: string;
+};
+
+export type MarketSentiment = {
+  score: number;
+  drivers: SentimentDriver[];
+  timestamp: string;
+  lastUpdated: string;
+};
+
+export type IntradayCandle = {
+  ts: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+export type IntradayData = {
+  symbol: string;
+  interval: string;
+  candles: IntradayCandle[];
+  source: string;
+};
