@@ -52,7 +52,7 @@ export function Header({ title, subtitle, portfolioId }: HeaderProps) {
   return (
     <header className="bg-card shadow-sm border-b border-border px-4 md:px-6 py-4">
       <div className="flex items-center justify-between">
-        <div className="min-w-0 flex-1 md:flex-none">
+        <div className="min-w-0 flex-1 md:flex-none ml-12 md:ml-0">
           <h2 className="text-xl md:text-2xl font-bold text-foreground truncate">{title}</h2>
           <p className="text-sm text-muted-foreground mt-1 hidden sm:block">{subtitle}</p>
         </div>
