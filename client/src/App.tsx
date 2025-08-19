@@ -8,6 +8,10 @@ import { Sidebar } from "@/components/layout/sidebar";
 import Dashboard from "@/pages/dashboard";
 import Portfolio from "@/pages/portfolio";
 import Insights from "@/pages/insights";
+import Headlines from "@/pages/headlines";
+import Earnings from "@/pages/earnings";
+import EconomicCalendar from "@/pages/economic-calendar";
+import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,6 +20,10 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/portfolio" component={Portfolio} />
       <Route path="/insights" component={Insights} />
+      <Route path="/headlines" component={Headlines} />
+      <Route path="/earnings" component={Earnings} />
+      <Route path="/economic-calendar" component={EconomicCalendar} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
