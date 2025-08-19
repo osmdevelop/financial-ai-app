@@ -1,0 +1,169 @@
+You are my senior engineer. Extend the current app with a CoinMarketCap‑style asset add flow and move holdings to a transactions‑based model. Keep outputs informational only.
+
+========================================
+GOALS
+========================================
+1) Global asset search (equities/ETFs/crypto) with autosuggest.
+2) Asset sheet (like CMC) with price, mini chart, metadata, and “Add Transaction” CTA.
+3) Transaction model (buy/sell/transfer/airdrop/fee) → positions computed from transactions.
+4) Editable transaction history per asset + undo/delete.
+5) Watchlist with “quick add to portfolio”.
+
+========================================
+ENV VARS (update .env.example)
+========================================
+COINGECKO_BASE=https://api.coingecko.com/api/v3
+# yfinance used server-side via Python service; no key needed.
+
+========================================
+DATABASE (Prisma - SQLite for now)
+========================================
+Add / replace with these models:
+
+model Portfolio {
+  id           String        @id @default(cuid())
+  name         String
+  baseCurrency String        @default("USD")
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  portfolioId  String
+  symbol       String
+  assetType    String   // equity | etf | crypto | fx | commodity
+  side         String   // buy | sell | transfer_in | transfer_out | airdrop | fee | dividend
+  quantity     Decimal   // positive numbers only
+  price        Decimal?  // unit price in quote currency (USD default)
+  fee          Decimal?  // optional
+  occurredAt   DateTime
+  note         String?
+  Portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  @@index([portfolioId, symbol, occurredAt])
+}
+
+model PositionView { // not a real table; create a DB view or compute in code
+  // computed: current quantity, avgCost (WAC), realized P&L, unrealized P&L
+}
+
+Delete the old Position model OR keep it temporarily but stop writing to it.
+
+========================================
+BACKEND
+========================================
+1) Unified Search API
+   - GET /api/search?q=appl&types=equity,etf,crypto&limit=10
+   - Implementation:
+     * equities/etfs: use yfinance symbol lookup via Python service (/py/search/equity?q=)
+     * crypto: CoinGecko /search or /coins/list (client-side cache)
+     * Normalize response: { id, symbol, name, assetType, exchange?, coingeckoId? }
+
+2) Asset Sheet API
+   - GET /api/asset/:id?assetType=crypto|equity
+     * Returns: { symbol, name, assetType, price, change24h, marketCap?, miniChart:[{ts,close}], as_of }
+     * For crypto use CoinGecko /coins/markets + /market_chart?days=7
+     * For equity/etf use yfinance via Python: /py/price/summary?symbol=SPY (last close + 7d)
+
+3) Transactions API
+   - POST /api/transactions  → create
+   - PATCH /api/transactions/:id  → edit
+   - DELETE /api/transactions/:id → delete
+   - GET /api/transactions?portfolioId=...&symbol=... → list
+   - All endpoints validate:
+     * quantity > 0
+     * price ≥ 0 (nullable for airdrops/transfers)
+     * occurredAt required
+   - Server computes and returns updated “position snapshot” for that symbol.
+
+4) Positions (computed)
+   - GET /api/positions?portfolioId=... → returns each symbol’s:
+     { symbol, assetType, quantity, avgCost, lastPrice, value, pnl$, pnl%, realizedPnl$ }
+   - Use **WAC (weighted average cost)** method for avgCost.
+   - Realized P&L: sum over sells using WAC at sell-time.
+   - Reuse your existing price cache; fetch price if missing.
+
+5) Watchlist API
+   - POST /api/watchlist  { symbol, assetType }
+   - GET  /api/watchlist
+   - DELETE /api/watchlist/:id
+   - Not tied to a portfolio.
+
+6) Python service (apps/py) additions
+   - GET /py/search/equity?q=appl → return top 10 matches (symbol, name, exchange).
+   - GET /py/price/summary?symbol=SPY → { price, change24h, miniChart }
+   - Reuse yfinance; return safe mocks if lookup fails.
+
+========================================
+FRONTEND (Next.js)
+========================================
+A) Global Command Palette / Omnisearch
+   - Keyboard: Cmd/Ctrl+K
+   - Input with autosuggest from /api/search
+   - Result rows show: logo letter, symbol, name, assetType tag, latest price (faded)
+   - Selecting a row opens the **Asset Sheet** modal
+
+B) Asset Sheet Modal (CMC-style)
+   - Shows name + symbol, price, 7d mini chart, market cap (if available), % change
+   - Buttons:
+     * “Add Transaction” → opens Transaction Modal
+     * “Add to Watchlist”
+   - Small info line: “Data as of {as_of}”
+
+C) Transaction Modal
+   - Fields:
+     * Side (buy/sell/transfer in/out/airdrop/fee)
+     * Quantity
+     * Price (USD) – auto-filled with current price, editable
+     * Fee (optional)
+     * Date & Time (defaults to now)
+     * Note (optional)
+   - Validate inputs; show computed subtotal & total (qty*price+fee)
+   - On save → POST /api/transactions; toast success; update dashboard metrics
+
+D) Portfolio Page revamp
+   - Replace old static Positions table with **computed positions** from /api/positions
+   - Add “Transactions” tab per symbol with sortable table and edit/delete actions
+   - Add “Quick Add” button that opens Command Palette scoped to symbol search
+
+E) Watchlist Page (simple)
+   - Grid of watched assets (symbol, price, 24h change, mini chart)
+   - Each row has “Add Transaction” shortcut
+
+F) Dashboard updates
+   - KPIs & charts now based on computed positions (not old Position table)
+   - Keep “Last Updated” badge pattern
+
+========================================
+MIGRATION / COMPAT
+========================================
+- Add a one-time script to convert any existing Position rows into Transactions:
+  * For each Position: create a single BUY transaction with quantity and avgCost at an earlier date.
+- Keep the old CSV upload:
+  * Parsing now converts rows into BUY transactions (one per line).
+  * Provide a new sample CSV: symbol,assetType,side,quantity,price,fee,occurredAt,note
+
+========================================
+PROMPTING & GUARDRAILS
+========================================
+- For AI Insights, include optional context snippet that lists the top 5 holdings by value from computed positions.
+- Do NOT let the model infer prices; always pass actual fetched prices with an as_of timestamp.
+
+========================================
+ACCEPTANCE CRITERIA
+========================================
+- Cmd/Ctrl+K opens global search; typing “aapl” or “btc” shows results across equities and crypto.
+- Selecting a result shows the Asset Sheet with live-ish price and a 7d mini chart.
+- “Add Transaction” saves to DB and immediately updates:
+  * Portfolio totals, P&L, Top Mover
+  * Positions table row for that symbol
+- Transactions tab supports edit and delete with recalculated P&L.
+- Watchlist page renders and allows “Add Transaction”.
+- Old data is migrated to transactions and the app works without manual DB edits.
+- Works offline with mocked search/price responses if APIs rate-limit.
+
+========================================
+NON-GOALS (for now)
+========================================
+- No tax-lot methods beyond WAC (FIFO/LIFO can be a future toggle).
+- No broker connections, no alerts, no real-time websockets yet.

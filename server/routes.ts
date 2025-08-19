@@ -1,7 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPortfolioSchema, insertPositionSchema, insertPriceSchema } from "@shared/schema";
+import { 
+  insertPortfolioSchema, 
+  insertPositionSchema, 
+  insertPriceSchema,
+  insertTransactionSchema,
+  insertWatchlistSchema 
+} from "@shared/schema";
 import { spawn } from "child_process";
 import { z } from "zod";
 import OpenAI from "openai";
@@ -53,6 +59,25 @@ const econAnalyzeSchema = z.object({
   previous: z.string().optional(),
   forecast: z.string().optional(),
   importance: z.enum(["low", "medium", "high"]).default("medium")
+});
+
+// Schema for asset search
+const assetSearchSchema = z.object({
+  q: z.string().min(1),
+  types: z.string().optional().transform(val => val ? val.split(',') : ['equity', 'etf', 'crypto']),
+  limit: z.string().optional().transform(val => val ? parseInt(val) : 10)
+});
+
+// Schema for asset sheet
+const assetSheetSchema = z.object({
+  symbol: z.string(),
+  assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity"])
+});
+
+// Schema for transaction queries
+const transactionQuerySchema = z.object({
+  portfolioId: z.string(),
+  symbol: z.string().optional()
 });
 
 // Initialize OpenAI client
@@ -838,6 +863,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
     } catch (error) {
       res.status(500).json({ error: "Failed to analyze economic event" });
+    }
+  });
+
+  // Asset Search API
+  app.get("/api/search", async (req, res) => {
+    try {
+      const { q, types, limit } = assetSearchSchema.parse(req.query);
+      const results = await storage.searchAssets(q, types, limit);
+      res.json(results);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid search parameters" });
+    }
+  });
+
+  // Asset Sheet API
+  app.get("/api/asset/:symbol", async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { assetType } = assetSheetSchema.parse({ 
+        symbol, 
+        assetType: req.query.assetType 
+      });
+      
+      const assetData = await storage.getAssetSheetData(symbol, assetType);
+      if (!assetData) {
+        return res.status(404).json({ error: "Asset not found" });
+      }
+      
+      res.json(assetData);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid asset parameters" });
+    }
+  });
+
+  // Transaction CRUD APIs
+  app.post("/api/transactions", async (req, res) => {
+    try {
+      const validatedData = insertTransactionSchema.parse(req.body);
+      const transaction = await storage.createTransaction(validatedData);
+      
+      // Return updated position for the symbol
+      const updatedPosition = await storage.getComputedPosition(
+        validatedData.portfolioId, 
+        validatedData.symbol
+      );
+      
+      res.json({ transaction, position: updatedPosition });
+    } catch (error) {
+      res.status(400).json({ error: "Invalid transaction data" });
+    }
+  });
+
+  app.get("/api/transactions", async (req, res) => {
+    try {
+      const { portfolioId, symbol } = transactionQuerySchema.parse(req.query);
+      const transactions = await storage.getTransactionsByPortfolio(portfolioId, symbol);
+      res.json(transactions);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid query parameters" });
+    }
+  });
+
+  app.patch("/api/transactions/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = insertTransactionSchema.partial().parse(req.body);
+      const transaction = await storage.updateTransaction(id, updates);
+      
+      if (!transaction) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
+      
+      res.json(transaction);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid transaction data" });
+    }
+  });
+
+  app.delete("/api/transactions/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteTransaction(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete transaction" });
+    }
+  });
+
+  // Computed Positions API
+  app.get("/api/positions", async (req, res) => {
+    try {
+      const { portfolioId } = req.query;
+      if (!portfolioId || typeof portfolioId !== 'string') {
+        return res.status(400).json({ error: "Portfolio ID required" });
+      }
+      
+      const positions = await storage.getComputedPositions(portfolioId);
+      res.json(positions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch positions" });
+    }
+  });
+
+  // Watchlist APIs
+  app.post("/api/watchlist", async (req, res) => {
+    try {
+      const validatedData = insertWatchlistSchema.parse(req.body);
+      const item = await storage.addToWatchlist(validatedData);
+      res.json(item);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid watchlist data" });
+    }
+  });
+
+  app.get("/api/watchlist", async (req, res) => {
+    try {
+      const watchlist = await storage.getWatchlist();
+      res.json(watchlist);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch watchlist" });
+    }
+  });
+
+  app.delete("/api/watchlist/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.removeFromWatchlist(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove from watchlist" });
+    }
+  });
+
+  // Migration endpoint (for converting existing positions to transactions)
+  app.post("/api/migrate", async (req, res) => {
+    try {
+      await storage.migratePositionsToTransactions();
+      res.json({ success: true, message: "Migration completed" });
+    } catch (error) {
+      res.status(500).json({ error: "Migration failed" });
     }
   });
 

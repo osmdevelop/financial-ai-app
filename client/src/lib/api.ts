@@ -14,7 +14,14 @@ import type {
   EarningsHistory,
   EarningsPrediction,
   EconomicEvent,
-  EconomicImpact
+  EconomicImpact,
+  AssetSearchResult,
+  AssetSheetData,
+  Transaction,
+  InsertTransaction,
+  ComputedPosition,
+  WatchlistItem,
+  InsertWatchlistItem
 } from "@shared/schema";
 
 export const api = {
@@ -111,6 +118,74 @@ export const api = {
 
   async analyzeEconomicEvent(event: string, previous?: string, forecast?: string, importance: string = "medium"): Promise<EconomicImpact> {
     const res = await apiRequest("POST", "/api/econ/analyze", { event, previous, forecast, importance });
+    return res.json();
+  },
+
+  // Asset Search
+  async searchAssets(query: string, types?: string[], limit = 10): Promise<AssetSearchResult[]> {
+    const params = new URLSearchParams();
+    params.set('q', query);
+    if (types) params.set('types', types.join(','));
+    params.set('limit', limit.toString());
+    const res = await apiRequest("GET", `/api/search?${params}`);
+    return res.json();
+  },
+
+  // Asset Sheet
+  async getAssetSheetData(symbol: string, assetType: string): Promise<AssetSheetData> {
+    const res = await apiRequest("GET", `/api/asset/${symbol}?assetType=${assetType}`);
+    return res.json();
+  },
+
+  // Transactions
+  async createTransaction(data: InsertTransaction): Promise<{ transaction: Transaction; position: ComputedPosition | null }> {
+    const res = await apiRequest("POST", "/api/transactions", data);
+    return res.json();
+  },
+
+  async getTransactions(portfolioId: string, symbol?: string): Promise<Transaction[]> {
+    const params = new URLSearchParams();
+    params.set('portfolioId', portfolioId);
+    if (symbol) params.set('symbol', symbol);
+    const res = await apiRequest("GET", `/api/transactions?${params}`);
+    return res.json();
+  },
+
+  async updateTransaction(id: string, data: Partial<InsertTransaction>): Promise<Transaction> {
+    const res = await apiRequest("PATCH", `/api/transactions/${id}`, data);
+    return res.json();
+  },
+
+  async deleteTransaction(id: string): Promise<{ success: boolean }> {
+    const res = await apiRequest("DELETE", `/api/transactions/${id}`);
+    return res.json();
+  },
+
+  // Computed Positions
+  async getComputedPositions(portfolioId: string): Promise<ComputedPosition[]> {
+    const res = await apiRequest("GET", `/api/positions?portfolioId=${portfolioId}`);
+    return res.json();
+  },
+
+  // Watchlist
+  async getWatchlist(): Promise<WatchlistItem[]> {
+    const res = await apiRequest("GET", "/api/watchlist");
+    return res.json();
+  },
+
+  async addToWatchlist(data: InsertWatchlistItem): Promise<WatchlistItem> {
+    const res = await apiRequest("POST", "/api/watchlist", data);
+    return res.json();
+  },
+
+  async removeFromWatchlist(id: string): Promise<{ success: boolean }> {
+    const res = await apiRequest("DELETE", `/api/watchlist/${id}`);
+    return res.json();
+  },
+
+  // Migration
+  async migratePositionsToTransactions(): Promise<{ success: boolean; message: string }> {
+    const res = await apiRequest("POST", "/api/migrate");
     return res.json();
   }
 };

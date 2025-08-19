@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, timestamp, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -28,6 +28,31 @@ export const prices = pgTable("prices", {
   source: text("source").notNull(),
 });
 
+export const transactions = pgTable("transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
+  symbol: text("symbol").notNull(),
+  assetType: text("asset_type").notNull(), // equity | etf | crypto | fx | commodity
+  side: text("side").notNull(), // buy | sell | transfer_in | transfer_out | airdrop | fee | dividend
+  quantity: decimal("quantity").notNull(), // positive numbers only
+  price: decimal("price"), // unit price in quote currency (USD default)
+  fee: decimal("fee"), // optional
+  occurredAt: timestamp("occurred_at").notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  portfolioSymbolOccurredIdx: index("portfolio_symbol_occurred_idx").on(table.portfolioId, table.symbol, table.occurredAt),
+}));
+
+export const watchlist = pgTable("watchlist", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  symbol: text("symbol").notNull(),
+  assetType: text("asset_type").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  symbolAssetTypeIdx: index("symbol_asset_type_idx").on(table.symbol, table.assetType),
+}));
+
 // Insert schemas
 export const insertPortfolioSchema = createInsertSchema(portfolios).pick({
   name: true,
@@ -50,13 +75,42 @@ export const insertPriceSchema = createInsertSchema(prices).pick({
   source: true,
 });
 
+export const insertTransactionSchema = createInsertSchema(transactions).pick({
+  portfolioId: true,
+  symbol: true,
+  assetType: true,
+  side: true,
+  quantity: true,
+  price: true,
+  fee: true,
+  occurredAt: true,
+  note: true,
+}).extend({
+  side: z.enum(["buy", "sell", "transfer_in", "transfer_out", "airdrop", "fee", "dividend"]),
+  assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity"]),
+  quantity: z.string().transform(val => {
+    const num = parseFloat(val);
+    if (num <= 0) throw new Error("Quantity must be positive");
+    return val;
+  }),
+});
+
+export const insertWatchlistSchema = createInsertSchema(watchlist).pick({
+  symbol: true,
+  assetType: true,
+});
+
 // Types
 export type Portfolio = typeof portfolios.$inferSelect;
 export type Position = typeof positions.$inferSelect;
 export type Price = typeof prices.$inferSelect;
+export type Transaction = typeof transactions.$inferSelect;
+export type WatchlistItem = typeof watchlist.$inferSelect;
 export type InsertPortfolio = z.infer<typeof insertPortfolioSchema>;
 export type InsertPosition = z.infer<typeof insertPositionSchema>;
 export type InsertPrice = z.infer<typeof insertPriceSchema>;
+export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
+export type InsertWatchlistItem = z.infer<typeof insertWatchlistSchema>;
 
 // Extended types for API responses
 export type PositionWithPrice = Position & {
@@ -191,3 +245,41 @@ export type EconomicImpact = {
   explanation?: string;
   as_of: string;
 };
+
+// New types for transaction-based features
+export type ComputedPosition = {
+  symbol: string;
+  assetType: string;
+  quantity: number;
+  avgCost: number;
+  lastPrice?: number;
+  value: number;
+  pnlAmount: number;
+  pnlPercent: number;
+  realizedPnl: number;
+};
+
+export type AssetSearchResult = {
+  id: string;
+  symbol: string;
+  name: string;
+  assetType: string;
+  exchange?: string;
+  coingeckoId?: string;
+  lastPrice?: number;
+};
+
+export type AssetSheetData = {
+  symbol: string;
+  name: string;
+  assetType: string;
+  price: number;
+  change24h: number;
+  changePercent24h: number;
+  marketCap?: number;
+  miniChart: { ts: number; close: number }[];
+  asOf: string;
+};
+
+export type TransactionSide = "buy" | "sell" | "transfer_in" | "transfer_out" | "airdrop" | "fee" | "dividend";
+export type AssetType = "equity" | "etf" | "crypto" | "fx" | "commodity";

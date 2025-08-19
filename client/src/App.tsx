@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -6,6 +7,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { DisclaimerBanner } from "@/components/layout/disclaimer-banner";
 import { Sidebar } from "@/components/layout/sidebar";
+import { CommandPalette, useCommandPalette } from "@/components/ui/command-palette";
+import { AssetSheetModal } from "@/components/ui/asset-sheet-modal";
+import { TransactionModal } from "@/components/ui/transaction-modal";
+import type { AssetSearchResult } from "@shared/schema";
 import Dashboard from "@/pages/dashboard";
 import Portfolio from "@/pages/portfolio";
 import Insights from "@/pages/insights";
@@ -31,6 +36,21 @@ function Router() {
 }
 
 function App() {
+  const [selectedAsset, setSelectedAsset] = useState<AssetSearchResult | null>(null);
+  const [showAssetSheet, setShowAssetSheet] = useState(false);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const { open: commandPaletteOpen, setOpen: setCommandPaletteOpen } = useCommandPalette();
+
+  const handleAssetSelect = (asset: AssetSearchResult) => {
+    setSelectedAsset(asset);
+    setShowAssetSheet(true);
+  };
+
+  const handleAddTransaction = (asset: AssetSearchResult) => {
+    setSelectedAsset(asset);
+    setShowTransactionModal(true);
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="system" storageKey="finance-tracker-theme">
@@ -45,6 +65,29 @@ function App() {
           </div>
         </div>
           <Toaster />
+          
+          {/* Global Command Palette */}
+          <CommandPalette 
+            open={commandPaletteOpen}
+            onOpenChange={setCommandPaletteOpen}
+            onSelectAsset={handleAssetSelect}
+          />
+          
+          {/* Asset Sheet Modal */}
+          <AssetSheetModal
+            open={showAssetSheet}
+            onOpenChange={setShowAssetSheet}
+            asset={selectedAsset}
+            onAddTransaction={handleAddTransaction}
+          />
+          
+          {/* Transaction Modal */}
+          <TransactionModal
+            open={showTransactionModal}
+            onOpenChange={setShowTransactionModal}
+            asset={selectedAsset}
+            portfolioId="demo-portfolio-1" // TODO: Make this dynamic
+          />
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
