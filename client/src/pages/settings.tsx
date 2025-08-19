@@ -12,7 +12,7 @@ export default function Settings() {
         subtitle="Configure your portfolio tracker and API integrations"
       />
       
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           
           {/* API Keys Section */}
@@ -24,7 +24,7 @@ export default function Settings() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
                 <div className="p-4 border rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-medium">OpenAI API</h3>

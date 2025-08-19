@@ -49,28 +49,41 @@ export function Header({ title, subtitle, portfolioId }: HeaderProps) {
   };
 
   return (
-    <header className="bg-card shadow-sm border-b border-border px-6 py-4">
+    <header className="bg-card shadow-sm border-b border-border px-4 md:px-6 py-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">{title}</h2>
-          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+        <div className="min-w-0 flex-1 md:flex-none">
+          <h2 className="text-xl md:text-2xl font-bold text-foreground truncate">{title}</h2>
+          <p className="text-sm text-muted-foreground mt-1 hidden sm:block">{subtitle}</p>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 md:space-x-4">
           {portfolioId && (
             <Button 
               onClick={handleRefreshPrices}
               disabled={isRefreshing}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              size={"sm"}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 hidden sm:flex"
             >
               <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
-              {isRefreshing ? "Refreshing..." : "Refresh Prices"}
+              <span className="hidden md:inline">{isRefreshing ? "Refreshing..." : "Refresh Prices"}</span>
+              <span className="md:hidden">Refresh</span>
+            </Button>
+          )}
+          {portfolioId && (
+            <Button 
+              onClick={handleRefreshPrices}
+              disabled={isRefreshing}
+              size={"icon"}
+              variant="outline"
+              className="sm:hidden"
+            >
+              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
             </Button>
           )}
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
               <User className="text-muted-foreground text-sm" />
             </div>
-            <span className="text-sm text-foreground font-medium">Demo User</span>
+            <span className="text-sm text-foreground font-medium hidden sm:inline">Demo User</span>
           </div>
         </div>
       </div>

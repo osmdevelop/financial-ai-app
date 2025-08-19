@@ -35,9 +35,11 @@ function App() {
       <TooltipProvider>
         <div className="min-h-screen bg-background">
           <DisclaimerBanner />
-          <div className="flex h-[calc(100vh-3rem)]">
+          <div className="flex h-[calc(100vh-3rem)] relative">
             <Sidebar />
-            <Router />
+            <div className="flex-1 min-w-0">
+              <Router />
+            </div>
           </div>
         </div>
         <Toaster />

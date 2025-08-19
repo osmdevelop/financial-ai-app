@@ -53,7 +53,7 @@ export default function EconomicCalendar() {
         subtitle="Upcoming economic events with market impact analysis"
       />
       
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <Select value={timeframe} onValueChange={setTimeframe}>

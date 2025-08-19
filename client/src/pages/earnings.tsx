@@ -47,7 +47,7 @@ export default function Earnings() {
         subtitle="Upcoming earnings reports with AI-powered predictions"
       />
       
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <Select value={timeframe} onValueChange={setTimeframe}>
@@ -70,7 +70,7 @@ export default function Earnings() {
 
         {/* Earnings Grid */}
         {isLoading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <Card key={i} className="animate-pulse">
                 <CardHeader>
@@ -88,7 +88,7 @@ export default function Earnings() {
             ))}
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {earnings?.map((earning) => (
               <Card key={`${earning.symbol}-${earning.date}`} className="hover:shadow-md transition-shadow">
                 <CardHeader>

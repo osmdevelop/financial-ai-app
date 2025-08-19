@@ -163,7 +163,7 @@ BTC-USD,0.05,60000.00,crypto`;
         portfolioId={selectedPortfolioId}
       />
       
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
         {/* Portfolio Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
@@ -171,16 +171,18 @@ BTC-USD,0.05,60000.00,crypto`;
               <h3 className="text-lg font-semibold text-foreground">Portfolio Management</h3>
               <p className="text-sm text-muted-foreground">Manage your positions and upload new data</p>
             </div>
-            <div className="flex space-x-3">
-              <Button variant="outline" onClick={downloadTemplate}>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button variant="outline" onClick={downloadTemplate} size="sm">
                 <Download className="mr-2 h-4 w-4" />
-                Download Template
+                <span className="hidden sm:inline">Download Template</span>
+                <span className="sm:hidden">Template</span>
               </Button>
               <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
                 <DialogTrigger asChild>
-                  <Button disabled={!selectedPortfolioId}>
+                  <Button disabled={!selectedPortfolioId} size="sm">
                     <Upload className="mr-2 h-4 w-4" />
-                    Upload CSV
+                    <span className="hidden sm:inline">Upload CSV</span>
+                    <span className="sm:hidden">Upload</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
