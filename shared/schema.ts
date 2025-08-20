@@ -102,6 +102,10 @@ export const insertTransactionSchema = createInsertSchema(transactions).pick({
     if (num <= 0) throw new Error("Quantity must be positive");
     return val;
   }),
+  occurredAt: z.union([z.date(), z.string().transform(val => new Date(val))]),
+  price: z.union([z.string(), z.null()]).optional(),
+  fee: z.union([z.string(), z.null()]).optional(),
+  note: z.union([z.string(), z.null()]).optional(),
 });
 
 export const insertWatchlistSchema = createInsertSchema(watchlist).pick({
