@@ -46,7 +46,7 @@ export default function PortfolioV2() {
   const [activeTab, setActiveTab] = useState("holdings");
   const [showHidden, setShowHidden] = useState(false);
   const { toast } = useToast();
-  const { setOpen: openCommandPalette } = useCommandPalette();
+  const { setOpen: openCommandPalette, setCurrentPortfolioId } = useCommandPalette();
 
   // Fetch portfolios
   const { data: portfolios, isLoading: portfoliosLoading } = useQuery({
@@ -60,6 +60,13 @@ export default function PortfolioV2() {
       setSelectedPortfolioId(portfolios[0].id);
     }
   }, [portfolios, selectedPortfolioId]);
+
+  // Update global portfolio context when portfolio changes
+  useEffect(() => {
+    if (selectedPortfolioId) {
+      setCurrentPortfolioId(selectedPortfolioId);
+    }
+  }, [selectedPortfolioId, setCurrentPortfolioId]);
 
   // Fetch computed positions
   const { data: positions = [], isLoading: positionsLoading } = useQuery({
@@ -82,6 +89,87 @@ export default function PortfolioV2() {
       baseCurrency: "USD",
     },
   });
+
+  // Import/Export handlers
+  const handleUploadCSV = () => {
+    toast({
+      title: "Feature Coming Soon",
+      description: "CSV import functionality will be available in a future update.",
+    });
+  };
+
+  const handleDownloadTemplate = () => {
+    const csvContent = "Date,Symbol,Side,Quantity,Price,Fee,Note\n2025-01-20,AAPL,buy,10,150.00,9.99,Example transaction";
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'portfolio_template.csv';
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleExportTransactions = () => {
+    if (!selectedPortfolioId) {
+      toast({
+        title: "No Portfolio Selected",
+        description: "Please select a portfolio to export transactions.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const csvContent = transactions.length > 0 
+      ? "Date,Symbol,Side,Quantity,Price,Fee,Note\n" + 
+        transactions.map(t => 
+          `${t.occurredAt},${t.symbol},${t.side},${t.quantity},${t.price || ''},${t.fee || ''},${t.note || ''}`
+        ).join('\n')
+      : "Date,Symbol,Side,Quantity,Price,Fee,Note\nNo transactions to export";
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `transactions_${selectedPortfolio?.name || 'portfolio'}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Export Complete",
+      description: `Exported ${transactions.length} transactions.`,
+    });
+  };
+
+  const handleExportPositions = () => {
+    if (!selectedPortfolioId) {
+      toast({
+        title: "No Portfolio Selected",
+        description: "Please select a portfolio to export positions.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const csvContent = positions.length > 0
+      ? "Symbol,Asset Type,Quantity,Avg Cost,Last Price,Value,Unrealized P&L,Realized P&L\n" +
+        positions.map(p => 
+          `${p.symbol},${p.assetType},${p.quantity},${p.avgCost || ''},${p.lastPrice || ''},${p.value || ''},${p.unrealizedPnl || ''},${p.realizedPnl || ''}`
+        ).join('\n')
+      : "Symbol,Asset Type,Quantity,Avg Cost,Last Price,Value,Unrealized P&L,Realized P&L\nNo positions to export";
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `positions_${selectedPortfolio?.name || 'portfolio'}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Export Complete",
+      description: `Exported ${positions.length} positions.`,
+    });
+  };
 
   const createPortfolioMutation = useMutation({
     mutationFn: api.createPortfolio,
@@ -517,11 +605,11 @@ export default function PortfolioV2() {
                   <p className="text-sm text-muted-foreground">
                     Upload a CSV file with transaction data to bulk import into your portfolio.
                   </p>
-                  <Button className="w-full">
+                  <Button className="w-full" onClick={handleUploadCSV}>
                     <Upload className="mr-2 h-4 w-4" />
                     Upload CSV
                   </Button>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" onClick={handleDownloadTemplate}>
                     <Download className="mr-2 h-4 w-4" />
                     Download Template
                   </Button>
@@ -536,11 +624,11 @@ export default function PortfolioV2() {
                   <p className="text-sm text-muted-foreground">
                     Export your transaction history and current positions for backup or analysis.
                   </p>
-                  <Button className="w-full">
+                  <Button className="w-full" onClick={handleExportTransactions}>
                     <Download className="mr-2 h-4 w-4" />
                     Export Transactions
                   </Button>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" onClick={handleExportPositions}>
                     <Download className="mr-2 h-4 w-4" />
                     Export Positions
                   </Button>

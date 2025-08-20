@@ -41,15 +41,16 @@ function AppContent() {
   const [selectedAsset, setSelectedAsset] = useState<AssetSearchResult | null>(null);
   const [showAssetSheet, setShowAssetSheet] = useState(false);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
-  const { open: commandPaletteOpen, setOpen: setCommandPaletteOpen } = useCommandPalette();
+  const { open: commandPaletteOpen, setOpen: setCommandPaletteOpen, currentPortfolioId, setCurrentPortfolioId } = useCommandPalette();
 
   const handleAssetSelect = (asset: AssetSearchResult) => {
     setSelectedAsset(asset);
     setShowAssetSheet(true);
   };
 
-  const handleAddTransaction = (asset: AssetSearchResult) => {
+  const handleAddTransaction = (asset: AssetSearchResult, portfolioId?: string) => {
     setSelectedAsset(asset);
+    if (portfolioId) setCurrentPortfolioId(portfolioId);
     setShowTransactionModal(true);
   };
 
@@ -77,6 +78,7 @@ function AppContent() {
         onOpenChange={setShowAssetSheet}
         asset={selectedAsset}
         onAddTransaction={handleAddTransaction}
+        portfolioId={currentPortfolioId}
       />
       
       {/* Transaction Modal */}
@@ -84,7 +86,8 @@ function AppContent() {
         open={showTransactionModal}
         onOpenChange={setShowTransactionModal}
         asset={selectedAsset}
-        portfolioId="demo-portfolio-1" // TODO: Make this dynamic
+        portfolioId={currentPortfolioId}
+        onPortfolioIdChange={setCurrentPortfolioId}
       />
     </div>
   );

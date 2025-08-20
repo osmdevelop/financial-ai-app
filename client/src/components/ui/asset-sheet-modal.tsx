@@ -14,14 +14,16 @@ interface AssetSheetModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   asset: AssetSearchResult | null;
-  onAddTransaction: (asset: AssetSearchResult) => void;
+  onAddTransaction: (asset: AssetSearchResult, portfolioId?: string) => void;
+  portfolioId?: string;
 }
 
 export function AssetSheetModal({ 
   open, 
   onOpenChange, 
   asset, 
-  onAddTransaction 
+  onAddTransaction,
+  portfolioId 
 }: AssetSheetModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -74,7 +76,7 @@ export function AssetSheetModal({
 
   const handleAddTransaction = () => {
     if (!asset) return;
-    onAddTransaction(asset);
+    onAddTransaction(asset, portfolioId);
     onOpenChange(false);
   };
 

@@ -31,6 +31,7 @@ interface TransactionModalProps {
   onOpenChange: (open: boolean) => void;
   asset: AssetSearchResult | null;
   portfolioId: string;
+  onPortfolioIdChange?: (portfolioId: string) => void;
 }
 
 const TRANSACTION_SIDES: { value: TransactionSide; label: string; description: string }[] = [
@@ -43,7 +44,7 @@ const TRANSACTION_SIDES: { value: TransactionSide; label: string; description: s
   { value: "dividend", label: "Dividend", description: "Dividend payment received" },
 ];
 
-export function TransactionModal({ open, onOpenChange, asset, portfolioId }: TransactionModalProps) {
+export function TransactionModal({ open, onOpenChange, asset, portfolioId, onPortfolioIdChange }: TransactionModalProps) {
   const [date, setDate] = useState<Date>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
