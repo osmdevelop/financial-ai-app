@@ -229,7 +229,7 @@ export default function PortfolioV2() {
                   <SelectValue placeholder="Select Portfolio" />
                 </SelectTrigger>
                 <SelectContent>
-                  {portfolios?.filter(p => !p.archived).map((portfolio) => (
+                  {portfolios?.map((portfolio) => (
                     <SelectItem key={portfolio.id} value={portfolio.id}>
                       {portfolio.name} ({portfolio.baseCurrency})
                     </SelectItem>
