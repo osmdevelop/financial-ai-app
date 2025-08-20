@@ -128,6 +128,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/portfolios/:id/archive", async (req, res) => {
+    try {
+      await storage.archivePortfolio(req.params.id);
+      res.json({ success: true, message: "Portfolio archived" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to archive portfolio" });
+    }
+  });
+
+  app.delete("/api/portfolios/:id", async (req, res) => {
+    try {
+      await storage.deletePortfolio(req.params.id);
+      res.json({ success: true, message: "Portfolio deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete portfolio" });
+    }
+  });
+
   // Position routes
   app.post("/api/portfolios/:id/positions/upload", async (req, res) => {
     try {

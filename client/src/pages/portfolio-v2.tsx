@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +28,9 @@ import {
   TrendingUp,
   TrendingDown,
   Activity,
-  DollarSign
+  DollarSign,
+  Archive,
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -192,6 +196,56 @@ export default function PortfolioV2() {
     },
   });
 
+  const archivePortfolioMutation = useMutation({
+    mutationFn: api.archivePortfolio,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/portfolios"] });
+      // Reset selected portfolio if it was archived
+      const remainingPortfolios = portfolios?.filter(p => p.id !== selectedPortfolioId && p.archived !== "true");
+      if (remainingPortfolios && remainingPortfolios.length > 0) {
+        setSelectedPortfolioId(remainingPortfolios[0].id);
+      } else {
+        setSelectedPortfolioId("");
+      }
+      toast({
+        title: "Portfolio archived",
+        description: "Portfolio has been archived successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to archive portfolio",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deletePortfolioMutation = useMutation({
+    mutationFn: api.deletePortfolio,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/portfolios"] });
+      // Reset selected portfolio if it was deleted
+      const remainingPortfolios = portfolios?.filter(p => p.id !== selectedPortfolioId);
+      if (remainingPortfolios && remainingPortfolios.length > 0) {
+        setSelectedPortfolioId(remainingPortfolios[0].id);
+      } else {
+        setSelectedPortfolioId("");
+      }
+      toast({
+        title: "Portfolio deleted",
+        description: "Portfolio has been permanently deleted.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to delete portfolio",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Calculate portfolio summary
   const portfolioSummary = positions.reduce(
     (acc, position) => {
@@ -224,18 +278,89 @@ export default function PortfolioV2() {
         <div className="mb-4 sm:mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 sm:mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-              <Select value={selectedPortfolioId} onValueChange={setSelectedPortfolioId}>
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select Portfolio" />
-                </SelectTrigger>
-                <SelectContent>
-                  {portfolios?.map((portfolio) => (
-                    <SelectItem key={portfolio.id} value={portfolio.id}>
-                      {portfolio.name} ({portfolio.baseCurrency})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select value={selectedPortfolioId} onValueChange={setSelectedPortfolioId}>
+                  <SelectTrigger className="w-64">
+                    <SelectValue placeholder="Select Portfolio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {portfolios?.map((portfolio) => (
+                      <SelectItem key={portfolio.id} value={portfolio.id}>
+                        {portfolio.name} ({portfolio.baseCurrency})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                {selectedPortfolio && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            <Archive className="mr-2 h-4 w-4" />
+                            Archive Portfolio
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Archive Portfolio</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to archive "{selectedPortfolio.name}"? 
+                              It will be hidden from the main view but can be restored later.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => archivePortfolioMutation.mutate(selectedPortfolio.id)}
+                              disabled={archivePortfolioMutation.isPending}
+                            >
+                              {archivePortfolioMutation.isPending ? "Archiving..." : "Archive"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      
+                      <DropdownMenuSeparator />
+                      
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            <Trash2 className="mr-2 h-4 w-4 text-red-500" />
+                            <span className="text-red-500">Delete Portfolio</span>
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Portfolio</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to permanently delete "{selectedPortfolio.name}"? 
+                              This will remove all transactions, positions, and historical data. 
+                              This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deletePortfolioMutation.mutate(selectedPortfolio.id)}
+                              disabled={deletePortfolioMutation.isPending}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              {deletePortfolioMutation.isPending ? "Deleting..." : "Delete"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
               
               <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
                 <DialogTrigger asChild>

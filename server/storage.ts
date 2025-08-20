@@ -35,6 +35,8 @@ export interface IStorage {
   createPortfolio(portfolio: InsertPortfolio): Promise<Portfolio>;
   getPortfolio(id: string): Promise<Portfolio | undefined>;
   getPortfolios(): Promise<Portfolio[]>;
+  archivePortfolio(id: string): Promise<void>;
+  deletePortfolio(id: string): Promise<void>;
   
   // Position methods
   createPosition(position: InsertPosition): Promise<Position>;
@@ -442,12 +444,47 @@ export class DatabaseStorage implements IStorage {
   async searchAssets(query: string, types?: string[], limit = 20): Promise<AssetSearchResult[]> {
     // Mock implementation - in real app would search external APIs
     const mockResults: AssetSearchResult[] = [
+      // Tech Stocks
       { id: "1", symbol: "AAPL", name: "Apple Inc.", assetType: "equity", exchange: "NASDAQ" },
       { id: "2", symbol: "GOOGL", name: "Alphabet Inc.", assetType: "equity", exchange: "NASDAQ" },
       { id: "3", symbol: "MSFT", name: "Microsoft Corporation", assetType: "equity", exchange: "NASDAQ" },
+      { id: "7", symbol: "TSLA", name: "Tesla Inc.", assetType: "equity", exchange: "NASDAQ" },
+      { id: "8", symbol: "AMZN", name: "Amazon.com Inc.", assetType: "equity", exchange: "NASDAQ" },
+      { id: "9", symbol: "META", name: "Meta Platforms Inc.", assetType: "equity", exchange: "NASDAQ" },
+      { id: "10", symbol: "NFLX", name: "Netflix Inc.", assetType: "equity", exchange: "NASDAQ" },
+      { id: "11", symbol: "NVDA", name: "NVIDIA Corporation", assetType: "equity", exchange: "NASDAQ" },
+      
+      // Blue Chip Stocks
+      { id: "12", symbol: "JPM", name: "JPMorgan Chase & Co.", assetType: "equity", exchange: "NYSE" },
+      { id: "13", symbol: "V", name: "Visa Inc.", assetType: "equity", exchange: "NYSE" },
+      { id: "14", symbol: "JNJ", name: "Johnson & Johnson", assetType: "equity", exchange: "NYSE" },
+      { id: "15", symbol: "WMT", name: "Walmart Inc.", assetType: "equity", exchange: "NYSE" },
+      { id: "16", symbol: "PG", name: "Procter & Gamble Co.", assetType: "equity", exchange: "NYSE" },
+      { id: "17", symbol: "HD", name: "The Home Depot Inc.", assetType: "equity", exchange: "NYSE" },
+      { id: "18", symbol: "BAC", name: "Bank of America Corp.", assetType: "equity", exchange: "NYSE" },
+      { id: "19", symbol: "DIS", name: "The Walt Disney Company", assetType: "equity", exchange: "NYSE" },
+      
+      // ETFs
       { id: "4", symbol: "SPY", name: "SPDR S&P 500 ETF Trust", assetType: "etf", exchange: "NYSE" },
+      { id: "20", symbol: "QQQ", name: "Invesco QQQ Trust", assetType: "etf", exchange: "NASDAQ" },
+      { id: "21", symbol: "IWM", name: "iShares Russell 2000 ETF", assetType: "etf", exchange: "NYSE" },
+      { id: "22", symbol: "VTI", name: "Vanguard Total Stock Market ETF", assetType: "etf", exchange: "NYSE" },
+      { id: "23", symbol: "VOO", name: "Vanguard S&P 500 ETF", assetType: "etf", exchange: "NYSE" },
+      { id: "24", symbol: "VEA", name: "Vanguard FTSE Developed Markets ETF", assetType: "etf", exchange: "NYSE" },
+      { id: "25", symbol: "VWO", name: "Vanguard FTSE Emerging Markets ETF", assetType: "etf", exchange: "NYSE" },
+      { id: "26", symbol: "TLT", name: "iShares 20+ Year Treasury Bond ETF", assetType: "etf", exchange: "NASDAQ" },
+      
+      // Cryptocurrencies
       { id: "5", symbol: "BTC", name: "Bitcoin", assetType: "crypto", coingeckoId: "bitcoin" },
       { id: "6", symbol: "ETH", name: "Ethereum", assetType: "crypto", coingeckoId: "ethereum" },
+      { id: "27", symbol: "ADA", name: "Cardano", assetType: "crypto", coingeckoId: "cardano" },
+      { id: "28", symbol: "SOL", name: "Solana", assetType: "crypto", coingeckoId: "solana" },
+      { id: "29", symbol: "DOT", name: "Polkadot", assetType: "crypto", coingeckoId: "polkadot" },
+      { id: "30", symbol: "AVAX", name: "Avalanche", assetType: "crypto", coingeckoId: "avalanche-2" },
+      { id: "31", symbol: "MATIC", name: "Polygon", assetType: "crypto", coingeckoId: "matic-network" },
+      { id: "32", symbol: "LINK", name: "Chainlink", assetType: "crypto", coingeckoId: "chainlink" },
+      { id: "33", symbol: "UNI", name: "Uniswap", assetType: "crypto", coingeckoId: "uniswap" },
+      { id: "34", symbol: "LTC", name: "Litecoin", assetType: "crypto", coingeckoId: "litecoin" },
     ];
 
     return mockResults.filter(asset => 
@@ -523,6 +560,15 @@ export class DatabaseStorage implements IStorage {
   async getEconomicEvents(days = 7): Promise<EconomicEvent[]> {
     // Mock implementation
     return [];
+  }
+
+  async archivePortfolio(id: string): Promise<void> {
+    await db.update(portfolios).set({ archived: "true" }).where(eq(portfolios.id, id));
+  }
+
+  async deletePortfolio(id: string): Promise<void> {
+    // This will cascade delete all related data (transactions, positions, etc.)
+    await db.delete(portfolios).where(eq(portfolios.id, id));
   }
 
   async initializeSampleData(): Promise<void> {

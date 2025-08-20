@@ -36,6 +36,16 @@ export const api = {
     return res.json();
   },
 
+  async archivePortfolio(id: string): Promise<{ success: boolean; message: string }> {
+    const res = await apiRequest("PUT", `/api/portfolios/${id}/archive`);
+    return res.json();
+  },
+
+  async deletePortfolio(id: string): Promise<{ success: boolean; message: string }> {
+    const res = await apiRequest("DELETE", `/api/portfolios/${id}`);
+    return res.json();
+  },
+
   async getPortfolioDetails(id: string): Promise<{
     portfolio: Portfolio;
     positions: PositionWithPrice[];
