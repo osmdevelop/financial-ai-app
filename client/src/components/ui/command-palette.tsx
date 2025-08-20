@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +51,7 @@ export function CommandPalette({ open, onOpenChange, onSelectAsset }: CommandPal
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onOpenChange]);
 
-  // Reset query when dialog closes
+  // Clear query when modal closes
   useEffect(() => {
     if (!open) {
       setQuery("");
@@ -59,89 +59,89 @@ export function CommandPalette({ open, onOpenChange, onSelectAsset }: CommandPal
     }
   }, [open]);
 
-  const handleSelect = useCallback((asset: AssetSearchResult) => {
+  const handleSelect = (asset: AssetSearchResult) => {
     onSelectAsset(asset);
     onOpenChange(false);
-  }, [onSelectAsset, onOpenChange]);
-
-  const getAssetTypeColor = (assetType: string) => {
-    switch (assetType) {
-      case "equity": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
-      case "etf": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-      case "crypto": return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
-    }
-  };
-
-  const getAssetIcon = (symbol: string) => {
-    // Return first letter as a simple icon
-    return symbol.charAt(0).toUpperCase();
-  };
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(price);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 gap-0">
-        <div className="flex items-center border-b px-3">
-          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search stocks, ETFs, crypto... (⌘K)"
-            className="flex h-14 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-            autoFocus
-          />
-        </div>
-        
-        <Command className="max-h-80">
-          <CommandList>
-            {query.length >= 2 && (
+      <DialogContent className="max-w-2xl p-0">
+        <Command className="rounded-lg border shadow-md">
+          <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <Input
+              placeholder="Search stocks, ETFs, crypto..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border-0 focus-visible:ring-0"
+            />
+          </div>
+          <CommandList className="max-h-[300px] overflow-y-auto">
+            {isLoading && query.length >= 2 && (
+              <div className="py-6 text-center text-sm">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-muted-foreground">Searching...</p>
+              </div>
+            )}
+            
+            {!isLoading && query.length >= 2 && (
               <>
-                {isLoading ? (
-                  <div className="py-6 text-center text-sm text-muted-foreground">
-                    Searching...
+                <CommandEmpty>
+                  <div className="py-6 text-center text-sm">
+                    <div className="mb-2">
+                      <Search className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                    </div>
+                    <p className="text-muted-foreground">No assets found for "{query}"</p>
+                    <p className="text-xs mt-1 text-muted-foreground">
+                      Try searching for a stock symbol, company name, or cryptocurrency
+                    </p>
                   </div>
-                ) : searchResults.length === 0 ? (
-                  <CommandEmpty>No assets found.</CommandEmpty>
-                ) : (
+                </CommandEmpty>
+                
+                {searchResults.length > 0 && (
                   <CommandGroup heading="Assets">
                     {searchResults.map((asset) => (
                       <CommandItem
                         key={`${asset.symbol}-${asset.assetType}`}
-                        value={`${asset.symbol} ${asset.name}`}
+                        value={`${asset.symbol} ${asset.name} ${asset.assetType}`}
                         onSelect={() => handleSelect(asset)}
                         className="flex items-center justify-between p-3 cursor-pointer"
                       >
                         <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
-                            {getAssetIcon(asset.symbol)}
-                          </div>
                           <div className="flex flex-col">
                             <div className="flex items-center space-x-2">
                               <span className="font-medium">{asset.symbol}</span>
                               <Badge 
-                                variant="secondary" 
-                                className={`text-xs ${getAssetTypeColor(asset.assetType)}`}
+                                variant="outline" 
+                                className="text-xs"
+                                style={{ 
+                                  borderColor: `hsl(${asset.assetType === 'equity' ? '210 40% 60%' : 
+                                    asset.assetType === 'crypto' ? '45 93% 47%' : 
+                                    asset.assetType === 'etf' ? '142 76% 36%' : '210 40% 60%'})`,
+                                  color: `hsl(${asset.assetType === 'equity' ? '210 40% 60%' : 
+                                    asset.assetType === 'crypto' ? '45 93% 47%' : 
+                                    asset.assetType === 'etf' ? '142 76% 36%' : '210 40% 60%'})`
+                                }}
                               >
                                 {asset.assetType.toUpperCase()}
                               </Badge>
                             </div>
-                            <span className="text-sm text-muted-foreground truncate max-w-md">
+                            <div className="text-sm text-muted-foreground">
                               {asset.name}
-                            </span>
+                            </div>
                           </div>
                         </div>
                         
                         {asset.lastPrice && (
-                          <div className="text-right">
+                          <div className="flex items-center space-x-2">
+                            {asset.priceChange !== undefined && asset.priceChange !== 0 && (
+                              asset.priceChange > 0 ? (
+                                <TrendingUp className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <TrendingDown className="w-4 h-4 text-red-500" />
+                              )
+                            )}
                             <div className="font-medium text-sm">
                               ${asset.lastPrice.toLocaleString()}
                             </div>
@@ -172,8 +172,17 @@ export function CommandPalette({ open, onOpenChange, onSelectAsset }: CommandPal
   );
 }
 
-// Hook for using the command palette
-export function useCommandPalette() {
+// Context for command palette state
+interface CommandPaletteContextType {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  toggle: () => void;
+  close: () => void;
+}
+
+const CommandPaletteContext = createContext<CommandPaletteContextType | null>(null);
+
+export function CommandPaletteProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
 
   const toggle = useCallback(() => {
@@ -184,10 +193,25 @@ export function useCommandPalette() {
     setOpen(false);
   }, []);
 
-  return {
+  const value = {
     open,
     setOpen,
     toggle,
     close,
   };
+
+  return (
+    <CommandPaletteContext.Provider value={value}>
+      {children}
+    </CommandPaletteContext.Provider>
+  );
+}
+
+// Hook for using the command palette
+export function useCommandPalette() {
+  const context = useContext(CommandPaletteContext);
+  if (!context) {
+    throw new Error("useCommandPalette must be used within a CommandPaletteProvider");
+  }
+  return context;
 }
