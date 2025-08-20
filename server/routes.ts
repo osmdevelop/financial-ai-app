@@ -10,6 +10,7 @@ import {
 } from "@shared/schema";
 import { spawn } from "child_process";
 import { z } from "zod";
+import { ZodError } from "zod";
 import OpenAI from "openai";
 import fs from 'fs/promises';
 import path from 'path';
@@ -900,6 +901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Transaction CRUD APIs
   app.post("/api/transactions", async (req, res) => {
     try {
+      console.log("Received transaction data:", JSON.stringify(req.body, null, 2));
       const validatedData = insertTransactionSchema.parse(req.body);
       const transaction = await storage.createTransaction(validatedData);
       
@@ -911,7 +913,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ transaction, position: updatedPosition });
     } catch (error) {
-      res.status(400).json({ error: "Invalid transaction data" });
+      console.error("Transaction validation error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid transaction data", details: error.errors });
+      } else {
+        res.status(400).json({ error: "Invalid transaction data" });
+      }
     }
   });
 
@@ -996,15 +1003,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Migration endpoint (for converting existing positions to transactions)
-  app.post("/api/migrate", async (req, res) => {
-    try {
-      await storage.migratePositionsToTransactions();
-      res.json({ success: true, message: "Migration completed" });
-    } catch (error) {
-      res.status(500).json({ error: "Migration failed" });
-    }
-  });
+  // Migration endpoint removed - using transaction-based system from start
 
   // Initialize sample data on startup
   await storage.initializeSampleData();

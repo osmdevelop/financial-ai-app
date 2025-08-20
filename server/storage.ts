@@ -334,7 +334,7 @@ export class DatabaseStorage implements IStorage {
 
     const computedPositions: ComputedPosition[] = [];
 
-    for (const [symbol, data] of positionMap) {
+    for (const [symbol, data] of Array.from(positionMap.entries())) {
       const { buyTxns, sellTxns, allTxns } = data;
       
       // Calculate WAC (Weighted Average Cost) and current quantity
@@ -543,7 +543,7 @@ export class DatabaseStorage implements IStorage {
       {
         portfolioId: portfolio.id,
         symbol: "AAPL",
-        assetType: "equity",
+        assetType: "equity" as const,
         side: "buy" as const,
         quantity: "10",
         price: "150.00",
@@ -552,7 +552,7 @@ export class DatabaseStorage implements IStorage {
       {
         portfolioId: portfolio.id,
         symbol: "GOOGL",
-        assetType: "equity",
+        assetType: "equity" as const,
         side: "buy" as const,
         quantity: "5",
         price: "140.00",
@@ -561,7 +561,7 @@ export class DatabaseStorage implements IStorage {
       {
         portfolioId: portfolio.id,
         symbol: "SPY",
-        assetType: "etf",
+        assetType: "etf" as const,
         side: "buy" as const,
         quantity: "20",
         price: "420.00",
