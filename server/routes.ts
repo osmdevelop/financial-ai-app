@@ -944,18 +944,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { symbol, assetType, frames } = assetOverviewSchema.parse(req.query);
       
-      // First check if the asset exists in our search results
-      const searchResults = await storage.searchAssets(symbol, [assetType], 1);
-      if (searchResults.length === 0) {
-        return res.status(404).json({ error: `Asset ${symbol} not found. Please search for valid assets.` });
+      // First check if the asset exists in our search results by exact symbol match
+      const searchResults = await storage.searchAssets(symbol);
+      const validAsset = searchResults.find(asset => 
+        asset.symbol.toLowerCase() === symbol.toLowerCase() && 
+        asset.assetType === assetType
+      );
+      
+      if (!validAsset) {
+        return res.status(404).json({ 
+          error: `Asset ${symbol} (${assetType}) not found. Please search for valid assets from our database.`,
+          suggestion: "Try searching for AAPL, GOOGL, BTC, or SPY"
+        });
       }
       
-      const validAsset = searchResults[0];
       const timeframes = frames.split(',');
       const overview = await storage.getAssetOverview(validAsset.symbol, validAsset.assetType, timeframes);
       res.json({
         ...overview,
-        name: validAsset.name // Use the real name from search results
+        name: validAsset.name, // Use the real name from search results
+        symbol: validAsset.symbol // Ensure consistent symbol casing
       });
     } catch (error) {
       console.error("Asset overview error:", error);
