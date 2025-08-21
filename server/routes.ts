@@ -6,7 +6,8 @@ import {
   insertPositionSchema, 
   insertPriceSchema,
   insertTransactionSchema,
-  insertWatchlistSchema 
+  insertWatchlistSchema,
+  insertFocusAssetSchema 
 } from "@shared/schema";
 import { spawn } from "child_process";
 import { z } from "zod";
@@ -73,6 +74,48 @@ const assetSearchSchema = z.object({
 const assetSheetSchema = z.object({
   symbol: z.string(),
   assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity"])
+});
+
+// Phase 3 schemas
+const focusAssetQuerySchema = z.object({
+  portfolioId: z.string()
+});
+
+const focusAssetReorderSchema = z.object({
+  items: z.array(z.object({
+    id: z.string(),
+    order: z.number()
+  }))
+});
+
+const sentimentExplainSchema = z.object({
+  indexPayload: z.any(),
+  contextNote: z.string().optional()
+});
+
+const assetOverviewSchema = z.object({
+  symbol: z.string(),
+  assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity"]),
+  frames: z.string().optional().default("1h,1d,1w,1m,3m,1y")
+});
+
+const assetOverviewExplainSchema = z.object({
+  overviewPayload: z.any()
+});
+
+const headlinesTimelineSchema = z.object({
+  symbols: z.string().optional(),
+  limit: z.string().optional().transform(val => val ? parseInt(val) : 100)
+});
+
+const headlineImpactSchema = z.object({
+  title: z.string(),
+  summary: z.string().optional(),
+  symbols: z.array(z.string()).default([])
+});
+
+const recapSummarizeSchema = z.object({
+  recapPayload: z.any()
 });
 
 // Schema for transaction queries
@@ -1022,6 +1065,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Migration endpoint removed - using transaction-based system from start
+
+  // ===== PHASE 3 API ROUTES =====
+
+  // Enhanced Sentiment Index
+  app.get("/api/sentiment/index", async (req, res) => {
+    try {
+      const sentiment = await storage.getEnhancedSentiment();
+      res.json(sentiment);
+    } catch (error) {
+      console.error("Enhanced sentiment error:", error);
+      res.status(500).json({ error: "Failed to get sentiment index" });
+    }
+  });
+
+  app.post("/api/sentiment/explain", async (req, res) => {
+    try {
+      const { indexPayload, contextNote } = sentimentExplainSchema.parse(req.body);
+      const narrative = await storage.getSentimentNarrative(indexPayload, contextNote);
+      res.json(narrative);
+    } catch (error) {
+      console.error("Sentiment narrative error:", error);
+      res.status(500).json({ error: "Failed to generate sentiment narrative" });
+    }
+  });
+
+  // Focus Assets CRUD
+  app.get("/api/focus-assets", async (req, res) => {
+    try {
+      const { portfolioId } = focusAssetQuerySchema.parse(req.query);
+      const focusAssets = await storage.getFocusAssets(portfolioId);
+      res.json(focusAssets);
+    } catch (error) {
+      console.error("Get focus assets error:", error);
+      res.status(500).json({ error: "Failed to get focus assets" });
+    }
+  });
+
+  app.post("/api/focus-assets", async (req, res) => {
+    try {
+      const focusAssetData = insertFocusAssetSchema.parse(req.body);
+      const focusAsset = await storage.createFocusAsset(focusAssetData);
+      res.json(focusAsset);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Maximum 5 focus assets")) {
+        return res.status(400).json({ error: "Limit reached — remove one to add another" });
+      }
+      console.error("Create focus asset error:", error);
+      res.status(500).json({ error: "Failed to create focus asset" });
+    }
+  });
+
+  app.delete("/api/focus-assets/:id", async (req, res) => {
+    try {
+      await storage.deleteFocusAsset(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete focus asset error:", error);
+      res.status(500).json({ error: "Failed to delete focus asset" });
+    }
+  });
+
+  app.patch("/api/focus-assets/reorder", async (req, res) => {
+    try {
+      const { items } = focusAssetReorderSchema.parse(req.body);
+      await storage.reorderFocusAssets(items);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Reorder focus assets error:", error);
+      res.status(500).json({ error: "Failed to reorder focus assets" });
+    }
+  });
+
+  // Asset Overview / Multi-timeframe
+  app.get("/api/asset/overview", async (req, res) => {
+    try {
+      const { symbol, assetType, frames } = assetOverviewSchema.parse(req.query);
+      const timeframes = frames.split(',');
+      const overview = await storage.getAssetOverview(symbol, assetType, timeframes);
+      res.json(overview);
+    } catch (error) {
+      console.error("Asset overview error:", error);
+      res.status(500).json({ error: "Failed to get asset overview" });
+    }
+  });
+
+  app.post("/api/asset/overview/explain", async (req, res) => {
+    try {
+      const { overviewPayload } = assetOverviewExplainSchema.parse(req.body);
+      const summary = await storage.getAssetOverviewSummary(overviewPayload);
+      res.json(summary);
+    } catch (error) {
+      console.error("Asset overview summary error:", error);
+      res.status(500).json({ error: "Failed to generate overview summary" });
+    }
+  });
+
+  // Market Recap (daily)
+  app.get("/api/recap/daily", async (req, res) => {
+    try {
+      const recap = await storage.getMarketRecap();
+      res.json(recap);
+    } catch (error) {
+      console.error("Market recap error:", error);
+      res.status(500).json({ error: "Failed to get market recap" });
+    }
+  });
+
+  app.post("/api/recap/summarize", async (req, res) => {
+    try {
+      const { recapPayload } = recapSummarizeSchema.parse(req.body);
+      const summary = await storage.getMarketRecapSummary(recapPayload);
+      res.json(summary);
+    } catch (error) {
+      console.error("Market recap summary error:", error);
+      res.status(500).json({ error: "Failed to generate recap summary" });
+    }
+  });
+
+  // Enhanced Headlines timeline
+  app.get("/api/headlines/timeline", async (req, res) => {
+    try {
+      const { symbols, limit } = headlinesTimelineSchema.parse(req.query);
+      const symbolsArray = symbols ? symbols.split(',') : undefined;
+      const headlines = await storage.getHeadlinesTimeline(symbolsArray, limit);
+      res.json(headlines);
+    } catch (error) {
+      console.error("Headlines timeline error:", error);
+      res.status(500).json({ error: "Failed to get headlines timeline" });
+    }
+  });
+
+  app.post("/api/headlines/impact", async (req, res) => {
+    try {
+      const { title, summary, symbols } = headlineImpactSchema.parse(req.body);
+      const impact = await storage.analyzeHeadlineImpact(title, summary, symbols);
+      res.json(impact);
+    } catch (error) {
+      console.error("Headline impact analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze headline impact" });
+    }
+  });
 
   // Initialize sample data on startup
   await storage.initializeSampleData();

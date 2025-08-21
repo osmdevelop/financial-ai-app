@@ -62,6 +62,17 @@ export const watchlist = pgTable("watchlist", {
   symbolAssetTypeIdx: index("symbol_asset_type_idx").on(table.symbol, table.assetType),
 }));
 
+export const focusAssets = pgTable("focus_assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
+  symbol: text("symbol").notNull(),
+  assetType: text("asset_type").notNull(), // equity | etf | crypto | fx | commodity
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  portfolioSymbolIdx: index("portfolio_symbol_focus_idx").on(table.portfolioId, table.symbol),
+}));
+
 // Insert schemas
 export const insertPortfolioSchema = createInsertSchema(portfolios).pick({
   name: true,
@@ -118,6 +129,15 @@ export const insertHiddenAssetSchema = createInsertSchema(hiddenAssets).pick({
   symbol: true,
 });
 
+export const insertFocusAssetSchema = createInsertSchema(focusAssets).pick({
+  portfolioId: true,
+  symbol: true,
+  assetType: true,
+  order: true,
+}).extend({
+  assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity"]),
+});
+
 // Types
 export type Portfolio = typeof portfolios.$inferSelect;
 export type Position = typeof positions.$inferSelect;
@@ -125,12 +145,14 @@ export type Price = typeof prices.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type WatchlistItem = typeof watchlist.$inferSelect;
 export type HiddenAsset = typeof hiddenAssets.$inferSelect;
+export type FocusAsset = typeof focusAssets.$inferSelect;
 export type InsertPortfolio = z.infer<typeof insertPortfolioSchema>;
 export type InsertPosition = z.infer<typeof insertPositionSchema>;
 export type InsertPrice = z.infer<typeof insertPriceSchema>;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type InsertWatchlistItem = z.infer<typeof insertWatchlistSchema>;
 export type InsertHiddenAsset = z.infer<typeof insertHiddenAssetSchema>;
+export type InsertFocusAsset = z.infer<typeof insertFocusAssetSchema>;
 
 // Extended types for API responses
 export type PositionWithPrice = Position & {
@@ -179,15 +201,13 @@ export type AIInsightResponse = {
   whyThisMatters: string[];
 };
 
-export type SentimentDriver = {
-  label: string;
-  weight: number;
-  explanation: string;
-};
-
 export type MarketSentiment = {
   score: number;
-  drivers: SentimentDriver[];
+  drivers: {
+    label: string;
+    weight: number;
+    explanation: string;
+  }[];
   timestamp: string;
   lastUpdated: string;
 };
@@ -308,3 +328,107 @@ export type AssetSheetData = {
 
 export type TransactionSide = "buy" | "sell" | "transfer_in" | "transfer_out" | "airdrop" | "fee" | "dividend";
 export type AssetType = "equity" | "etf" | "crypto" | "fx" | "commodity";
+
+// Phase 3 - Enhanced Sentiment Types
+export type SentimentRegime = "Risk-On" | "Neutral" | "Risk-Off";
+
+export type SentimentDriver = {
+  label: string;
+  value: number;
+  contribution: number;
+  note: string;
+};
+
+export type EnhancedMarketSentiment = {
+  score: number; // 0-100
+  regime: SentimentRegime;
+  drivers: SentimentDriver[];
+  as_of: string;
+};
+
+export type SentimentNarrative = {
+  summary: string;
+  bullets: string[];
+  as_of: string;
+};
+
+// Phase 3 - Focus Assets
+export type FocusAssetWithDetails = FocusAsset & {
+  name?: string;
+  lastPrice?: number;
+  change24h?: number;
+  changePercent24h?: number;
+};
+
+// Phase 3 - Multi-timeframe Analysis
+export type TimeframeStance = "Bullish" | "Bearish" | "Neutral";
+
+export type AssetTimeframeData = {
+  changePct: number;
+  stance: TimeframeStance;
+  confidence: number;
+  notes: string[];
+};
+
+export type AssetOverview = {
+  symbol: string;
+  name: string;
+  assetType: string;
+  price: number;
+  change24h: number;
+  frames: Record<string, AssetTimeframeData>; // "1h", "1d", "1w", etc.
+  as_of: string;
+};
+
+export type AssetOverviewSummary = {
+  headline: string;
+  bullets: string[];
+  as_of: string;
+};
+
+// Phase 3 - Market Recap
+export type IndexPerformance = {
+  symbol: string;
+  name: string;
+  pct: number;
+};
+
+export type SectorPerformance = {
+  symbol: string;
+  name: string;
+  pct: number;
+};
+
+export type TopMover = {
+  symbol: string;
+  name: string;
+  pct: number;
+  volume?: number;
+};
+
+export type MarketRecap = {
+  indices: IndexPerformance[];
+  sectors: SectorPerformance[];
+  movers: {
+    gainers: TopMover[];
+    losers: TopMover[];
+  };
+  as_of: string;
+};
+
+export type MarketRecapSummary = {
+  bullets: string[];
+  watchTomorrow: string;
+  as_of: string;
+};
+
+// Phase 3 - Enhanced Headlines
+export type HeadlineImpactAnalysis = {
+  whyThisMatters: string[];
+  impacts: {
+    symbol: string;
+    direction: 'up' | 'down' | 'neutral';
+    confidence: number;
+  }[];
+  as_of: string;
+};

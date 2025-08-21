@@ -21,7 +21,17 @@ import type {
   InsertTransaction,
   ComputedPosition,
   WatchlistItem,
-  InsertWatchlistItem
+  InsertWatchlistItem,
+  // Phase 3 types
+  FocusAssetWithDetails,
+  InsertFocusAsset,
+  EnhancedMarketSentiment,
+  SentimentNarrative,
+  AssetOverview,
+  AssetOverviewSummary,
+  MarketRecap,
+  MarketRecapSummary,
+  HeadlineImpactAnalysis
 } from "@shared/schema";
 
 export const api = {
@@ -196,6 +206,76 @@ export const api = {
   // Migration
   async migratePositionsToTransactions(): Promise<{ success: boolean; message: string }> {
     const res = await apiRequest("POST", "/api/migrate");
+    return res.json();
+  },
+
+  // ===== PHASE 3 API METHODS =====
+
+  // Enhanced Sentiment
+  async getEnhancedSentiment(): Promise<EnhancedMarketSentiment> {
+    const res = await apiRequest("GET", "/api/sentiment/index");
+    return res.json();
+  },
+
+  async getSentimentNarrative(indexPayload: EnhancedMarketSentiment, contextNote?: string): Promise<SentimentNarrative> {
+    const res = await apiRequest("POST", "/api/sentiment/explain", { indexPayload, contextNote });
+    return res.json();
+  },
+
+  // Focus Assets
+  async getFocusAssets(portfolioId: string): Promise<FocusAssetWithDetails[]> {
+    const res = await apiRequest("GET", `/api/focus-assets?portfolioId=${portfolioId}`);
+    return res.json();
+  },
+
+  async createFocusAsset(data: InsertFocusAsset): Promise<FocusAssetWithDetails> {
+    const res = await apiRequest("POST", "/api/focus-assets", data);
+    return res.json();
+  },
+
+  async deleteFocusAsset(id: string): Promise<{ success: boolean }> {
+    const res = await apiRequest("DELETE", `/api/focus-assets/${id}`);
+    return res.json();
+  },
+
+  async reorderFocusAssets(items: { id: string; order: number }[]): Promise<{ success: boolean }> {
+    const res = await apiRequest("PATCH", "/api/focus-assets/reorder", { items });
+    return res.json();
+  },
+
+  // Asset Overview
+  async getAssetOverview(symbol: string, assetType: string, frames: string[] = ["1h","1d","1w","1m","3m","1y"]): Promise<AssetOverview> {
+    const res = await apiRequest("GET", `/api/asset/overview?symbol=${symbol}&assetType=${assetType}&frames=${frames.join(',')}`);
+    return res.json();
+  },
+
+  async getAssetOverviewSummary(overviewPayload: AssetOverview): Promise<AssetOverviewSummary> {
+    const res = await apiRequest("POST", "/api/asset/overview/explain", { overviewPayload });
+    return res.json();
+  },
+
+  // Market Recap
+  async getMarketRecap(): Promise<MarketRecap> {
+    const res = await apiRequest("GET", "/api/recap/daily");
+    return res.json();
+  },
+
+  async getMarketRecapSummary(recapPayload: MarketRecap): Promise<MarketRecapSummary> {
+    const res = await apiRequest("POST", "/api/recap/summarize", { recapPayload });
+    return res.json();
+  },
+
+  // Enhanced Headlines
+  async getHeadlinesTimeline(symbols?: string[], limit = 100): Promise<Headline[]> {
+    const params = new URLSearchParams();
+    if (symbols) params.set('symbols', symbols.join(','));
+    params.set('limit', limit.toString());
+    const res = await apiRequest("GET", `/api/headlines/timeline?${params}`);
+    return res.json();
+  },
+
+  async analyzeHeadlineImpact(title: string, summary?: string, symbols: string[] = []): Promise<HeadlineImpactAnalysis> {
+    const res = await apiRequest("POST", "/api/headlines/impact", { title, summary, symbols });
     return res.json();
   }
 };

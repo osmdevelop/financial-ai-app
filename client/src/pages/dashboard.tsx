@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header";
 import { KPICardSkeleton, ChartSkeleton } from "@/components/ui/loading-skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SentimentGauge } from "@/components/ui/sentiment-gauge";
+import { FocusAssetsPicker } from "@/components/ui/focus-assets-picker";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, Rocket, Activity } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/constants";
@@ -30,8 +31,8 @@ export default function Dashboard() {
   });
 
   const { data: marketSentiment, isLoading: sentimentLoading } = useQuery({
-    queryKey: ["/api/sentiment"],
-    queryFn: () => api.getMarketSentiment(),
+    queryKey: ["/api/sentiment/index"],
+    queryFn: () => api.getEnhancedSentiment(),
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   });
 
@@ -181,9 +182,16 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">Market Sentiment</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {sentimentLoading ? "Loading..." : marketSentiment ? `${marketSentiment.score}/100` : "N/A"}
-                  </p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-foreground">
+                      {sentimentLoading ? "Loading..." : marketSentiment ? `${marketSentiment.score}/100` : "N/A"}
+                    </p>
+                    {!sentimentLoading && marketSentiment && (
+                      <Badge variant="secondary" className="text-xs">
+                        {marketSentiment.regime}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
                   <Activity className="text-primary text-xl" />
@@ -198,22 +206,27 @@ export default function Dashboard() {
               
               <div className="mt-4">
                 {!sentimentLoading && marketSentiment ? (
-                  <div className="space-y-2">
-                    {marketSentiment.drivers.slice(0, 2).map((driver, index) => (
-                      <Badge 
-                        key={index} 
-                        variant="outline" 
-                        className={`text-xs ${
-                          driver.weight > 0 ? 'border-success text-success' : 
-                          driver.weight < 0 ? 'border-danger text-danger' : 
-                          'border-muted text-muted-foreground'
-                        }`}
-                      >
-                        {driver.label}
-                      </Badge>
-                    ))}
-                    <div className="text-xs text-muted-foreground mt-2">
-                      Last Updated: {marketSentiment.lastUpdated}
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Price:</span>
+                        <span className="font-medium">{marketSentiment.subScores?.price || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Volume:</span>
+                        <span className="font-medium">{marketSentiment.subScores?.volume || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">News:</span>
+                        <span className="font-medium">{marketSentiment.subScores?.news || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Options:</span>
+                        <span className="font-medium">{marketSentiment.subScores?.options || 'N/A'}</span>
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Updated: {marketSentiment.lastUpdated}
                     </div>
                   </div>
                 ) : (
@@ -222,6 +235,18 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Focus Assets Section */}
+        <div className="mb-6">
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg font-semibold text-foreground">Focus Assets</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FocusAssetsPicker portfolioId={demoPortfolioId || ""} />
             </CardContent>
           </Card>
         </div>

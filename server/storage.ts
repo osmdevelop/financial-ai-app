@@ -5,12 +5,14 @@ import {
   Transaction,
   WatchlistItem,
   HiddenAsset,
+  FocusAsset,
   InsertPortfolio, 
   InsertPosition, 
   InsertPrice,
   InsertTransaction,
   InsertWatchlistItem,
   InsertHiddenAsset,
+  InsertFocusAsset,
   PositionWithPrice,
   PortfolioSummary,
   ComputedPosition,
@@ -19,12 +21,21 @@ import {
   Headline,
   UpcomingEarning,
   EconomicEvent,
+  FocusAssetWithDetails,
+  EnhancedMarketSentiment,
+  SentimentNarrative,
+  AssetOverview,
+  AssetOverviewSummary,
+  MarketRecap,
+  MarketRecapSummary,
+  HeadlineImpactAnalysis,
   portfolios,
   positions,
   prices,
   transactions,
   watchlist,
-  hiddenAssets
+  hiddenAssets,
+  focusAssets
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
@@ -82,6 +93,28 @@ export interface IStorage {
   // Search methods
   searchAssets(query: string, types?: string[], limit?: number): Promise<AssetSearchResult[]>;
   getAssetSheetData(symbol: string, assetType: string): Promise<AssetSheetData | null>;
+  
+  // Focus Assets methods
+  getFocusAssets(portfolioId: string): Promise<FocusAssetWithDetails[]>;
+  createFocusAsset(focusAsset: InsertFocusAsset): Promise<FocusAsset>;
+  deleteFocusAsset(id: string): Promise<void>;
+  reorderFocusAssets(items: { id: string; order: number }[]): Promise<void>;
+  
+  // Phase 3 - Enhanced Sentiment
+  getEnhancedSentiment(): Promise<EnhancedMarketSentiment>;
+  getSentimentNarrative(sentimentData: EnhancedMarketSentiment, contextNote?: string): Promise<SentimentNarrative>;
+  
+  // Phase 3 - Asset Overview
+  getAssetOverview(symbol: string, assetType: string, frames: string[]): Promise<AssetOverview>;
+  getAssetOverviewSummary(overview: AssetOverview): Promise<AssetOverviewSummary>;
+  
+  // Phase 3 - Market Recap  
+  getMarketRecap(): Promise<MarketRecap>;
+  getMarketRecapSummary(recap: MarketRecap): Promise<MarketRecapSummary>;
+  
+  // Phase 3 - Enhanced Headlines
+  getHeadlinesTimeline(symbols?: string[], limit?: number): Promise<Headline[]>;
+  analyzeHeadlineImpact(title: string, summary?: string, symbols?: string[]): Promise<HeadlineImpactAnalysis>;
   
   // Initialize sample data
   initializeSampleData(): Promise<void>;
@@ -569,6 +602,190 @@ export class DatabaseStorage implements IStorage {
   async deletePortfolio(id: string): Promise<void> {
     // This will cascade delete all related data (transactions, positions, etc.)
     await db.delete(portfolios).where(eq(portfolios.id, id));
+  }
+
+  // Focus Assets methods
+  async getFocusAssets(portfolioId: string): Promise<FocusAssetWithDetails[]> {
+    const assets = await db
+      .select()
+      .from(focusAssets)
+      .where(eq(focusAssets.portfolioId, portfolioId))
+      .orderBy(focusAssets.order);
+
+    // Enhance with additional details
+    return assets.map((asset: FocusAsset) => ({
+      ...asset,
+      name: `${asset.symbol} Name`, // Would fetch from external API
+      lastPrice: Math.random() * 200 + 50,
+      change24h: (Math.random() - 0.5) * 20,
+      changePercent24h: (Math.random() - 0.5) * 10,
+    }));
+  }
+
+  async createFocusAsset(focusAsset: InsertFocusAsset): Promise<FocusAsset> {
+    // Check if we already have 5 focus assets for this portfolio
+    const existing = await db
+      .select()
+      .from(focusAssets)
+      .where(eq(focusAssets.portfolioId, focusAsset.portfolioId));
+
+    if (existing.length >= 5) {
+      throw new Error("Maximum 5 focus assets allowed per portfolio");
+    }
+
+    const [result] = await db
+      .insert(focusAssets)
+      .values(focusAsset)
+      .returning();
+    return result;
+  }
+
+  async deleteFocusAsset(id: string): Promise<void> {
+    await db.delete(focusAssets).where(eq(focusAssets.id, id));
+  }
+
+  async reorderFocusAssets(items: { id: string; order: number }[]): Promise<void> {
+    for (const item of items) {
+      await db
+        .update(focusAssets)
+        .set({ order: item.order })
+        .where(eq(focusAssets.id, item.id));
+    }
+  }
+
+  // Phase 3 - Enhanced Sentiment (placeholder implementations)
+  async getEnhancedSentiment(): Promise<EnhancedMarketSentiment> {
+    // This would integrate with the existing sentiment logic but enhanced
+    return {
+      score: 65,
+      regime: "Neutral",
+      drivers: [
+        {
+          label: "SPY Performance",
+          value: 0.5,
+          contribution: 15,
+          note: "SPY up 0.5% today → moderate bullish signal"
+        },
+        {
+          label: "VIX Level",
+          value: 18.5,
+          contribution: 10,
+          note: "VIX at 18.5 indicates low fear → bullish"
+        }
+      ],
+      as_of: new Date().toISOString()
+    };
+  }
+
+  async getSentimentNarrative(sentimentData: EnhancedMarketSentiment, contextNote?: string): Promise<SentimentNarrative> {
+    return {
+      summary: "Mixed market signals with moderate risk appetite amid steady volatility conditions.",
+      bullets: [
+        "Equity markets showing resilience with SPY maintaining upward momentum",
+        "Low volatility environment supporting risk-taking behavior",
+        "Treasury yields stabilizing after recent pressure"
+      ],
+      as_of: new Date().toISOString()
+    };
+  }
+
+  // Phase 3 - Asset Overview (placeholder implementations)
+  async getAssetOverview(symbol: string, assetType: string, frames: string[]): Promise<AssetOverview> {
+    const frameData: Record<string, any> = {};
+    
+    for (const frame of frames) {
+      const changePct = (Math.random() - 0.5) * 10; // Random change for demo
+      frameData[frame] = {
+        changePct,
+        stance: changePct > 1 ? "Bullish" : changePct < -1 ? "Bearish" : "Neutral",
+        confidence: 0.7,
+        notes: ["MA20 > MA50", "RSI neutral"]
+      };
+    }
+
+    return {
+      symbol,
+      name: `${symbol} Corporation`,
+      assetType,
+      price: 150 + Math.random() * 100,
+      change24h: (Math.random() - 0.5) * 10,
+      frames: frameData,
+      as_of: new Date().toISOString()
+    };
+  }
+
+  async getAssetOverviewSummary(overview: AssetOverview): Promise<AssetOverviewSummary> {
+    return {
+      headline: `${overview.symbol} showing mixed technicals across timeframes`,
+      bullets: [
+        "Short-term momentum remains positive with MA support",
+        "Mid-term consolidation phase suggests range-bound action",
+        "Long-term trend intact despite recent volatility"
+      ],
+      as_of: new Date().toISOString()
+    };
+  }
+
+  // Phase 3 - Market Recap (placeholder implementations)
+  async getMarketRecap(): Promise<MarketRecap> {
+    return {
+      indices: [
+        { symbol: "SPY", name: "S&P 500", pct: 0.5 },
+        { symbol: "QQQ", name: "Nasdaq 100", pct: -0.3 },
+        { symbol: "IWM", name: "Russell 2000", pct: 0.8 },
+        { symbol: "DIA", name: "Dow Jones", pct: 0.2 }
+      ],
+      sectors: [
+        { symbol: "XLK", name: "Technology", pct: -0.5 },
+        { symbol: "XLF", name: "Financials", pct: 1.2 },
+        { symbol: "XLE", name: "Energy", pct: 2.1 },
+        { symbol: "XLV", name: "Healthcare", pct: -0.1 }
+      ],
+      movers: {
+        gainers: [
+          { symbol: "NVDA", name: "NVIDIA Corp", pct: 5.2 },
+          { symbol: "TSLA", name: "Tesla Inc", pct: 3.8 }
+        ],
+        losers: [
+          { symbol: "AAPL", name: "Apple Inc", pct: -2.1 },
+          { symbol: "MSFT", name: "Microsoft Corp", pct: -1.5 }
+        ]
+      },
+      as_of: new Date().toISOString()
+    };
+  }
+
+  async getMarketRecapSummary(recap: MarketRecap): Promise<MarketRecapSummary> {
+    return {
+      bullets: [
+        "Mixed performance with small-caps outperforming large-caps",
+        "Energy leading sectors on oil price strength",
+        "Tech showing weakness amid rate concerns"
+      ],
+      watchTomorrow: "Fed speakers and key economic data could drive direction",
+      as_of: new Date().toISOString()
+    };
+  }
+
+  // Phase 3 - Enhanced Headlines (placeholder implementations)
+  async getHeadlinesTimeline(symbols?: string[], limit = 100): Promise<Headline[]> {
+    // This would enhance the existing headlines logic
+    return this.getHeadlines(limit);
+  }
+
+  async analyzeHeadlineImpact(title: string, summary?: string, symbols: string[] = []): Promise<HeadlineImpactAnalysis> {
+    return {
+      whyThisMatters: [
+        "Market sentiment shift from regulatory uncertainty",
+        "Potential sector rotation based on policy changes"
+      ],
+      impacts: symbols.map(symbol => ({
+        symbol,
+        direction: Math.random() > 0.5 ? "up" : "down",
+        confidence: 0.6 + Math.random() * 0.3
+      })),
+      as_of: new Date().toISOString()
+    };
   }
 
   async initializeSampleData(): Promise<void> {
