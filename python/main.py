@@ -7,8 +7,36 @@ from typing import List, Dict, Any
 import os
 
 def fetch_equity_price(symbol: str) -> Dict[str, Any]:
-    """Fetch equity/ETF price using yfinance"""
+    """Fetch equity/ETF price using Alpha Vantage API with yfinance fallback"""
     try:
+        alpha_vantage_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        
+        if alpha_vantage_key:
+            # Try Alpha Vantage first
+            try:
+                url = "https://www.alphavantage.co/query"
+                params = {
+                    "function": "GLOBAL_QUOTE",
+                    "symbol": symbol,
+                    "apikey": alpha_vantage_key
+                }
+                
+                response = requests.get(url, params=params)
+                response.raise_for_status()
+                
+                data = response.json()
+                if "Global Quote" in data and "05. price" in data["Global Quote"]:
+                    return {
+                        "symbol": symbol,
+                        "assetType": "equity",
+                        "close": float(data["Global Quote"]["05. price"]),
+                        "date": data["Global Quote"]["07. latest trading day"],
+                        "source": "alphavantage"
+                    }
+            except Exception as e:
+                print(f"Alpha Vantage failed for {symbol}: {e}", file=sys.stderr)
+        
+        # Fallback to yfinance
         ticker = yf.Ticker(symbol)
         hist = ticker.history(period="1d")
         
@@ -16,7 +44,7 @@ def fetch_equity_price(symbol: str) -> Dict[str, Any]:
             raise ValueError(f"No data found for {symbol}")
         
         latest_price = hist['Close'].iloc[-1]
-        latest_date = hist.index[-1].strftime('%Y-%m-%d')
+        latest_date = hist.index[-1].date().strftime('%Y-%m-%d')
         
         return {
             "symbol": symbol,
@@ -38,7 +66,12 @@ def fetch_crypto_price(coingecko_id: str, symbol_map: Dict[str, str]) -> Dict[st
             "vs_currencies": "usd"
         }
         
-        response = requests.get(url, params=params)
+        headers = {}
+        coingecko_key = os.getenv("COINGECKO_API_KEY")
+        if coingecko_key:
+            headers["x-cg-demo-api-key"] = coingecko_key
+        
+        response = requests.get(url, params=params, headers=headers)
         response.raise_for_status()
         
         data = response.json()
@@ -127,7 +160,7 @@ def fetch_price_summary(symbol: str) -> Dict[str, Any]:
         mini_chart = []
         for index, row in hist_7d.iterrows():
             mini_chart.append({
-                "ts": int(index.timestamp() * 1000),
+                "ts": int(index.to_pydatetime().timestamp() * 1000),
                 "close": float(row["Close"])
             })
         
@@ -203,7 +236,7 @@ def fetch_intraday_data(symbol: str, interval: str = "1m", lookback: str = "1d")
         candles = []
         for index, row in hist.iterrows():
             candles.append({
-                "ts": int(index.timestamp() * 1000),
+                "ts": int(index.to_pydatetime().timestamp() * 1000),
                 "open": float(row["Open"]),
                 "high": float(row["High"]),
                 "low": float(row["Low"]),

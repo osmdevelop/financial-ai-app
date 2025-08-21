@@ -96,10 +96,97 @@ export default function PortfolioV2() {
 
   // Import/Export handlers
   const handleUploadCSV = () => {
-    toast({
-      title: "Feature Coming Soon",
-      description: "CSV import functionality will be available in a future update.",
-    });
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      if (!selectedPortfolioId) {
+        toast({
+          title: "No Portfolio Selected",
+          description: "Please select a portfolio to import transactions.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        const text = await file.text();
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        if (lines.length < 2) {
+          throw new Error('CSV file must have a header row and at least one data row');
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const requiredHeaders = ['date', 'symbol', 'side', 'quantity', 'price'];
+        const missingHeaders = requiredHeaders.filter(h => !headers.some(header => header.includes(h)));
+        
+        if (missingHeaders.length > 0) {
+          throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
+        }
+
+        const transactions = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim());
+          if (values.length !== headers.length) continue;
+
+          const row: any = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index];
+          });
+
+          // Map CSV columns to transaction format
+          const transaction = {
+            portfolioId: selectedPortfolioId,
+            symbol: row.symbol?.toUpperCase() || '',
+            assetType: row.type || 'equity', // default to equity if not specified
+            side: row.side?.toLowerCase() || 'buy',
+            quantity: row.quantity || '0',
+            price: row.price || '0',
+            fee: row.fee || '0',
+            occurredAt: new Date(row.date || Date.now()),
+            note: row.note || ''
+          };
+
+          if (transaction.symbol && transaction.quantity && transaction.price) {
+            transactions.push(transaction);
+          }
+        }
+
+        if (transactions.length === 0) {
+          throw new Error('No valid transactions found in CSV file');
+        }
+
+        // Import transactions
+        let successCount = 0;
+        for (const txn of transactions) {
+          try {
+            await api.createTransaction(txn);
+            successCount++;
+          } catch (error) {
+            console.error('Failed to import transaction:', txn, error);
+          }
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["/api/transactions", selectedPortfolioId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/positions", selectedPortfolioId] });
+
+        toast({
+          title: "CSV Import Complete",
+          description: `Successfully imported ${successCount} of ${transactions.length} transactions.`,
+        });
+      } catch (error) {
+        toast({
+          title: "Import Failed",
+          description: error instanceof Error ? error.message : "Failed to import CSV file",
+          variant: "destructive",
+        });
+      }
+    };
+    input.click();
   };
 
   const handleDownloadTemplate = () => {
@@ -496,6 +583,24 @@ export default function PortfolioV2() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={async () => {
+                        if (selectedPortfolioId) {
+                          try {
+                            await api.refreshPrices(selectedPortfolioId);
+                            queryClient.invalidateQueries({ queryKey: ["/api/positions", selectedPortfolioId] });
+                            toast({ title: "Prices refreshed", description: "Latest prices have been updated." });
+                          } catch (error) {
+                            toast({ title: "Failed to refresh prices", variant: "destructive" });
+                          }
+                        }
+                      }}
+                    >
+                      <Activity className="h-4 w-4 mr-2" />
+                      Refresh Prices
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setShowHidden(!showHidden)}
                     >
                       {showHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -599,15 +704,52 @@ export default function PortfolioV2() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-center">
                               <div className="flex items-center justify-center space-x-1 sm:space-x-2">
-                                <Button size="sm" variant="outline" className="text-xs px-2 py-1">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="text-xs px-2 py-1"
+                                  onClick={() => {
+                                    setCurrentPortfolioId(selectedPortfolioId);
+                                    openCommandPalette(true);
+                                  }}
+                                >
                                   Buy
                                 </Button>
-                                <Button size="sm" variant="outline" className="text-xs px-2 py-1">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="text-xs px-2 py-1"
+                                  onClick={() => {
+                                    setCurrentPortfolioId(selectedPortfolioId);
+                                    openCommandPalette(true);
+                                  }}
+                                >
                                   Sell
                                 </Button>
-                                <Button size="sm" variant="ghost" className="p-1">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="sm" variant="ghost" className="p-1">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => {
+                                      setCurrentPortfolioId(selectedPortfolioId);
+                                      openCommandPalette(true);
+                                    }}>
+                                      Add Transaction
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                      // Hide position functionality could be added here
+                                      toast({
+                                        title: "Feature Coming Soon",
+                                        description: "Hide asset functionality will be available soon.",
+                                      });
+                                    }}>
+                                      Hide Asset
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             </td>
                           </tr>
