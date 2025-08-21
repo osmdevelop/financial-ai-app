@@ -207,26 +207,16 @@ export default function Dashboard() {
               <div className="mt-4">
                 {!sentimentLoading && marketSentiment ? (
                   <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Price:</span>
-                        <span className="font-medium">{marketSentiment.subScores?.price || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Volume:</span>
-                        <span className="font-medium">{marketSentiment.subScores?.volume || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">News:</span>
-                        <span className="font-medium">{marketSentiment.subScores?.news || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Options:</span>
-                        <span className="font-medium">{marketSentiment.subScores?.options || 'N/A'}</span>
-                      </div>
+                    <div className="space-y-2 text-xs">
+                      {marketSentiment.drivers.slice(0, 4).map((driver, index) => (
+                        <div key={index} className="flex justify-between">
+                          <span className="text-muted-foreground">{driver.label}:</span>
+                          <span className="font-medium">{driver.value}</span>
+                        </div>
+                      ))}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Updated: {marketSentiment.lastUpdated}
+                      Updated: {new Date(marketSentiment.as_of).toLocaleTimeString()}
                     </div>
                   </div>
                 ) : (

@@ -96,7 +96,7 @@ export function FocusAssetsPicker({ portfolioId, className }: FocusAssetsPickerP
     await createMutation.mutateAsync({
       portfolioId,
       symbol: asset.symbol,
-      assetType: asset.assetType,
+      assetType: asset.assetType as "fx" | "equity" | "etf" | "crypto" | "commodity",
       order: focusAssets.length,
     });
 
@@ -182,6 +182,9 @@ export function FocusAssetsPicker({ portfolioId, className }: FocusAssetsPickerP
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Add Focus Asset</DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Search and add assets to your focus list (max 5)
+              </p>
             </DialogHeader>
             <div className="space-y-4">
               <Input

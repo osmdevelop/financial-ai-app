@@ -13,6 +13,8 @@ import {
   Menu,
   X,
   Activity,
+  Search,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -22,6 +24,8 @@ const navigation = [
   { name: "AI Insights", href: "/insights", icon: Brain },
   { name: "Sentiment", href: "/sentiment", icon: Activity },
   { name: "Headlines", href: "/headlines", icon: Newspaper },
+  { name: "Asset Overview", href: "/asset-overview", icon: Search },
+  { name: "Market Recap", href: "/market-recap", icon: Globe },
   { name: "Earnings", href: "/earnings", icon: TrendingUp },
   { name: "Economic Calendar", href: "/economic-calendar", icon: Calendar },
 ];
