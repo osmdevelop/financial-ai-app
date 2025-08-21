@@ -1,0 +1,188 @@
+You are my senior engineer. Extend the existing app with Phase 3 features:
+
+- AI Sentiment Index (composite score + narrative)
+- Market Headlines timeline (like screenshot) with AI impact
+- Selected Assets (user picks up to 5 from any asset class)
+- Asset Summary/Overview with bullish/bearish view across multiple timeframes
+- Daily Market Recap (indices, sector breadth, top movers + AI brief)
+
+All outputs are informational only (not investment advice). Keep current non‑realtime data acceptable, but include live if sources available.
+
+========================================
+ENV VARS (update .env.example)
+========================================
+POLYGON_API_KEY=          # optional, else yfinance fallback
+NEWSAPI_KEY=              # optional, else sample JSON
+OPENAI_API_KEY=           # already present
+
+========================================
+DATABASE (Prisma / SQLite)
+========================================
+Add table for the user's 5 "focus assets":
+
+model FocusAsset {
+  id          String   @id @default(cuid())
+  portfolioId String
+  symbol      String
+  assetType   String   // equity | etf | crypto | fx | commodity
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  @@unique([portfolioId, symbol])
+}
+
+(If you support multiple portfolios, FocusAsset is per-portfolio.)
+
+Run a migration named `phase3_focus_assets`.
+
+========================================
+BACKEND: APIs
+========================================
+1) Sentiment Index
+GET  /api/sentiment/index
+- Fetch/derive inputs (prefer Polygon, fallback yfinance):
+  * SPY %change (risk appetite)
+  * QQQ %change (growth risk)
+  * VIX level and Δ (volatility)
+  * ^TNX (10Y yield) Δ (rates pressure)
+  * HYG vs LQD %spread or perf diff (credit risk)
+  * Sector breadth: % of sector ETFs up today (XLK, XLF, XLE, XLI, XLY, XLP, XLV, XLU, XLB, XLRE)
+- Normalize to z-scores or bucketed 0–100 sub-scores, then compute:
+  indexScore = weighted_avg(subscores, weights = {SPY:0.25, QQQ:0.15, VIX:0.2, TNX:0.15, Credit:0.1, Breadth:0.15})
+- Return:
+  {
+    score: number,                 // 0..100
+    regime: "Risk-On"|"Neutral"|"Risk-Off",
+    drivers: [{label, value, contribution, note}],
+    as_of: ISO8601
+  }
+
+POST /api/sentiment/explain
+- Body: { indexPayload, contextNote? }
+- If OPENAI_API_KEY present, produce 2–4 bullets narrative and a one‑liner, else rules-based text.
+- Include your provided theme line if detected:
+  e.g., "Mixed market signals with tech selloff, defensive strength, modest vol rise, cautious ahead of Jackson Hole."
+
+2) Market Headlines (timeline)
+GET  /api/headlines/timeline?symbols=...&limit=100
+- If NEWSAPI_KEY: pull latest headlines (business/markets) last 12–24h; enrich with detected tickers (regex list).
+- Else serve from /infra/dev/headlines.sample.json.
+- Return: [{id, published, title, source, url, symbols[], summary?, img?}]
+
+POST /api/headlines/impact
+- Body: { title, summary?, symbols[] }
+- Return AI or rules output:
+  { whyThisMatters: string[], impacts:[{symbol, direction:"up"|"down"|"neutral", confidence:0..1}], as_of }
+
+3) Focus Assets
+GET  /api/focus-assets?portfolioId=...
+POST /api/focus-assets        { portfolioId, symbol, assetType, order }
+DELETE /api/focus-assets/:id
+PATCH /api/focus-assets/reorder  { items: [{id, order}] }
+- Enforce max 5 per portfolio; if >5, return 400 with message.
+
+4) Asset Summary / Multi-timeframe
+GET  /api/asset/overview?symbol=BTC-USD&assetType=crypto&frames=1h,1d,1w,1m,3m,1y
+- For each timeframe return price series (sparse ok), last price, %change, tech flags:
+  * MA crossover (fast vs slow), slope sign, RSI band (if easy), simple volatility
+- Produce a rule-based stance per frame:
+  stance ∈ {"Bullish","Bearish","Neutral"} with confidence 0..1
+- Return:
+  {
+    symbol, name, assetType, price, change24h, frames: {
+      "1h": { changePct, stance, confidence, notes[] },
+      "1d": {...}, ...
+    },
+    as_of
+  }
+
+POST /api/asset/overview/explain
+- Body: { overviewPayload }
+- If OPENAI: compress into a short paragraph headline + 2–3 bullets.
+- Else deterministic template.
+
+5) Market Recap (daily)
+GET  /api/recap/daily
+- Collect:
+  * Major indices perf: SPY, QQQ, IWM, DIA
+  * Sector perf: XLK..(all 11)
+  * Top 10 gainers/losers from a simple watchlist universe (S&P top names) or focus assets if you want it scoped
+  * Macro snippets from headlines tagged “Fed/Inflation/China/Energy” in last 24h
+- Return: { indices:[{symbol,pct}], sectors:[{symbol,pct}], movers:{gainers:[...], losers:[...]}, as_of }
+
+POST /api/recap/summarize
+- Body: { recapPayload }
+- Use OpenAI (or rules) to produce a 4–6 bullet executive summary + one "What to watch tomorrow" line with explicit timestamps.
+
+========================================
+FRONTEND: Pages & Components
+========================================
+A) Sentiment Index (Dashboard tile + /modules/sentiment page)
+- New tile shows gauge (0–100), regime chip, and 2–3 driver badges with tooltips.
+- Clicking tile opens full page:
+  - Gauge, drivers list, and "AI Narrative" card from /api/sentiment/explain
+  - Auto-refresh every 5 minutes; show "as_of" timestamp.
+
+B) Market Headlines (timeline view)
+- Replace basic list with vertical timeline:
+  - Dot + vertical line; timestamp (“10 minutes ago”) + source
+  - Title with keyword highlights (e.g., PMI, OPEC, CPI)
+  - Right-side action icons: "Analyze" (brain), "Open" (link), optional image icon
+  - Analyzing shows impact chips per symbol (↑/↓/→ with confidence)
+- Filters: search box + dropdown (All | Portfolio | Focus Assets | Macro)
+- “Live” red dot if last fetch < 3m.
+
+C) Focus Assets Picker (max 5)
+- Prompt the user at first visit to select up to 5 assets (searchable modal using /api/search).
+- Show a bar of selected chips on **Dashboard** and **AI Insights** (draggable to reorder).
+- Enforce max 5 with friendly error (“Limit reached — remove one to add another”).
+
+D) Asset Summary/Overview
+- New page: **/assets/overview** with tabs for the Focus Assets.
+- For the active asset:
+  - Header: price, 24h change, mini chart
+  - Below: timeframe buttons (1H, 1D, 1W, 1M, 3M, 1Y). Each shows:
+    * stance pill (Bullish/Bearish/Neutral) + confidence bar
+    * tiny notes (e.g., “MA20>MA50”, “RSI near 70”, “Slope negative”)
+  - Right panel: **AI Summary** combining the frames via /api/asset/overview/explain
+
+E) Market Recap
+- New page: **/modules/recap**
+  - Left: bar chart of sector perf; right: indices tiles
+  - “Top Gainers/Losers” list
+  - “AI Daily Brief” card (bullets + “What to watch tomorrow”)
+  - Badge: “as_of HH:MM TZ”
+
+Global:
+- Add “Sentiment”, “Overview”, and “Recap” to sidebar (or group under “Intelligence”).
+- Everywhere: show as_of timestamps and reuse your Last Updated pattern.
+
+========================================
+LOGIC DETAILS
+========================================
+- Sentiment regime thresholds:
+  * 0–39 Risk-Off, 40–60 Neutral, 61–100 Risk-On
+- Multi-timeframe stance rules (example):
+  * if changePct > +1% and fastMA > slowMA and slope>0 → Bullish (0.7–0.9)
+  * if changePct < -1% and fastMA < slowMA and slope<0 → Bearish
+  * else Neutral (0.4–0.6)
+- Confidence scales with strength of signals and number of agreeing indicators.
+- Headlines ticker detection: use a small curated symbol map; show tags for “Macro”, “Earnings”, “Energy”, etc.
+
+========================================
+MOCKS & FALLBACKS
+========================================
+- If external APIs rate-limit, serve from:
+  /infra/dev/headlines.sample.json
+  /infra/dev/recap.sample.json
+  /infra/dev/overview.sample.json
+- Keep response shapes identical.
+
+========================================
+ACCEPTANCE CRITERIA
+========================================
+- Sentiment Index tile shows a score and regime; /modules/sentiment renders full drivers + AI narrative.
+- Timeline Headlines page matches the screenshot style; per-item "Analyze" returns impacts with confidence.
+- User can pick up to 5 Focus Assets; trying to add a 6th is prevented with a clear message.
+- /assets/overview displays per‑asset multi‑timeframe stance and AI summary.
+- /modules/recap shows indices, sector bars, top movers, and an AI daily brief.
+- All cards display “as_of” timestamps; auto-refresh works without breaking mocks.
