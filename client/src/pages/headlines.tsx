@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ExternalLink, TrendingUp, TrendingDown, Minus, Search, Clock, Filter, Zap, AlertCircle } from "lucide-react";
+import { ExternalLink, TrendingUp, TrendingDown, Minus, Search, Clock, Filter, Zap, AlertCircle, Newspaper } from "lucide-react";
 import { formatDistance, format, isToday, isYesterday } from "date-fns";
 
 export default function Headlines() {
