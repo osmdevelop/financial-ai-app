@@ -612,14 +612,29 @@ export class DatabaseStorage implements IStorage {
       .where(eq(focusAssets.portfolioId, portfolioId))
       .orderBy(focusAssets.order);
 
-    // Enhance with additional details
-    return assets.map((asset: FocusAsset) => ({
-      ...asset,
-      name: `${asset.symbol} Name`, // Would fetch from external API
-      lastPrice: Math.random() * 200 + 50,
-      change24h: (Math.random() - 0.5) * 20,
-      changePercent24h: (Math.random() - 0.5) * 10,
-    }));
+    // Helper function to generate consistent prices based on symbol
+    const getConsistentPrice = (symbol: string) => {
+      const hash = symbol.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+      const basePrice = (hash % 1000) + 50; // Price between $50-$1050
+      const change = ((hash % 200) - 100) / 10; // Change between -10% to +10%
+      const changePercent = change;
+      
+      return {
+        lastPrice: parseFloat(basePrice.toFixed(2)),
+        change24h: parseFloat((basePrice * change / 100).toFixed(2)),
+        changePercent24h: parseFloat(changePercent.toFixed(2)),
+      };
+    };
+
+    // Enhance with additional details and consistent prices
+    return assets.map((asset: FocusAsset) => {
+      const priceData = getConsistentPrice(asset.symbol);
+      return {
+        ...asset,
+        name: `${asset.symbol} Name`, // Would fetch from external API
+        ...priceData,
+      };
+    });
   }
 
   async createFocusAsset(focusAsset: InsertFocusAsset): Promise<FocusAsset> {
