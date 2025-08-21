@@ -959,7 +959,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const timeframes = frames.split(',');
-      const overview = await storage.getAssetOverview(validAsset.symbol, validAsset.assetType, timeframes);
+      
+      // Use real data service for overview
+      const { assetOverviewService } = await import("./asset-overview");
+      const overview = await assetOverviewService.getAssetOverview(validAsset.symbol, validAsset.assetType, timeframes);
+      
       res.json({
         ...overview,
         name: validAsset.name, // Use the real name from search results
@@ -967,7 +971,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Asset overview error:", error);
-      res.status(500).json({ error: "Failed to get asset overview" });
+      // Fallback to mock data on error
+      const timeframes = req.query.frames ? String(req.query.frames).split(',') : ['1d'];
+      const fallbackOverview = await storage.getAssetOverview(String(req.query.symbol), String(req.query.assetType), timeframes);
+      res.json(fallbackOverview);
     }
   });
 
@@ -1114,7 +1121,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced Sentiment Index
   app.get("/api/sentiment/index", async (req, res) => {
     try {
-      const sentiment = await storage.getEnhancedSentiment();
+      const { sentimentAnalyzer } = await import("./sentiment");
+      const sentiment = await sentimentAnalyzer.calculateSentimentIndex();
       res.json(sentiment);
     } catch (error) {
       console.error("Enhanced sentiment error:", error);
@@ -1184,8 +1192,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Market Recap (daily)
   app.get("/api/recap/daily", async (req, res) => {
     try {
-      const recap = await storage.getMarketRecap();
-      res.json(recap);
+      // Try real data first
+      try {
+        const { marketRecapService } = await import("./market-recap");
+        const recap = await marketRecapService.getDailyRecap();
+        res.json(recap);
+      } catch (apiError) {
+        console.warn("Market recap API error, falling back to mock data:", apiError);
+        const recap = await storage.getMarketRecap();
+        res.json(recap);
+      }
     } catch (error) {
       console.error("Market recap error:", error);
       res.status(500).json({ error: "Failed to get market recap" });
@@ -1208,8 +1224,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { symbols, limit } = headlinesTimelineSchema.parse(req.query);
       const symbolsArray = symbols ? symbols.split(',') : undefined;
-      const headlines = await storage.getHeadlinesTimeline(symbolsArray, limit);
-      res.json(headlines);
+      
+      // Try real data first
+      try {
+        const { headlinesService } = await import("./headlines");
+        const headlines = await headlinesService.getTimeline({
+          tickers: symbolsArray,
+          limit: limit || 50
+        });
+        res.json(headlines);
+      } catch (apiError) {
+        console.warn("Headlines API error, falling back to mock data:", apiError);
+        const headlines = await storage.getHeadlinesTimeline(symbolsArray, limit);
+        res.json(headlines);
+      }
     } catch (error) {
       console.error("Headlines timeline error:", error);
       res.status(500).json({ error: "Failed to get headlines timeline" });
