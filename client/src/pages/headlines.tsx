@@ -239,7 +239,7 @@ export default function Headlines() {
                                 <div className="flex items-center gap-2 flex-wrap">
                                   {headline.symbols && headline.symbols.length > 0 && (
                                     <div className="flex gap-1">
-                                      {headline.symbols.slice(0, 4).map((symbol) => (
+                                      {headline.symbols.slice(0, 4).map((symbol: string) => (
                                         <Badge key={symbol} variant="secondary" className="text-xs">
                                           {symbol}
                                         </Badge>
