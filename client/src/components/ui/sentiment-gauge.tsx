@@ -61,7 +61,6 @@ export function SentimentGauge({ score, size = "md", className }: SentimentGauge
             cx={radius + strokeWidth}
             cy={radius + strokeWidth}
             className={cn(getColor(score), "transition-all duration-500 ease-out")}
-            strokeLinecap="round"
           />
         </svg>
         
