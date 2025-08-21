@@ -939,7 +939,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Asset Sheet API
+  // Asset Overview / Multi-timeframe (MUST come before /api/asset/:symbol)
+  app.get("/api/asset/overview", async (req, res) => {
+    try {
+      const { symbol, assetType, frames } = assetOverviewSchema.parse(req.query);
+      const timeframes = frames.split(',');
+      const overview = await storage.getAssetOverview(symbol, assetType, timeframes);
+      res.json(overview);
+    } catch (error) {
+      console.error("Asset overview error:", error);
+      res.status(500).json({ error: "Failed to get asset overview" });
+    }
+  });
+
+  app.post("/api/asset/overview/explain", async (req, res) => {
+    try {
+      const { overviewPayload } = assetOverviewExplainSchema.parse(req.body);
+      const summary = await storage.getAssetOverviewSummary(overviewPayload);
+      res.json(summary);
+    } catch (error) {
+      console.error("Asset overview summary error:", error);
+      res.status(500).json({ error: "Failed to generate overview summary" });
+    }
+  });
+
+  // Asset Sheet API (MUST come after specific routes)
   app.get("/api/asset/:symbol", async (req, res) => {
     try {
       const { symbol } = req.params;
@@ -1137,29 +1161,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Asset Overview / Multi-timeframe
-  app.get("/api/asset/overview", async (req, res) => {
-    try {
-      const { symbol, assetType, frames } = assetOverviewSchema.parse(req.query);
-      const timeframes = frames.split(',');
-      const overview = await storage.getAssetOverview(symbol, assetType, timeframes);
-      res.json(overview);
-    } catch (error) {
-      console.error("Asset overview error:", error);
-      res.status(500).json({ error: "Failed to get asset overview" });
-    }
-  });
-
-  app.post("/api/asset/overview/explain", async (req, res) => {
-    try {
-      const { overviewPayload } = assetOverviewExplainSchema.parse(req.body);
-      const summary = await storage.getAssetOverviewSummary(overviewPayload);
-      res.json(summary);
-    } catch (error) {
-      console.error("Asset overview summary error:", error);
-      res.status(500).json({ error: "Failed to generate overview summary" });
-    }
-  });
 
   // Market Recap (daily)
   app.get("/api/recap/daily", async (req, res) => {

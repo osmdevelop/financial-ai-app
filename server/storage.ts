@@ -713,17 +713,45 @@ export class DatabaseStorage implements IStorage {
       frameData[frame] = {
         changePct,
         stance: changePct > 1 ? "Bullish" : changePct < -1 ? "Bearish" : "Neutral",
-        confidence: 0.7,
-        notes: ["MA20 > MA50", "RSI neutral"]
+        confidence: Math.round((0.5 + Math.random() * 0.4) * 100), // 50-90% confidence
+        notes: [`${frame} trend analysis`, "Technical indicators mixed", "Volume above average"]
       };
     }
 
+    // Generate realistic company names based on symbol
+    const getCompanyName = (sym: string, type: string) => {
+      const commonStocks: Record<string, string> = {
+        'AAPL': 'Apple Inc.',
+        'MSFT': 'Microsoft Corporation',
+        'GOOGL': 'Alphabet Inc.',
+        'AMZN': 'Amazon.com Inc.',
+        'TSLA': 'Tesla Inc.',
+        'NVDA': 'NVIDIA Corporation',
+        'META': 'Meta Platforms Inc.',
+        'BTC': 'Bitcoin',
+        'ETH': 'Ethereum',
+        'SPY': 'SPDR S&P 500 ETF Trust'
+      };
+      
+      if (commonStocks[sym]) {
+        return commonStocks[sym];
+      }
+      
+      if (type === 'crypto') {
+        return `${sym} Cryptocurrency`;
+      } else if (type === 'etf') {
+        return `${sym} Exchange Traded Fund`;
+      } else {
+        return `${sym} Corporation`;
+      }
+    };
+
     return {
       symbol,
-      name: `${symbol} Corporation`,
+      name: getCompanyName(symbol, assetType),
       assetType,
-      price: 150 + Math.random() * 100,
-      change24h: (Math.random() - 0.5) * 10,
+      price: 50 + Math.random() * 200, // Random price between $50-250
+      change24h: (Math.random() - 0.5) * 10, // Random change
       frames: frameData,
       as_of: new Date().toISOString()
     };
