@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Header } from "@/components/layout/header";
@@ -8,21 +8,46 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, TrendingUp, TrendingDown, Minus, Activity, Brain, Target } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Search, TrendingUp, TrendingDown, Minus, Activity, Brain, Target, Check, ChevronsUpDown } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/constants";
-import type { AssetOverview, AssetOverviewSummary } from "@shared/schema";
+import type { AssetOverview, AssetOverviewSummary, AssetSearchResult } from "@shared/schema";
+import { cn } from "@/lib/utils";
 
 export default function AssetOverview() {
-  const [symbol, setSymbol] = useState("AAPL");
-  const [assetType, setAssetType] = useState("equity");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedAsset, setSelectedAsset] = useState<AssetSearchResult | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [aiSummary, setAiSummary] = useState<AssetOverviewSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
 
-  const { data: overview, isLoading, refetch } = useQuery({
-    queryKey: ["/api/asset/overview", symbol, assetType],
-    queryFn: () => api.getAssetOverview(symbol, assetType),
-    enabled: !!symbol && !!assetType,
+  // Asset search query
+  const { data: searchResults = [] } = useQuery({
+    queryKey: ["/api/search", searchQuery],
+    queryFn: () => api.searchAssets(searchQuery),
+    enabled: searchQuery.length > 0,
   });
+
+  // Asset overview query
+  const { data: overview, isLoading, refetch } = useQuery({
+    queryKey: ["/api/asset/overview", selectedAsset?.symbol, selectedAsset?.assetType],
+    queryFn: () => api.getAssetOverview(selectedAsset!.symbol, selectedAsset!.assetType),
+    enabled: !!selectedAsset,
+  });
+
+  // Set default asset
+  useEffect(() => {
+    if (!selectedAsset) {
+      setSelectedAsset({
+        id: "1",
+        symbol: "AAPL",
+        name: "Apple Inc.",
+        assetType: "equity",
+        exchange: "NASDAQ"
+      });
+    }
+  }, []);
 
   const handleAnalyze = async () => {
     if (!overview) return;
@@ -66,32 +91,73 @@ export default function AssetOverview() {
       />
       
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
-        {/* Search Controls */}
+        {/* Asset Search Controls */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="flex gap-2 flex-1">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Enter symbol (e.g., AAPL, BTC)"
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                className="pl-10"
-              />
-            </div>
-            <Select value={assetType} onValueChange={setAssetType}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="equity">Stock</SelectItem>
-                <SelectItem value="etf">ETF</SelectItem>
-                <SelectItem value="crypto">Crypto</SelectItem>
-                <SelectItem value="commodity">Commodity</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex-1">
+            <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={searchOpen}
+                  className="w-full justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <Search className="h-4 w-4" />
+                    {selectedAsset ? (
+                      <span>{selectedAsset.symbol} - {selectedAsset.name}</span>
+                    ) : (
+                      "Search assets..."
+                    )}
+                  </div>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0">
+                <Command>
+                  <CommandInput
+                    placeholder="Search stocks, ETFs, crypto..."
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                  />
+                  <CommandList>
+                    <CommandEmpty>No assets found.</CommandEmpty>
+                    <CommandGroup>
+                      {searchResults.map((asset) => (
+                        <CommandItem
+                          key={asset.id}
+                          onSelect={() => {
+                            setSelectedAsset(asset);
+                            setSearchOpen(false);
+                            setAiSummary(null); // Clear old summary
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedAsset?.symbol === asset.symbol ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <div className="flex flex-col">
+                            <span className="font-medium">{asset.symbol} - {asset.name}</span>
+                            <span className="text-sm text-muted-foreground capitalize">
+                              {asset.assetType} {asset.exchange && `• ${asset.exchange}`}
+                            </span>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           
-          <Button onClick={() => refetch()} variant="outline">
+          <Button 
+            onClick={() => refetch()} 
+            variant="outline"
+            disabled={!selectedAsset}
+          >
             <Activity className="h-4 w-4 mr-2" />
             Analyze
           </Button>
@@ -272,7 +338,7 @@ export default function AssetOverview() {
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
                     <Brain className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
-                    <p>Click "Generate Analysis" to get AI-powered insights for {symbol}</p>
+                    <p>Click "Generate Analysis" to get AI-powered insights for {selectedAsset?.symbol || 'this asset'}</p>
                   </div>
                 )}
               </CardContent>

@@ -943,9 +943,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/asset/overview", async (req, res) => {
     try {
       const { symbol, assetType, frames } = assetOverviewSchema.parse(req.query);
+      
+      // First check if the asset exists in our search results
+      const searchResults = await storage.searchAssets(symbol, [assetType], 1);
+      if (searchResults.length === 0) {
+        return res.status(404).json({ error: `Asset ${symbol} not found. Please search for valid assets.` });
+      }
+      
+      const validAsset = searchResults[0];
       const timeframes = frames.split(',');
-      const overview = await storage.getAssetOverview(symbol, assetType, timeframes);
-      res.json(overview);
+      const overview = await storage.getAssetOverview(validAsset.symbol, validAsset.assetType, timeframes);
+      res.json({
+        ...overview,
+        name: validAsset.name // Use the real name from search results
+      });
     } catch (error) {
       console.error("Asset overview error:", error);
       res.status(500).json({ error: "Failed to get asset overview" });
