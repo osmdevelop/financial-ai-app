@@ -61,10 +61,15 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <div className="flex flex-1 relative">
+    <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">
+      {/* Modern Background Elements */}
+      <div className="absolute inset-0 bg-gradient-to-br from-background via-background-secondary to-background-tertiary" />
+      <div className="absolute top-0 left-1/2 w-96 h-96 bg-primary/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-float" />
+      <div className="absolute bottom-0 right-0 w-64 h-64 bg-purple/10 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 animate-float" style={{animationDelay: '1s'}} />
+      
+      <div className="flex flex-1 relative z-10">
         <Sidebar />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 animate-fade-in">
           <Router />
         </div>
       </div>

@@ -67,16 +67,16 @@ export function Sidebar() {
           onClick={() => setIsOpen(!isOpen)}
           variant="outline"
           size="icon"
-          className="fixed top-4 left-4 z-50 md:hidden"
+          className="fixed top-6 left-6 z-50 md:hidden glass hover-glow transition-all duration-300"
         >
-          {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
       )}
 
       {/* Overlay for mobile */}
       {isMobile && isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-fade-in"
           onClick={() => setIsOpen(false)}
         />
       )}
@@ -84,36 +84,34 @@ export function Sidebar() {
       {/* Sidebar */}
       <div
         className={cn(
-          "bg-card shadow-lg border-r border-border transition-transform duration-300 ease-in-out z-50",
+          "glass-strong shadow-elegant border-r border-border/30 transition-all duration-500 ease-out z-50 animate-fade-in",
           isMobile
             ? cn(
-                "fixed inset-y-0 left-0 w-64 transform",
+                "fixed inset-y-0 left-0 w-72 transform",
                 isOpen ? "translate-x-0" : "-translate-x-full",
               )
-            : "w-64 relative",
+            : "w-72 relative",
         )}
       >
-        <div className="p-6 border-b border-border">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <BarChart3 className="text-primary-foreground text-lg" />
+        <div className="p-8 border-b border-border/20">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 gradient-primary rounded-2xl flex items-center justify-center shadow-glow hover-glow animate-float">
+              <BarChart3 className="w-7 h-7 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">OSM Fin</h1>
-              <p className="text-sm text-muted-foreground">
-                Portfolio Intelligence
-              </p>
+              <h1 className="text-xl font-bold text-gradient">OSM Fin</h1>
+              <p className="text-sm text-muted-foreground font-medium">Portfolio Intelligence</p>
             </div>
           </div>
         </div>
 
-        <nav className="mt-6">
-          <div className="px-6 py-2">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Menu
+        <nav className="mt-8">
+          <div className="px-8 py-3">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Navigation
             </h3>
           </div>
-          <ul className="space-y-1 px-3">
+          <ul className="space-y-2 px-4">
             {navigation.map((item) => {
               const isActive = location === item.href;
               return (
@@ -122,13 +120,13 @@ export function Sidebar() {
                     <span
                       onClick={closeSidebar}
                       className={cn(
-                        "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer",
+                        "flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer hover-lift",
                         isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                          ? "gradient-primary text-primary-foreground shadow-glow"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:shadow-elegant",
                       )}
                     >
-                      <item.icon className="mr-3 h-4 w-4" />
+                      <item.icon className="mr-4 h-5 w-5" />
                       {item.name}
                     </span>
                   </Link>
@@ -137,20 +135,20 @@ export function Sidebar() {
             })}
           </ul>
 
-          <div className="px-6 py-2 mt-8">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="px-8 py-3 mt-10">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
               Account
             </h3>
           </div>
-          <ul className="space-y-1 px-3">
+          <ul className="space-y-2 px-4">
             {secondaryNavigation.map((item) => (
               <li key={item.name}>
                 <Link href={item.href}>
                   <span
                     onClick={closeSidebar}
-                    className="text-muted-foreground hover:text-foreground hover:bg-accent flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                    className="text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:shadow-elegant flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer hover-lift"
                   >
-                    <item.icon className="mr-3 h-4 w-4" />
+                    <item.icon className="mr-4 h-5 w-5" />
                     {item.name}
                   </span>
                 </Link>
