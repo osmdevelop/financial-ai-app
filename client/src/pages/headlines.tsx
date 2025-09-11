@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Header } from "@/components/layout/header";
@@ -6,49 +6,82 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Clock, ExternalLink, Newspaper, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
-import { format, formatDistance } from "date-fns";
+import {
+  Clock,
+  ExternalLink,
+  Newspaper,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+} from "lucide-react";
+import { format, formatDistance, parseISO, isValid } from "date-fns";
 import type { Headline } from "@shared/schema";
 
-// Helper function to group headlines by date
-const groupHeadlinesByDate = (headlines: Headline[]) => {
-  const grouped = headlines.reduce((acc, headline) => {
-    const date = format(new Date(headline.published), "yyyy-MM-dd");
-    if (!acc[date]) {
-      acc[date] = [];
-    }
-    acc[date].push(headline);
-    return acc;
-  }, {} as Record<string, Headline[]>);
+// --- configuration for "real-time" behavior ---
+const POLL_HEADLINES_MS = 30_000; // refresh feed every 30s
+const RELATIVE_TIME_TICK_MS = 60_000; // update "x minutes ago" each minute
 
-  return Object.entries(grouped).sort(([a], [b]) => b.localeCompare(a));
-};
-
-// Helper function to format timeline date
-const formatTimelineDate = (dateStr: string) => {
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-      return "Unknown Date";
-    }
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    if (format(date, "yyyy-MM-dd") === format(today, "yyyy-MM-dd")) {
-      return "Today";
-    } else if (format(date, "yyyy-MM-dd") === format(yesterday, "yyyy-MM-dd")) {
-      return "Yesterday";
-    } else {
-      return format(date, "MMMM d, yyyy");
-    }
-  } catch (error) {
-    console.error("Date formatting error:", error);
-    return "Unknown Date";
+// ---------- safe date helpers ----------
+const toDate = (v: unknown): Date | null => {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === "number") return new Date(v < 1e12 ? v * 1000 : v); // epoch secs or ms
+  if (typeof v === "string") {
+    const num = Number(v);
+    if (!Number.isNaN(num)) return new Date(num < 1e12 ? num * 1000 : num);
+    const d = parseISO(v);
+    return isValid(d) ? d : null;
   }
+  return null;
 };
 
-// Helper function to get impact color
+const safeFormat = (v: unknown, fmt: string, fallback = "—") => {
+  const d = toDate(v);
+  return d && isValid(d) ? format(d, fmt) : fallback;
+};
+
+const safeDistance = (v: unknown, now: number, fallback = "") => {
+  const d = toDate(v);
+  return d && isValid(d)
+    ? formatDistance(d, new Date(now), { addSuffix: true })
+    : fallback;
+};
+// ---------------------------------------
+
+// Group headlines by day, handling bad dates and sorting newest -> oldest
+const groupHeadlinesByDate = (headlines: Headline[]) => {
+  const grouped = headlines.reduce(
+    (acc, headline) => {
+      const d = toDate((headline as any)?.published);
+      const key = d && isValid(d) ? format(d, "yyyy-MM-dd") : "Unknown";
+      (acc[key] ||= []).push(headline);
+      return acc;
+    },
+    {} as Record<string, Headline[]>,
+  );
+
+  return Object.entries(grouped).sort(([a], [b]) => {
+    if (a === "Unknown") return 1;
+    if (b === "Unknown") return -1;
+    return b.localeCompare(a);
+  });
+};
+
+// Helper to show "Today / Yesterday / Month d, yyyy"
+const formatTimelineDate = (dateLike: unknown) => {
+  const d = toDate(dateLike);
+  if (!d) return "Unknown Date";
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const yest = new Date();
+  yest.setDate(yest.getDate() - 1);
+  const yestStr = format(yest, "yyyy-MM-dd");
+  const dStr = format(d, "yyyy-MM-dd");
+  if (dStr === todayStr) return "Today";
+  if (dStr === yestStr) return "Yesterday";
+  return format(d, "MMMM d, yyyy");
+};
+
+// Impact styles/icons (optional use later if you add impact back to UI)
 const getImpactColor = (impact: string) => {
   switch (impact?.toLowerCase()) {
     case "high":
@@ -62,7 +95,6 @@ const getImpactColor = (impact: string) => {
   }
 };
 
-// Helper function to get impact icon
 const getImpactIcon = (impact: string) => {
   switch (impact?.toLowerCase()) {
     case "high":
@@ -79,12 +111,15 @@ const getImpactIcon = (impact: string) => {
 export default function Headlines() {
   const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [now, setNow] = useState(() => Date.now()); // rerender driver for relative time
 
-  const { data: headlines, isLoading } = useQuery({
-    queryKey: ["/api/headlines/timeline"],
-    queryFn: () => api.getHeadlinesTimeline(),
-  });
+  // tick so "x minutes ago" updates
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), RELATIVE_TIME_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
 
+  // Focus assets & watchlist
   const { data: focusAssets = [] } = useQuery({
     queryKey: ["/api/focus-assets"],
     queryFn: () => api.getFocusAssets("default"),
@@ -95,13 +130,42 @@ export default function Headlines() {
     queryFn: () => api.getWatchlist(),
   });
 
+  const focusSymbols = useMemo(
+    () => focusAssets.map((fa: any) => fa.symbol),
+    [focusAssets],
+  );
+  const watchlistSymbols = useMemo(
+    () => watchlist?.map((w: any) => w.symbol) ?? [],
+    [watchlist],
+  );
+
+  const activeSymbols: string[] | undefined = useMemo(() => {
+    if (scope === "focus") return focusSymbols;
+    if (scope === "watchlist") return watchlistSymbols;
+    return undefined; // "all"
+  }, [scope, focusSymbols, watchlistSymbols]);
+
+  // Headlines (real-time polling + proper scoping)
+  const { data: headlines = [], isLoading } = useQuery({
+    queryKey: ["/api/headlines/timeline", scope, activeSymbols],
+    queryFn: () => api.getHeadlinesTimeline(activeSymbols, scope, 100),
+    enabled:
+      scope === "all" ||
+      (Array.isArray(activeSymbols) && activeSymbols.length > 0),
+    refetchInterval: POLL_HEADLINES_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    keepPreviousData: true,
+  });
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header 
-        title="Headlines" 
+      <Header
+        title="Headlines"
         subtitle="Real-time market news and sentiment analysis"
       />
-      
+
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
         {/* Search and Filters */}
         <div className="space-y-4 mb-6">
@@ -112,7 +176,7 @@ export default function Headlines() {
             className="max-w-md"
             data-testid="input-search"
           />
-          
+
           <div className="flex flex-wrap gap-2">
             <div className="flex gap-2">
               <Button
@@ -130,9 +194,9 @@ export default function Headlines() {
                 size="sm"
                 onClick={() => setScope("focus")}
                 className="h-8"
-                disabled={!focusAssets.length}
+                disabled={!focusSymbols.length}
               >
-                Focus Assets ({focusAssets.length})
+                Focus Assets ({focusSymbols.length})
               </Button>
               <Button
                 data-testid="scope-watchlist"
@@ -140,24 +204,31 @@ export default function Headlines() {
                 size="sm"
                 onClick={() => setScope("watchlist")}
                 className="h-8"
-                disabled={!watchlist?.length}
+                disabled={!watchlistSymbols.length}
               >
-                Watchlist ({watchlist?.length || 0})
+                Watchlist ({watchlistSymbols.length})
               </Button>
             </div>
           </div>
-          
+
           {/* Active Filter Display */}
           {scope !== "all" && (
             <div className="flex flex-wrap gap-2">
               <span className="text-sm text-muted-foreground mr-2">
                 {scope === "focus" ? "Focus Assets:" : "Watchlist:"}
               </span>
-              {(scope === "focus" ? focusAssets.map(fa => fa.symbol) : watchlist?.map(w => w.symbol) || []).map((symbol) => (
-                <Badge key={symbol} variant="secondary" className="text-xs" data-testid={`badge-${symbol}`}>
-                  {symbol}
-                </Badge>
-              ))}
+              {(scope === "focus" ? focusSymbols : watchlistSymbols).map(
+                (symbol) => (
+                  <Badge
+                    key={symbol}
+                    variant="secondary"
+                    className="text-xs"
+                    data-testid={`badge-${symbol}`}
+                  >
+                    {symbol}
+                  </Badge>
+                ),
+              )}
             </div>
           )}
         </div>
@@ -188,25 +259,28 @@ export default function Headlines() {
           <div className="space-y-8">
             {headlines && headlines.length > 0 ? (
               groupHeadlinesByDate(
-                headlines.filter(h => 
-                  !searchTerm || 
-                  h.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  h.summary?.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-              ).map(([date, dateHeadlines]) => (
-                <div key={date} className="relative">
+                headlines.filter(
+                  (h: any) =>
+                    !searchTerm ||
+                    h.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    h.summary?.toLowerCase().includes(searchTerm.toLowerCase()),
+                ),
+              ).map(([dateKey, dateHeadlines]) => (
+                <div key={dateKey} className="relative">
                   {/* Date Header */}
                   <div className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 pb-4">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full">
                         <Clock className="h-4 w-4 text-primary" />
                         <span className="font-semibold text-primary">
-                          {formatTimelineDate(dateHeadlines[0].published)}
+                          {formatTimelineDate(
+                            (dateHeadlines as Headline[])[0]?.published,
+                          )}
                         </span>
                       </div>
                       <div className="h-px bg-border flex-1"></div>
                       <span className="text-xs text-muted-foreground">
-                        {dateHeadlines.length} headlines
+                        {(dateHeadlines as Headline[]).length} headlines
                       </span>
                     </div>
                   </div>
@@ -215,14 +289,14 @@ export default function Headlines() {
                   <div className="space-y-4 relative">
                     {/* Timeline line */}
                     <div className="absolute left-6 top-0 bottom-0 w-px bg-border"></div>
-                    
-                    {dateHeadlines.map((headline, index) => (
-                      <div key={headline.id} className="relative">
+
+                    {(dateHeadlines as Headline[]).map((headline) => (
+                      <div key={headline.id as any} className="relative">
                         {/* Timeline dot */}
                         <div className="absolute left-4 w-4 h-4 bg-background border-2 border-primary rounded-full z-10">
                           <div className="absolute inset-1 bg-primary rounded-full"></div>
                         </div>
-                        
+
                         {/* Timeline content */}
                         <div className="ml-12">
                           <Card className="hover:shadow-md transition-all duration-200 border-l-4 border-l-primary/20">
@@ -233,44 +307,66 @@ export default function Headlines() {
                                     {headline.title}
                                   </h3>
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <span className="font-medium">{headline.source}</span>
+                                    <span className="font-medium">
+                                      {(headline as any).source}
+                                    </span>
                                     <span>•</span>
-                                    <span>{format(new Date(headline.published), "h:mm a")}</span>
+                                    <span>
+                                      {safeFormat(headline.published, "h:mm a")}
+                                    </span>
                                     <span>•</span>
-                                    <span>{formatDistance(new Date(headline.published), new Date(), { addSuffix: true })}</span>
+                                    <span>
+                                      {safeDistance(headline.published, now)}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
-                              
+
                               {headline.summary && (
                                 <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
                                   {headline.summary}
                                 </p>
                               )}
-                              
+
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  {headline.symbols && headline.symbols.length > 0 && (
+                                  {(headline as any).symbols?.length > 0 && (
                                     <div className="flex gap-1">
-                                      {headline.symbols.slice(0, 4).map((symbol: string) => (
-                                        <Badge key={symbol} variant="secondary" className="text-xs">
-                                          {symbol}
-                                        </Badge>
-                                      ))}
-                                      {headline.symbols.length > 4 && (
-                                        <Badge variant="secondary" className="text-xs">
-                                          +{headline.symbols.length - 4} more
+                                      {(headline as any).symbols
+                                        .slice(0, 4)
+                                        .map((symbol: string) => (
+                                          <Badge
+                                            key={symbol}
+                                            variant="secondary"
+                                            className="text-xs"
+                                          >
+                                            {symbol}
+                                          </Badge>
+                                        ))}
+                                      {(headline as any).symbols.length > 4 && (
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-xs"
+                                        >
+                                          +
+                                          {(headline as any).symbols.length - 4}{" "}
+                                          more
                                         </Badge>
                                       )}
                                     </div>
                                   )}
                                 </div>
-                                
-                                {headline.url && (
-                                  <Button variant="ghost" size="sm" asChild className="h-8 px-3">
-                                    <a 
-                                      href={headline.url} 
-                                      target="_blank" 
+
+                                {(headline as any).url && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    asChild
+                                    className="h-8 px-3"
+                                  >
+                                    <a
+                                      href={(headline as any).url}
+                                      target="_blank"
                                       rel="noopener noreferrer"
                                       className="flex items-center gap-1 text-xs"
                                     >
@@ -295,12 +391,11 @@ export default function Headlines() {
                     <Newspaper className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                     <h3 className="font-medium mb-2">No headlines found</h3>
                     <p className="text-sm">
-                      {scope === "focus" 
+                      {scope === "focus"
                         ? "No news found for your focus assets. Try adding more assets or switch to all headlines."
                         : scope === "watchlist"
-                        ? "No news found for your watchlist. Try adding more symbols or switch to all headlines."
-                        : "Try adjusting your search terms or check back later for new headlines."
-                      }
+                          ? "No news found for your watchlist. Try adding more symbols or switch to all headlines."
+                          : "Try adjusting your search terms or check back later for new headlines."}
                     </p>
                   </div>
                 </CardContent>
