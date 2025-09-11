@@ -14,12 +14,12 @@ import {
   TrendingDown,
   AlertTriangle,
 } from "lucide-react";
+import { RefreshCcw } from "lucide-react";
 import { format, formatDistance, parseISO, isValid } from "date-fns";
 import type { Headline } from "@shared/schema";
 
 // --- configuration for "real-time" behavior ---
 const POLL_HEADLINES_MS = 30_000; // refresh feed every 30s
-const RELATIVE_TIME_TICK_MS = 60_000; // update "x minutes ago" each minute
 
 // ---------- safe date helpers ----------
 const toDate = (v: unknown): Date | null => {
@@ -38,13 +38,6 @@ const toDate = (v: unknown): Date | null => {
 const safeFormat = (v: unknown, fmt: string, fallback = "—") => {
   const d = toDate(v);
   return d && isValid(d) ? format(d, fmt) : fallback;
-};
-
-const safeDistance = (v: unknown, now: number, fallback = "") => {
-  const d = toDate(v);
-  return d && isValid(d)
-    ? formatDistance(d, new Date(now), { addSuffix: true })
-    : fallback;
 };
 // ---------------------------------------
 
@@ -108,16 +101,22 @@ const getImpactIcon = (impact: string) => {
   }
 };
 
+/** Isolated minute-ticker so only the time text re-renders, not the whole page */
+function TimeAgo({ date }: { date: unknown }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => force((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const d = toDate(date);
+  if (!d || !isValid(d))
+    return <span className="text-xs text-muted-foreground">—</span>;
+  return <>{formatDistance(d, new Date(), { addSuffix: true })}</>;
+}
+
 export default function Headlines() {
   const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [now, setNow] = useState(() => Date.now()); // rerender driver for relative time
-
-  // tick so "x minutes ago" updates
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), RELATIVE_TIME_TICK_MS);
-    return () => clearInterval(id);
-  }, []);
 
   // Focus assets & watchlist
   const { data: focusAssets = [] } = useQuery({
@@ -145,8 +144,14 @@ export default function Headlines() {
     return undefined; // "all"
   }, [scope, focusSymbols, watchlistSymbols]);
 
-  // Headlines (real-time polling + proper scoping) — force real, no cache reuse
-  const { data: headlines = [], isLoading } = useQuery({
+  // Headlines (real-time polling + proper scoping) — keep previous data to avoid flicker
+  const {
+    data: headlines = [],
+    isLoading,
+    isFetching, // <-- add
+    refetch, // <-- add
+    dataUpdatedAt, // <-- add (epoch ms)
+  } = useQuery({
     queryKey: ["/api/headlines/timeline", scope, activeSymbols],
     queryFn: () =>
       api.getHeadlinesTimeline(activeSymbols, scope, 100, {
@@ -156,19 +161,27 @@ export default function Headlines() {
     enabled:
       scope === "all" ||
       (Array.isArray(activeSymbols) && activeSymbols.length > 0),
-
-    // IMPORTANT: avoid stale/mock reuse
     refetchInterval: POLL_HEADLINES_MS,
     refetchIntervalInBackground: true,
-    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    refetchOnMount: "always",
+    refetchOnWindowFocus: false, // avoid jolt when switching tabs
+    keepPreviousData: true, // <— key to avoid content “swap” feel
     staleTime: 0,
-    gcTime: 0,
-    retry: 1,
-    networkMode: "always",
-    keepPreviousData: false,
   });
+
+  // Memoize filter & grouping so they don’t recompute on each minute tick
+  const filtered = useMemo(
+    () =>
+      (headlines as Headline[]).filter(
+        (h: any) =>
+          !searchTerm ||
+          h.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          h.summary?.toLowerCase().includes(searchTerm.toLowerCase()),
+      ),
+    [headlines, searchTerm],
+  );
+
+  const grouped = useMemo(() => groupHeadlinesByDate(filtered), [filtered]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -177,26 +190,50 @@ export default function Headlines() {
         subtitle="Real-time market news and sentiment analysis"
       />
 
-      {/* optional visual flag if backend returns a mock payload */}
-      {Array.isArray(headlines) && (headlines as any)._meta?.mock && (
-        <div className="mx-4 md:mx-6 -mb-4">
-          <span className="text-xs px-2 py-1 rounded bg-yellow-500/10 text-yellow-400">
-            Showing MOCK headlines
+      {/* tiny live-indicator; does not re-layout the page */}
+      <div className="px-4 md:px-6 pt-2">
+        {!isLoading && (
+          <span className="text-[11px] text-muted-foreground">
+            {isFetching ? "Updating…" : "Live"} • Last update{" "}
+            {safeFormat(new Date(), "h:mm:ss a")}
           </span>
-        </div>
-      )}
+        )}
+      </div>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
         {/* Search and Filters */}
         <div className="space-y-4 mb-6">
-          <Input
-            placeholder="Search headlines..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-md"
-            data-testid="input-search"
-          />
+          {/* Top row: search + manual refresh */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <Input
+              placeholder="Search headlines..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-md"
+              data-testid="input-search"
+            />
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                aria-label="Refresh headlines"
+              >
+                <RefreshCcw
+                  className={`h-4 w-4 mr-1 ${isFetching ? "animate-spin" : ""}`}
+                />
+                {isFetching ? "Refreshing…" : "Refresh"}
+              </Button>
+              {!!dataUpdatedAt && (
+                <span className="text-xs text-muted-foreground">
+                  Updated {format(new Date(dataUpdatedAt), "h:mm:ss a")}
+                </span>
+              )}
+            </div>
+          </div>
 
+          {/* Scope buttons row (unchanged) */}
           <div className="flex flex-wrap gap-2">
             <div className="flex gap-2">
               <Button
@@ -231,7 +268,7 @@ export default function Headlines() {
             </div>
           </div>
 
-          {/* Active Filter Display */}
+          {/* Active chips row (unchanged) */}
           {scope !== "all" && (
             <div className="flex flex-wrap gap-2">
               <span className="text-sm text-muted-foreground mr-2">
@@ -277,15 +314,8 @@ export default function Headlines() {
           </div>
         ) : (
           <div className="space-y-8">
-            {headlines && headlines.length > 0 ? (
-              groupHeadlinesByDate(
-                headlines.filter(
-                  (h: any) =>
-                    !searchTerm ||
-                    h.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    h.summary?.toLowerCase().includes(searchTerm.toLowerCase()),
-                ),
-              ).map(([dateKey, dateHeadlines]) => (
+            {grouped && grouped.length > 0 ? (
+              grouped.map(([dateKey, dateHeadlines]) => (
                 <div key={dateKey} className="relative">
                   {/* Date Header */}
                   <div className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 pb-4">
@@ -336,7 +366,7 @@ export default function Headlines() {
                                     </span>
                                     <span>•</span>
                                     <span>
-                                      {safeDistance(headline.published, now)}
+                                      <TimeAgo date={headline.published} />
                                     </span>
                                   </div>
                                 </div>
