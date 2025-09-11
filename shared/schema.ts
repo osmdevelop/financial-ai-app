@@ -73,6 +73,33 @@ export const focusAssets = pgTable("focus_assets", {
   portfolioSymbolIdx: index("portfolio_symbol_focus_idx").on(table.portfolioId, table.symbol),
 }));
 
+export const userPrefs = pgTable("user_prefs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
+  riskStyle: text("risk_style").notNull(), // "Conservative" | "Balanced" | "Aggressive"
+  mockLivePref: text("mock_live_pref").notNull().default("mock"), // "mock" | "live"
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  portfolioIdx: index("user_prefs_portfolio_idx").on(table.portfolioId),
+}));
+
+export const alerts = pgTable("alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // "price" | "pct" | "earnings" | "sentiment"
+  symbol: text("symbol"), // null for sentiment alerts
+  threshold: decimal("threshold"), // price or pct or sentiment score
+  direction: text("direction"), // "above" | "below"
+  windowMin: integer("window_min").default(60), // debounce window for repeated fires
+  enabled: text("enabled").notNull().default("true"), // "true" | "false"
+  lastTriggered: timestamp("last_triggered"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  portfolioTypeSymbolIdx: index("alerts_portfolio_type_symbol_idx").on(table.portfolioId, table.type, table.symbol),
+}));
+
 // Insert schemas
 export const insertPortfolioSchema = createInsertSchema(portfolios).pick({
   name: true,
@@ -138,6 +165,32 @@ export const insertFocusAssetSchema = createInsertSchema(focusAssets).pick({
   assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity"]),
 });
 
+export const insertUserPrefsSchema = createInsertSchema(userPrefs).pick({
+  portfolioId: true,
+  riskStyle: true,
+  mockLivePref: true,
+}).extend({
+  riskStyle: z.enum(["Conservative", "Balanced", "Aggressive"]),
+  mockLivePref: z.enum(["mock", "live"]),
+});
+
+export const insertAlertSchema = createInsertSchema(alerts).pick({
+  portfolioId: true,
+  type: true,
+  symbol: true,
+  threshold: true,
+  direction: true,
+  windowMin: true,
+  enabled: true,
+}).extend({
+  type: z.enum(["price", "pct", "earnings", "sentiment"]),
+  direction: z.enum(["above", "below"]).optional(),
+  enabled: z.enum(["true", "false"]).optional(),
+  threshold: z.string().optional(),
+  symbol: z.string().optional(),
+  windowMin: z.number().optional(),
+});
+
 // Types
 export type Portfolio = typeof portfolios.$inferSelect;
 export type Position = typeof positions.$inferSelect;
@@ -153,6 +206,10 @@ export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type InsertWatchlistItem = z.infer<typeof insertWatchlistSchema>;
 export type InsertHiddenAsset = z.infer<typeof insertHiddenAssetSchema>;
 export type InsertFocusAsset = z.infer<typeof insertFocusAssetSchema>;
+export type UserPrefs = typeof userPrefs.$inferSelect;
+export type Alert = typeof alerts.$inferSelect;
+export type InsertUserPrefs = z.infer<typeof insertUserPrefsSchema>;
+export type InsertAlert = z.infer<typeof insertAlertSchema>;
 
 // Extended types for API responses
 export type PositionWithPrice = Position & {
@@ -431,4 +488,49 @@ export type HeadlineImpactAnalysis = {
     confidence: number;
   }[];
   as_of: string;
+};
+
+// Phase 4 - Alerts and Notifications
+export type Notification = {
+  id: string;
+  title: string;
+  body: string;
+  timestamp: string;
+  alertId?: string;
+};
+
+// Phase 4 - Enhanced Sentiment with Sub-scores
+export type SentimentSubScores = {
+  riskAppetite: number;
+  credit: number;
+  volatilityInv: number;
+  breadth: number;
+};
+
+export type SentimentDelta = {
+  vsYesterday: number;
+  vsLastWeek?: number;
+};
+
+export type EnhancedSentimentIndex = {
+  score: number;
+  regime: SentimentRegime;
+  as_of: string;
+  subscores: SentimentSubScores;
+  delta: SentimentDelta;
+};
+
+// Phase 4 - AI Insight Templates
+export type AIInsightTemplate = {
+  id: string;
+  name: string;
+  prompt: string;
+  description: string;
+};
+
+// Phase 4 - Enhanced API Response with Freshness
+export type FreshnessInfo = {
+  as_of: string;
+  source: string;
+  fresh: boolean;
 };
