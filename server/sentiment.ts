@@ -8,17 +8,41 @@ interface SentimentDriver {
   note: string;
 }
 
+interface SentimentSubscore {
+  name: string;
+  score: number;
+  weight: number;
+  change?: number; // day-over-day delta
+  trend: "up" | "down" | "neutral";
+}
+
 interface SentimentIndex {
   score: number;
   regime: "Risk-On" | "Neutral" | "Risk-Off";
   drivers: SentimentDriver[];
+  subscores: SentimentSubscore[];
+  change: number; // overall day-over-day delta (0 on first calculation)
   as_of: string;
 }
 
 export class SentimentAnalyzer {
+  private lastSentimentData: SentimentIndex | null = null;
+
   // Normalize values to 0-100 scale
   private normalize(value: number, min: number, max: number): number {
     return Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+  }
+
+  // Calculate day-over-day change
+  private calculateDelta(current: number, previous: number): number {
+    return Math.round(current - previous);
+  }
+
+  // Determine trend based on change
+  private getTrend(change: number): "up" | "down" | "neutral" {
+    if (change > 2) return "up";
+    if (change < -2) return "down";
+    return "neutral";
   }
 
   // Calculate realized volatility from price series
@@ -109,7 +133,7 @@ export class SentimentAnalyzer {
       // Volatility: Realized volatility of SPY (last 10 days)
       if (spyData.status === "fulfilled" && spyData.value.length >= 10) {
         const prices = spyData.value.slice(0, 10).map(d => d.close);
-        const realizedVol = this.calculateRealizedVolatility(prices);
+        const realizedVol = this.calculateRealizedVolatility(prices) * 100; // Convert to percentage
         volatilityInverse = this.normalize(30 - realizedVol, 0, 30); // Lower vol = higher score
 
         drivers.push({
@@ -137,12 +161,84 @@ export class SentimentAnalyzer {
         regime = "Neutral";
       }
 
-      return {
+      // Create subscores with day-over-day deltas
+      const subscores: SentimentSubscore[] = [];
+      
+      // Risk Appetite
+      const riskAppetiteScore = Math.round(riskAppetite);
+      let riskAppetiteChange: number | undefined;
+      if (this.lastSentimentData) {
+        const previousRiskAppetite = this.lastSentimentData.subscores.find(s => s.name === "Risk Appetite")?.score ?? 50;
+        riskAppetiteChange = this.calculateDelta(riskAppetiteScore, previousRiskAppetite);
+      } else {
+        riskAppetiteChange = 0; // First calculation
+      }
+      
+      subscores.push({
+        name: "Risk Appetite",
+        score: riskAppetiteScore,
+        weight: 0.4,
+        change: riskAppetiteChange,
+        trend: this.getTrend(riskAppetiteChange || 0)
+      });
+
+      // Credit Conditions  
+      const creditConditionsScore = Math.round(creditSpread);
+      let creditConditionsChange: number | undefined;
+      if (this.lastSentimentData) {
+        const previousCreditConditions = this.lastSentimentData.subscores.find(s => s.name === "Credit Conditions")?.score ?? 50;
+        creditConditionsChange = this.calculateDelta(creditConditionsScore, previousCreditConditions);
+      } else {
+        creditConditionsChange = 0; // First calculation
+      }
+      
+      subscores.push({
+        name: "Credit Conditions",
+        score: creditConditionsScore,
+        weight: 0.25,
+        change: creditConditionsChange,
+        trend: this.getTrend(creditConditionsChange || 0)
+      });
+
+      // Market Volatility
+      const volatilityScore = Math.round(volatilityInverse);
+      let volatilityChange: number | undefined;
+      if (this.lastSentimentData) {
+        const previousVolatility = this.lastSentimentData.subscores.find(s => s.name === "Market Volatility")?.score ?? 50;
+        volatilityChange = this.calculateDelta(volatilityScore, previousVolatility);
+      } else {
+        volatilityChange = 0; // First calculation
+      }
+      
+      subscores.push({
+        name: "Market Volatility", 
+        score: volatilityScore,
+        weight: 0.35,
+        change: volatilityChange,
+        trend: this.getTrend(volatilityChange || 0)
+      });
+
+      // Calculate overall day-over-day change
+      let overallChange: number;
+      if (this.lastSentimentData) {
+        overallChange = this.calculateDelta(indexScore, this.lastSentimentData.score);
+      } else {
+        overallChange = 0; // First calculation
+      }
+
+      const currentSentiment: SentimentIndex = {
         score: indexScore,
         regime,
         drivers,
+        subscores,
+        change: overallChange,
         as_of: new Date().toISOString()
       };
+
+      // Store current data for next calculation
+      this.lastSentimentData = currentSentiment;
+
+      return currentSentiment;
 
     } catch (error) {
       console.error("Sentiment analysis error:", error);
@@ -159,6 +255,30 @@ export class SentimentAnalyzer {
             note: "Using fallback neutral sentiment due to data unavailability"
           }
         ],
+        subscores: [
+          {
+            name: "Risk Appetite",
+            score: 50,
+            weight: 0.4,
+            change: 0,
+            trend: "neutral"
+          },
+          {
+            name: "Credit Conditions", 
+            score: 50,
+            weight: 0.25,
+            change: 0,
+            trend: "neutral"
+          },
+          {
+            name: "Market Volatility",
+            score: 50,
+            weight: 0.35,
+            change: 0,
+            trend: "neutral"
+          }
+        ],
+        change: 0,
         as_of: new Date().toISOString()
       };
     }
