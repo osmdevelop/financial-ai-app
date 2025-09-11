@@ -214,7 +214,9 @@ export const api = {
   // Enhanced Sentiment
   async getEnhancedSentiment(): Promise<EnhancedMarketSentiment> {
     const res = await apiRequest("GET", "/api/sentiment/index");
-    return res.json();
+    const response = await res.json();
+    // Handle new response format with freshness metadata
+    return response.data || response; // Fallback for backwards compatibility
   },
 
   async getSentimentNarrative(indexPayload: EnhancedMarketSentiment, contextNote?: string): Promise<SentimentNarrative> {
@@ -272,7 +274,9 @@ export const api = {
     params.set('scope', scope);
     params.set('limit', limit.toString());
     const res = await apiRequest("GET", `/api/headlines/timeline?${params}`);
-    return res.json();
+    const response = await res.json();
+    // Handle new response format with freshness metadata
+    return response.data || response; // Fallback for backwards compatibility
   },
 
   async analyzeHeadlineImpact(title: string, summary?: string, symbols: string[] = []): Promise<HeadlineImpactAnalysis> {

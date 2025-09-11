@@ -38,7 +38,9 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    const body = await res.json();
+    // Handle new response format with freshness metadata
+    return body?.data ?? body; // Unwrap if envelope format, otherwise return as-is
   };
 
 export const queryClient = new QueryClient({

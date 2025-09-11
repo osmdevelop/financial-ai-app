@@ -1391,8 +1391,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/sentiment/index", async (req, res) => {
     try {
       const { sentimentAnalyzer } = await import("./sentiment");
-      const sentiment = await sentimentAnalyzer.calculateSentimentIndex();
-      res.json(sentiment);
+      const { withFreshness, createLiveFreshness, createFallbackFreshness } = await import("./freshness");
+      
+      const result = await sentimentAnalyzer.calculateSentimentIndex();
+      
+      // Check if we got live data or fallback based on error patterns
+      const hasLiveData = !result.drivers.every(d => d.note.includes("using baseline"));
+      
+      const freshness = hasLiveData 
+        ? createLiveFreshness("Alpha Vantage", 5) 
+        : createFallbackFreshness("API rate limits reached");
+      
+      res.json(withFreshness(result, freshness));
     } catch (error) {
       console.error("Enhanced sentiment error:", error);
       res.status(500).json({ error: "Failed to get sentiment index" });
@@ -1504,6 +1514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Try real data first
       try {
         const { headlinesService } = await import("./headlines");
+        const { withFreshness, createLiveFreshness, createFallbackFreshness } = await import("./freshness");
         const headlines = await headlinesService.getTimeline({
           tickers: symbolsArray,
           limit: limit || 50
@@ -1517,7 +1528,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...headline,
             impactLevel: calculateImpactLevel(headline)
           }));
-          return res.json(enhancedFallback);
+          const freshness = createFallbackFreshness("Alpha Vantage API rate limits");
+          return res.json(withFreshness(enhancedFallback, freshness));
         }
         
         // Add impact levels to headlines
@@ -1526,9 +1538,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           impactLevel: calculateImpactLevel(headline)
         }));
         
-        res.json(enhancedHeadlines);
+        const freshness = createLiveFreshness("Alpha Vantage", 2);
+        res.json(withFreshness(enhancedHeadlines, freshness));
       } catch (apiError) {
         console.warn("Headlines API error, falling back to mock data:", apiError);
+        const { withFreshness, createFallbackFreshness } = await import("./freshness");
         const headlines = await storage.getHeadlinesTimeline(symbolsArray, limit);
         
         // Add impact levels to mock headlines
@@ -1537,7 +1551,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           impactLevel: calculateImpactLevel(headline)
         }));
         
-        res.json(enhancedHeadlines);
+        const freshness = createFallbackFreshness("API service error");
+        res.json(withFreshness(enhancedHeadlines, freshness));
       }
     } catch (error) {
       console.error("Headlines timeline error:", error);

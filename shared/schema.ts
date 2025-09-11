@@ -534,3 +534,14 @@ export type FreshnessInfo = {
   source: string;
   fresh: boolean;
 };
+
+// Enhanced freshness metadata with detailed source info
+export const freshnessMetadataSchema = z.object({
+  lastUpdated: z.string(), // ISO timestamp when data was fetched/calculated
+  dataSource: z.enum(["live", "mock", "cached", "fallback"]), // Source type
+  sourceName: z.string().optional(), // Specific source (e.g., "Alpha Vantage", "CoinGecko")
+  freshness: z.enum(["realtime", "recent", "stale", "unknown"]), // Data age assessment
+  disclaimer: z.string().optional(), // Additional context for users
+});
+
+export type FreshnessMetadata = z.infer<typeof freshnessMetadataSchema>;
