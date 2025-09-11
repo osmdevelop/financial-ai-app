@@ -1666,7 +1666,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Enhanced Headlines timeline with scope filtering and impact levels
-  apapp.get("/api/headlines/timeline", async (req, res) => {
+  app.get("/api/headlines/timeline", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
 
     try {
