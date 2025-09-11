@@ -208,7 +208,7 @@ export default function Dashboard() {
                 {!sentimentLoading && marketSentiment ? (
                   <div className="space-y-3">
                     <div className="space-y-2 text-xs">
-                      {marketSentiment.drivers.slice(0, 4).map((driver, index) => (
+                      {marketSentiment.drivers?.slice(0, 4).map((driver, index) => (
                         <div key={index} className="flex justify-between">
                           <span className="text-muted-foreground">{driver.label}:</span>
                           <span className="font-medium">{driver.value}</span>
