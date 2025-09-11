@@ -38,6 +38,11 @@ const insightsSchema = z.object({
   text: z.string()
 });
 
+// Schema for AI insight templates
+const insightTemplateSchema = z.object({
+  template: z.enum(["portfolio_health", "market_outlook", "risk_analysis", "opportunities", "weekly_summary"])
+});
+
 // Schema for intraday data
 const intradaySchema = z.object({
   symbol: z.string(),
@@ -658,6 +663,142 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error) {
       res.status(500).json({ error: "Failed to generate insights" });
+    }
+  });
+
+  // AI Insight Templates route
+  app.post("/api/insights/run", async (req, res) => {
+    try {
+      const { template } = insightTemplateSchema.parse(req.body);
+      
+      // Define template prompts and mock responses
+      const templates = {
+        portfolio_health: {
+          prompt: "Analyze my portfolio's overall health, diversification, and risk exposure",
+          mockResponse: {
+            summary: "Your portfolio demonstrates strong fundamentals with a well-balanced allocation across 3 asset classes. Current diversification metrics show healthy risk distribution with moderate correlation between holdings.",
+            whyThisMatters: [
+              "Risk Balance: Your 60/30/10 equity/ETF/crypto split provides growth potential while limiting single-asset exposure",
+              "Correlation Analysis: Holdings show low correlation (0.3 average), reducing portfolio volatility during market stress",
+              "Rebalancing Signal: Current allocation remains within target bands, no immediate rebalancing required"
+            ]
+          }
+        },
+        market_outlook: {
+          prompt: "Provide current market outlook and how it affects my portfolio positioning",
+          mockResponse: {
+            summary: "Market conditions show mixed signals with defensive rotation in progress. Current sentiment analysis indicates cautious optimism with volatility concerns in growth sectors.",
+            whyThisMatters: [
+              "Sector Rotation: Value sectors outperforming growth aligns with your defensive ETF positions", 
+              "Volatility Hedging: Your diversified approach provides natural hedging against current market uncertainty",
+              "Opportunity Window: Recent pullbacks may present entry points for quality names on your watchlist"
+            ]
+          }
+        },
+        risk_analysis: {
+          prompt: "Analyze current risk factors and potential vulnerabilities in my portfolio",
+          mockResponse: {
+            summary: "Portfolio risk analysis reveals moderate exposure with key concentrations in technology and growth sectors. Current beta suggests portfolio volatility aligns with broader market movements.",
+            whyThisMatters: [
+              "Concentration Risk: Technology allocation represents 35% of portfolio, creating sector-specific vulnerability",
+              "Market Beta: Portfolio beta of 1.2 indicates higher volatility than market average during corrections", 
+              "Liquidity Profile: All holdings maintain strong daily volume, ensuring exit flexibility during stress events"
+            ]
+          }
+        },
+        opportunities: {
+          prompt: "Identify potential opportunities and actionable insights for portfolio optimization",
+          mockResponse: {
+            summary: "Market analysis reveals emerging opportunities in defensive sectors and oversold quality names. Current valuations suggest selective accumulation opportunities in core holdings.",
+            whyThisMatters: [
+              "Valuation Opportunity: Recent market correction has pushed quality names below historical averages",
+              "Defensive Rotation: Utilities and consumer staples showing relative strength, supporting your ETF positions",
+              "Accumulation Zone: Current price levels for top holdings suggest favorable risk/reward for additional positions"
+            ]
+          }
+        },
+        weekly_summary: {
+          prompt: "Provide a comprehensive weekly portfolio and market summary with key insights",
+          mockResponse: {
+            summary: "This week's portfolio performance shows resilience despite market volatility. Key positions demonstrated defensive characteristics while maintaining exposure to growth opportunities.",
+            whyThisMatters: [
+              "Weekly Performance: Portfolio outperformed benchmarks by 1.2% due to defensive positioning and low correlation",
+              "Market Context: Broader indices faced pressure from rate concerns, validating your balanced allocation strategy",
+              "Next Week Setup: Technical indicators suggest continued volatility, supporting current defensive posture"
+            ]
+          }
+        }
+      };
+
+      // Get context for real API calls
+      let contextInfo = "";
+      try {
+        // Get portfolio data
+        const portfolios = await storage.getPortfolios();
+        if (portfolios.length > 0) {
+          const portfolioId = portfolios[0].id;
+          const summary = await storage.getPortfolioSummary(portfolioId);
+          const positions = await storage.getPortfolioPositionsWithPrices(portfolioId);
+          
+          contextInfo += `Portfolio Context (as of ${new Date().toLocaleDateString()}):\n`;
+          contextInfo += `- Total Value: $${summary.totalValue.toLocaleString()}\n`;
+          contextInfo += `- Daily P&L: ${summary.dailyPnL >= 0 ? '+' : ''}$${summary.dailyPnL.toLocaleString()} (${summary.dailyPnLPercent.toFixed(2)}%)\n`;
+          
+          if (summary.topMover) {
+            contextInfo += `- Top Mover: ${summary.topMover.symbol} ${summary.topMover.change >= 0 ? '+' : ''}$${summary.topMover.change.toLocaleString()} (${summary.topMover.changePercent.toFixed(2)}%)\n`;
+          }
+          
+          contextInfo += `- Holdings: ${positions.map(p => `${p.symbol} (${p.assetType})`).join(', ')}\n\n`;
+        }
+        
+        // Get market sentiment
+        const sentimentResponse = await fetch('http://localhost:5000/api/sentiment');
+        if (sentimentResponse.ok) {
+          const sentimentData = await sentimentResponse.json();
+          contextInfo += `Market Sentiment (${sentimentData.lastUpdated}):\n`;
+          contextInfo += `- Sentiment Score: ${sentimentData.score}/100\n`;
+          contextInfo += `- Key Drivers:\n`;
+          sentimentData.drivers.forEach((driver: any) => {
+            contextInfo += `  • ${driver.label}: ${driver.explanation}\n`;
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch context:', error);
+        contextInfo = "Context unavailable at this time.";
+      }
+
+      const templateData = templates[template];
+      
+      // Check if OpenAI API key is available
+      if (!process.env.OPENAI_API_KEY) {
+        // Return template mock response
+        return res.json(templateData.mockResponse);
+      }
+
+      // Use real OpenAI API with template prompt and context
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a financial analysis expert. Today's date is ${new Date().toLocaleDateString()}. Only use the supplied context data and today's date for your analysis. If data is missing from the context, explicitly state 'not available in current context'. Respond with JSON in this format: { 'summary': string, 'whyThisMatters': string[] }`
+          },
+          {
+            role: "user",
+            content: `Current Context:\n${contextInfo}\n\nTemplate Analysis Request: ${templateData.prompt}\n\nProvide analysis using ONLY the context data above and today's date. Reference specific numbers and data points from the context. Focus specifically on the template topic requested.`
+          }
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+      res.json(result);
+
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: "Invalid request", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to generate template insights" });
     }
   });
 
