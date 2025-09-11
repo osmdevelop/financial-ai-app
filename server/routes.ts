@@ -7,7 +7,9 @@ import {
   insertPriceSchema,
   insertTransactionSchema,
   insertWatchlistSchema,
-  insertFocusAssetSchema 
+  insertFocusAssetSchema,
+  insertUserPrefsSchema,
+  insertAlertSchema
 } from "@shared/schema";
 import { spawn } from "child_process";
 import { z } from "zod";
@@ -186,6 +188,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true, message: "Portfolio deleted" });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete portfolio" });
+    }
+  });
+
+  // Phase 4 - User Preferences routes
+  app.get("/api/prefs", async (req, res) => {
+    try {
+      const portfolioId = req.query.portfolioId as string;
+      if (!portfolioId) {
+        return res.status(400).json({ error: "portfolioId is required" });
+      }
+      
+      const prefs = await storage.getUserPrefs(portfolioId);
+      if (!prefs) {
+        return res.status(404).json({ error: "User preferences not found" });
+      }
+      
+      res.json(prefs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch user preferences" });
+    }
+  });
+
+  app.post("/api/prefs", async (req, res) => {
+    try {
+      const validatedData = insertUserPrefsSchema.parse(req.body);
+      const prefs = await storage.upsertUserPrefs(validatedData);
+      res.json(prefs);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: "Invalid preferences data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to save user preferences" });
+    }
+  });
+
+  // Phase 4 - Alerts routes
+  app.post("/api/alerts", async (req, res) => {
+    try {
+      const validatedData = insertAlertSchema.parse(req.body);
+      const alert = await storage.createAlert(validatedData);
+      res.json(alert);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: "Invalid alert data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create alert" });
+    }
+  });
+
+  app.get("/api/alerts", async (req, res) => {
+    try {
+      const portfolioId = req.query.portfolioId as string;
+      if (!portfolioId) {
+        return res.status(400).json({ error: "portfolioId is required" });
+      }
+      
+      const alerts = await storage.getAlerts(portfolioId);
+      res.json(alerts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch alerts" });
+    }
+  });
+
+  app.patch("/api/alerts/:id", async (req, res) => {
+    try {
+      const updates = insertAlertSchema.partial().parse(req.body);
+      const alert = await storage.updateAlert(req.params.id, updates);
+      
+      if (!alert) {
+        return res.status(404).json({ error: "Alert not found" });
+      }
+      
+      res.json(alert);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: "Invalid alert data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update alert" });
+    }
+  });
+
+  app.delete("/api/alerts/:id", async (req, res) => {
+    try {
+      await storage.deleteAlert(req.params.id);
+      res.json({ success: true, message: "Alert deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete alert" });
+    }
+  });
+
+  // Phase 4 - Notifications route
+  app.get("/api/notifications", async (req, res) => {
+    try {
+      const portfolioId = req.query.portfolioId as string;
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      if (!portfolioId) {
+        return res.status(400).json({ error: "portfolioId is required" });
+      }
+      
+      const notifications = await storage.getNotifications(portfolioId, limit);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch notifications" });
     }
   });
 
