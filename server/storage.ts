@@ -6,6 +6,8 @@ import {
   WatchlistItem,
   HiddenAsset,
   FocusAsset,
+  UserPrefs,
+  Alert,
   InsertPortfolio, 
   InsertPosition, 
   InsertPrice,
@@ -13,6 +15,8 @@ import {
   InsertWatchlistItem,
   InsertHiddenAsset,
   InsertFocusAsset,
+  InsertUserPrefs,
+  InsertAlert,
   PositionWithPrice,
   PortfolioSummary,
   ComputedPosition,
@@ -29,13 +33,17 @@ import {
   MarketRecap,
   MarketRecapSummary,
   HeadlineImpactAnalysis,
+  Notification,
+  EnhancedSentimentIndex,
   portfolios,
   positions,
   prices,
   transactions,
   watchlist,
   hiddenAssets,
-  focusAssets
+  focusAssets,
+  userPrefs,
+  alerts
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
@@ -115,6 +123,25 @@ export interface IStorage {
   // Phase 3 - Enhanced Headlines
   getHeadlinesTimeline(symbols?: string[], limit?: number): Promise<Headline[]>;
   analyzeHeadlineImpact(title: string, summary?: string, symbols?: string[]): Promise<HeadlineImpactAnalysis>;
+  
+  // Phase 4 - User Preferences
+  getUserPrefs(portfolioId: string): Promise<UserPrefs | null>;
+  upsertUserPrefs(prefs: InsertUserPrefs): Promise<UserPrefs>;
+  
+  // Phase 4 - Alerts
+  createAlert(alert: InsertAlert): Promise<Alert>;
+  getAlerts(portfolioId: string): Promise<Alert[]>;
+  updateAlert(id: string, updates: Partial<InsertAlert>): Promise<Alert | null>;
+  deleteAlert(id: string): Promise<void>;
+  getActiveAlerts(): Promise<Alert[]>;
+  updateAlertLastTriggered(id: string): Promise<void>;
+  
+  // Phase 4 - Notifications  
+  getNotifications(portfolioId: string, limit?: number): Promise<Notification[]>;
+  addNotification(notification: Omit<Notification, 'id'>): Promise<Notification>;
+  
+  // Phase 4 - Enhanced Sentiment Index
+  getEnhancedSentimentIndex(): Promise<EnhancedSentimentIndex>;
   
   // Initialize sample data
   initializeSampleData(): Promise<void>;
@@ -828,6 +855,142 @@ export class DatabaseStorage implements IStorage {
         confidence: 0.6 + Math.random() * 0.3
       })),
       as_of: new Date().toISOString()
+    };
+  }
+
+  // Phase 4 - User Preferences
+  async getUserPrefs(portfolioId: string): Promise<UserPrefs | null> {
+    const [result] = await db
+      .select()
+      .from(userPrefs)
+      .where(eq(userPrefs.portfolioId, portfolioId));
+    return result || null;
+  }
+
+  async upsertUserPrefs(prefs: InsertUserPrefs): Promise<UserPrefs> {
+    const existing = await this.getUserPrefs(prefs.portfolioId);
+    
+    if (existing) {
+      const [result] = await db
+        .update(userPrefs)
+        .set({
+          riskStyle: prefs.riskStyle,
+          mockLivePref: prefs.mockLivePref,
+          updatedAt: new Date(),
+        })
+        .where(eq(userPrefs.portfolioId, prefs.portfolioId))
+        .returning();
+      return result;
+    } else {
+      const [result] = await db
+        .insert(userPrefs)
+        .values(prefs)
+        .returning();
+      return result;
+    }
+  }
+
+  // Phase 4 - Alerts
+  async createAlert(alert: InsertAlert): Promise<Alert> {
+    const [result] = await db
+      .insert(alerts)
+      .values(alert)
+      .returning();
+    return result;
+  }
+
+  async getAlerts(portfolioId: string): Promise<Alert[]> {
+    return db
+      .select()
+      .from(alerts)
+      .where(eq(alerts.portfolioId, portfolioId))
+      .orderBy(desc(alerts.createdAt));
+  }
+
+  async updateAlert(id: string, updates: Partial<InsertAlert>): Promise<Alert | null> {
+    const [result] = await db
+      .update(alerts)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(alerts.id, id))
+      .returning();
+    return result || null;
+  }
+
+  async deleteAlert(id: string): Promise<void> {
+    await db.delete(alerts).where(eq(alerts.id, id));
+  }
+
+  async getActiveAlerts(): Promise<Alert[]> {
+    return db
+      .select()
+      .from(alerts)
+      .where(eq(alerts.enabled, "true"));
+  }
+
+  async updateAlertLastTriggered(id: string): Promise<void> {
+    await db
+      .update(alerts)
+      .set({
+        lastTriggered: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(alerts.id, id));
+  }
+
+  // Phase 4 - Notifications (in-memory for now, could be stored in database)
+  private notifications: Map<string, Notification[]> = new Map();
+
+  async getNotifications(portfolioId: string, limit = 20): Promise<Notification[]> {
+    const portfolioNotifications = this.notifications.get(portfolioId) || [];
+    return portfolioNotifications
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
+  }
+
+  async addNotification(notification: Omit<Notification, 'id'>): Promise<Notification> {
+    const newNotification: Notification = {
+      ...notification,
+      id: randomUUID(),
+    };
+    
+    // For demo purposes, extract portfolioId from notification context
+    // In a real app, this would be passed as a parameter
+    const portfolioId = "default"; // Would need to be passed in
+    
+    const existing = this.notifications.get(portfolioId) || [];
+    existing.unshift(newNotification);
+    
+    // Keep only last 100 notifications per portfolio
+    if (existing.length > 100) {
+      existing.splice(100);
+    }
+    
+    this.notifications.set(portfolioId, existing);
+    return newNotification;
+  }
+
+  // Phase 4 - Enhanced Sentiment Index
+  async getEnhancedSentimentIndex(): Promise<EnhancedSentimentIndex> {
+    // Mock implementation with subscores and deltas
+    const baseScore = 45 + Math.random() * 10; // 45-55 range
+    
+    return {
+      score: Math.round(baseScore),
+      regime: baseScore < 40 ? "Risk-Off" : baseScore > 60 ? "Risk-On" : "Neutral",
+      as_of: new Date().toISOString(),
+      subscores: {
+        riskAppetite: Math.round(baseScore + (Math.random() - 0.5) * 20),
+        credit: Math.round(baseScore + (Math.random() - 0.5) * 15),
+        volatilityInv: Math.round((100 - baseScore) + (Math.random() - 0.5) * 10), // Inverted VIX
+        breadth: Math.round(baseScore + (Math.random() - 0.5) * 25),
+      },
+      delta: {
+        vsYesterday: (Math.random() - 0.5) * 10, // -5 to +5 points
+        vsLastWeek: (Math.random() - 0.5) * 20, // -10 to +10 points
+      },
     };
   }
 
