@@ -1,0 +1,155 @@
+You are my senior engineer. Implement Phase 4: Personalization, Alerts, and UX polish using ONLY
+OpenAI, Alpha Vantage, and CoinGecko. Keep everything informational (not advice).
+
+========================================
+GOALS
+========================================
+1) Personalization: onboarding to set risk style + pick up to 5 Focus Assets.
+2) Alerts: price/percent moves, earnings soon, sentiment threshold.
+3) AI Insight Templates: one-click prompts that use our live context.
+4) Sentiment upgrades: sub-scores + day-over-day delta.
+5) Headlines upgrades: portfolio/focus filters + impact badges.
+6) UX polish: hide N/A, add freshness labels, mock/live indicator.
+
+========================================
+ENV (use existing keys)
+========================================
+ALPHAVANTAGE_KEY=...
+COINGECKO_BASE=https://api.coingecko.com/api/v3
+OPENAI_API_KEY=...
+
+========================================
+DB (Prisma)
+========================================
+model UserPrefs {
+  id            String   @id @default(cuid())
+  portfolioId   String
+  riskStyle     String   // "Conservative" | "Balanced" | "Aggressive"
+  mockLivePref  String   @default("mock") // "mock" | "live"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@unique([portfolioId])
+}
+
+model Alert {
+  id            String   @id @default(cuid())
+  portfolioId   String
+  type          String   // "price" | "pct" | "earnings" | "sentiment"
+  symbol        String?  // null for sentiment
+  threshold     Float?   // price or pct or sentiment score
+  direction     String?  // "above" | "below"
+  windowMin     Int?     // debounce window for repeated fires
+  enabled       Boolean  @default(true)
+  lastTriggered DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([portfolioId, type, symbol])
+}
+
+Run migration: phase4_personalization_alerts
+
+========================================
+BACKEND
+========================================
+A) Onboarding + Preferences
+- GET /api/prefs?portfolioId=...
+- POST /api/prefs { portfolioId, riskStyle, mockLivePref }
+- UI: 2-step modal on first run: (1) choose risk style, (2) pick up to 5 Focus Assets (reuse existing picker).
+
+B) Alerts
+- POST /api/alerts { portfolioId, type, symbol?, threshold, direction?, windowMin? }
+- PATCH /api/alerts/:id { enabled?, threshold?, direction?, windowMin? }
+- GET /api/alerts?portfolioId=...
+- DELETE /api/alerts/:id
+- Worker (in-process cron using `node-cron`):
+  - Every 5 minutes (dev-friendly): check active alerts.
+  - Data: 
+    * price/pct → CoinGecko (crypto) or Alpha Vantage (equity/etf/fx).
+    * earnings → Alpha Vantage earnings (next 14 days) for held/focus symbols.
+    * sentiment → our /api/sentiment/index score.
+  - Trigger rule: if condition met and lastTriggered older than windowMin (default 60) → mark lastTriggered and enqueue a notification.
+- Notifications API for UI:
+  - GET /api/notifications?portfolioId=... (returns recent fired alerts: {title, body, ts})
+
+C) AI Insight Templates
+- New endpoint POST /api/insights/run { templateId, context }
+- Templates (server-side JSON):
+  1) biggest_mover_today
+  2) portfolio_risk_breakdown
+  3) sector_contribution
+  4) focus_asset_checkup (uses current selected asset)
+- Each template composes the same context structure used by your AI Insights page (P&L today, sentiment, top mover, optional headlines snippets).
+
+D) Sentiment Upgrades
+- /api/sentiment/index now returns:
+  {
+    score, regime, as_of,
+    subscores: { riskAppetite, credit, volatilityInv, breadth },
+    delta: { vsYesterday: number, vsLastWeek?: number }
+  }
+- Store yesterday’s score in a tiny table or in-memory cache file; compute deltas.
+
+E) Headlines
+- /api/headlines/timeline adds query: scope=all|portfolio|focus (default all).
+- Add AI impact tag (↑ Bullish / ↓ Bearish / → Neutral) with confidence based on the existing impact endpoint.
+
+F) Freshness + N/A handling
+- All data responses include { as_of, source, fresh:boolean }.
+- In UI, hide cells that would show "N/A"; instead show a subtle "—".
+- Add top-bar badge “Mode: MOCK | LIVE” reading from UserPrefs.mockLivePref; provide a simple toggle in Settings that updates prefs.
+
+========================================
+FRONTEND
+========================================
+1) Onboarding Modal (first visit or empty prefs)
+   - Step 1: pick riskStyle (3 cards with short descriptions).
+   - Step 2: pick Focus Assets (limit 5; reuse search modal).
+   - Save → POST /api/prefs and existing focus-assets endpoints.
+
+2) Alerts UI
+   - New "Alerts" section under Settings or Portfolio:
+     * Create alert: type selector (price/pct/earnings/sentiment)
+     * Symbol input (auto-complete), threshold field, direction dropdown, window time.
+     * List of alerts with enable/disable, edit, delete.
+   - Header bell icon → opens Notifications drawer showing last 20 fired alerts.
+
+3) Dashboard
+   - Add "AI Highlight" card (1–2 sentences via the templates endpoint).
+   - Sentiment card shows sub-score pills + 7-day sparkline + delta vs yesterday.
+
+4) Headlines
+   - Add scope toggle chips (All | Portfolio | Focus).
+   - Show impact badge per row (↑/↓/→ with small confidence % tooltip).
+
+5) AI Insights
+   - Add top buttons for templates:
+     * “Explain my biggest mover”
+     * “Where is my risk?”
+     * “What changed today?”
+     * “Check selected asset”
+   - Clicking fills the prompt and calls /api/insights/run.
+
+6) Asset Overview
+   - Right panel: small "Alerts" box with quick-create (price/pct) prefilled for that asset.
+
+========================================
+ALGORITHMIC NOTES
+========================================
+- Price/Pct alerts:
+  - For pct, compare current price vs prior close (or vs price at alert creation if `direction` omitted).
+- Earnings alerts:
+  - Trigger when event is within 7 days for any Focus Asset or holding symbol.
+- Sentiment alerts:
+  - Trigger when score crosses user threshold in the selected direction.
+- Confidence for headline impact:
+  - Simple rule: keywords (beat/miss/hike/cut/ban/probe) + presence of symbol → 0.6–0.9; otherwise 0.4–0.6.
+
+========================================
+ACCEPTANCE CRITERIA
+========================================
+- On first visit I’m guided to choose risk style + 5 Focus Assets.
+- I can create/enable/disable/delete alerts and see them fire (simulated or live).
+- Dashboard shows an AI Highlight and sentiment delta + subscores + sparkline.
+- Headlines filter by All/Portfolio/Focus and show impact badges with confidence tooltips.
+- AI Insights has working one-click templates that produce answers using only provided context.
+- UI shows “Mode: MOCK | LIVE” and hides useless N/A cells.
