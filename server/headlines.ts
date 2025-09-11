@@ -2,7 +2,7 @@ import { alphaVantage } from "./alpha";
 
 interface NormalizedHeadline {
   id: string;
-  published: string;
+  published: string; // ISO
   title: string;
   source: string;
   url: string;
@@ -12,75 +12,98 @@ interface NormalizedHeadline {
   sentimentLabel?: string;
 }
 
+// Alpha Vantage gives '20250911T143000' (UTC). Normalize to ISO.
+function normalizeAVTime(s: string | undefined): string {
+  if (!s) return new Date().toISOString();
+  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/.exec(s);
+  if (m) {
+    const [, y, mo, d, h, mi, se] = m;
+    return `${y}-${mo}-${d}T${h}:${mi}:${se}Z`;
+  }
+  // Fallback – try Date constructor
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
 export class HeadlinesService {
-  async getTimeline(options: {
-    tickers?: string[];
-    limit?: number;
-  } = {}): Promise<NormalizedHeadline[]> {
+  async getTimeline(
+    options: {
+      tickers?: string[];
+      limit?: number;
+      allowMock?: boolean; // <— new
+    } = {},
+  ): Promise<NormalizedHeadline[]> {
+    const { tickers, limit = 50, allowMock = true } = options;
     try {
       const newsData = await alphaVantage.getNewsAndSentiment({
-        tickers: options.tickers,
+        tickers,
         topics: ["financial_markets"],
         sort: "LATEST",
-        limit: options.limit || 50
+        limit,
       });
 
-      // Check if we got data from Alpha Vantage
-      if (newsData && newsData.length > 0) {
+      if (Array.isArray(newsData) && newsData.length > 0) {
         return newsData.map((article: any, index: number) => ({
           id: `av_${Date.now()}_${index}`,
-          published: article.timePublished,
+          published: normalizeAVTime(article.timePublished),
           title: article.title,
           source: article.source,
-          url: article.url,
-          symbols: (article.tickerSentiment as any[])?.map((ts: any) => ts.ticker) || [],
+          url: article.url || "",
+          symbols:
+            (article.tickerSentiment as any[])?.map((ts: any) => ts.ticker) ||
+            [],
           summary: article.summary,
           sentimentScore: article.overallSentimentScore,
-          sentimentLabel: article.overallSentimentLabel
+          sentimentLabel: article.overallSentimentLabel,
         }));
-      } else {
-        // Alpha Vantage returned empty array (likely due to rate limits)
-        console.warn("Alpha Vantage returned empty headlines, using fallback data");
-        throw new Error("No data from Alpha Vantage");
       }
+
+      // Empty array (often rate limited)
+      throw new Error("Alpha Vantage returned no data");
     } catch (error) {
       console.error("Headlines service error:", error);
-      
-      // Fallback to enhanced mock data
+      if (!allowMock) {
+        // Let the route decide what to do (502 or explicit mock)
+        throw error;
+      }
+      // Fallback enhanced mocks (urls empty so UI hides "Read more")
       return [
         {
           id: "fallback_1",
-          published: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+          published: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
           title: "Market Update: Tech Earnings Drive Market Sentiment",
           source: "Financial News",
-          url: "#",
+          url: "",
           symbols: ["SPY", "QQQ", "AAPL"],
-          summary: "Technology sector earnings continue to influence broader market trends as investors assess quarterly results.",
+          summary:
+            "Technology sector earnings continue to influence broader market trends as investors assess quarterly results.",
           sentimentScore: 0.2,
-          sentimentLabel: "Slightly Positive"
+          sentimentLabel: "Slightly Positive",
         },
         {
-          id: "fallback_2", 
-          published: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+          id: "fallback_2",
+          published: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
           title: "Federal Reserve Policy Update Affects Market Direction",
           source: "Reuters",
-          url: "#",
+          url: "",
           symbols: ["SPY", "IWM"],
-          summary: "Recent Federal Reserve communications signal potential policy adjustments amid evolving economic conditions.",
+          summary:
+            "Recent Federal Reserve communications signal potential policy adjustments amid evolving economic conditions.",
           sentimentScore: -0.1,
-          sentimentLabel: "Slightly Negative"
+          sentimentLabel: "Slightly Negative",
         },
         {
           id: "fallback_3",
-          published: new Date(Date.now() - 1000 * 60 * 180).toISOString(), 
+          published: new Date(Date.now() - 180 * 60 * 1000).toISOString(),
           title: "Energy Sector Shows Resilience in Current Market Environment",
           source: "Bloomberg",
-          url: "#",
+          url: "",
           symbols: ["XLE", "CVX"],
-          summary: "Energy companies demonstrate stability as commodity prices find support from improving demand outlook.",
+          summary:
+            "Energy companies demonstrate stability as commodity prices find support from improving demand outlook.",
           sentimentScore: 0.15,
-          sentimentLabel: "Positive"
-        }
+          sentimentLabel: "Positive",
+        },
       ];
     }
   }

@@ -81,7 +81,7 @@ const formatTimelineDate = (dateLike: unknown) => {
   return format(d, "MMMM d, yyyy");
 };
 
-// Impact styles/icons (optional use later if you add impact back to UI)
+// Optional impact styles/icons (kept for future use)
 const getImpactColor = (impact: string) => {
   switch (impact?.toLowerCase()) {
     case "high":
@@ -145,18 +145,29 @@ export default function Headlines() {
     return undefined; // "all"
   }, [scope, focusSymbols, watchlistSymbols]);
 
-  // Headlines (real-time polling + proper scoping)
+  // Headlines (real-time polling + proper scoping) — force real, no cache reuse
   const { data: headlines = [], isLoading } = useQuery({
     queryKey: ["/api/headlines/timeline", scope, activeSymbols],
-    queryFn: () => api.getHeadlinesTimeline(activeSymbols, scope, 100),
+    queryFn: () =>
+      api.getHeadlinesTimeline(activeSymbols, scope, 100, {
+        forceReal: true,
+        noCache: true,
+      }),
     enabled:
       scope === "all" ||
       (Array.isArray(activeSymbols) && activeSymbols.length > 0),
+
+    // IMPORTANT: avoid stale/mock reuse
     refetchInterval: POLL_HEADLINES_MS,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    keepPreviousData: true,
+    refetchOnMount: "always",
+    staleTime: 0,
+    gcTime: 0,
+    retry: 1,
+    networkMode: "always",
+    keepPreviousData: false,
   });
 
   return (
@@ -165,6 +176,15 @@ export default function Headlines() {
         title="Headlines"
         subtitle="Real-time market news and sentiment analysis"
       />
+
+      {/* optional visual flag if backend returns a mock payload */}
+      {Array.isArray(headlines) && (headlines as any)._meta?.mock && (
+        <div className="mx-4 md:mx-6 -mb-4">
+          <span className="text-xs px-2 py-1 rounded bg-yellow-500/10 text-yellow-400">
+            Showing MOCK headlines
+          </span>
+        </div>
+      )}
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
         {/* Search and Filters */}

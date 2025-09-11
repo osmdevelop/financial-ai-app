@@ -1,8 +1,8 @@
 import { apiRequest } from "./queryClient";
-import type { 
-  Portfolio, 
-  InsertPortfolio, 
-  PositionWithPrice, 
+import type {
+  Portfolio,
+  InsertPortfolio,
+  PositionWithPrice,
   PortfolioSummary,
   AIInsightResponse,
   PriceData,
@@ -31,7 +31,7 @@ import type {
   AssetOverviewSummary,
   MarketRecap,
   MarketRecapSummary,
-  HeadlineImpactAnalysis
+  HeadlineImpactAnalysis,
 } from "@shared/schema";
 
 export const api = {
@@ -46,12 +46,16 @@ export const api = {
     return res.json();
   },
 
-  async archivePortfolio(id: string): Promise<{ success: boolean; message: string }> {
+  async archivePortfolio(
+    id: string,
+  ): Promise<{ success: boolean; message: string }> {
     const res = await apiRequest("PUT", `/api/portfolios/${id}/archive`);
     return res.json();
   },
 
-  async deletePortfolio(id: string): Promise<{ success: boolean; message: string }> {
+  async deletePortfolio(
+    id: string,
+  ): Promise<{ success: boolean; message: string }> {
     const res = await apiRequest("DELETE", `/api/portfolios/${id}`);
     return res.json();
   },
@@ -66,19 +70,36 @@ export const api = {
   },
 
   // Position operations
-  async uploadPositions(portfolioId: string, positions: any[]): Promise<{ success: boolean; positions: any[] }> {
-    const res = await apiRequest("POST", `/api/portfolios/${portfolioId}/positions/upload`, { positions });
+  async uploadPositions(
+    portfolioId: string,
+    positions: any[],
+  ): Promise<{ success: boolean; positions: any[] }> {
+    const res = await apiRequest(
+      "POST",
+      `/api/portfolios/${portfolioId}/positions/upload`,
+      { positions },
+    );
     return res.json();
   },
 
   // Price operations
-  async refreshPrices(portfolioId: string): Promise<{ success: boolean; pricesUpdated: number }> {
-    const res = await apiRequest("POST", "/api/refresh-prices", { portfolioId });
+  async refreshPrices(
+    portfolioId: string,
+  ): Promise<{ success: boolean; pricesUpdated: number }> {
+    const res = await apiRequest("POST", "/api/refresh-prices", {
+      portfolioId,
+    });
     return res.json();
   },
 
-  async getPortfolioPriceHistory(portfolioId: string, days: number = 30): Promise<any[]> {
-    const res = await apiRequest("GET", `/api/portfolios/${portfolioId}/price-history?days=${days}`);
+  async getPortfolioPriceHistory(
+    portfolioId: string,
+    days: number = 30,
+  ): Promise<any[]> {
+    const res = await apiRequest(
+      "GET",
+      `/api/portfolios/${portfolioId}/price-history?days=${days}`,
+    );
     return res.json();
   },
 
@@ -95,33 +116,54 @@ export const api = {
   },
 
   // Intraday Data
-  async getIntradayData(symbol: string, interval = "1m", lookback = "1d"): Promise<IntradayData> {
-    const res = await apiRequest("GET", `/api/price/intraday?symbol=${symbol}&interval=${interval}&lookback=${lookback}`);
+  async getIntradayData(
+    symbol: string,
+    interval = "1m",
+    lookback = "1d",
+  ): Promise<IntradayData> {
+    const res = await apiRequest(
+      "GET",
+      `/api/price/intraday?symbol=${symbol}&interval=${interval}&lookback=${lookback}`,
+    );
     return res.json();
   },
 
   // Headlines
   async getHeadlines(symbols?: string, limit = 50): Promise<Headline[]> {
     const params = new URLSearchParams();
-    if (symbols) params.set('symbols', symbols);
-    params.set('limit', limit.toString());
+    if (symbols) params.set("symbols", symbols);
+    params.set("limit", limit.toString());
     const res = await apiRequest("GET", `/api/headlines?${params}`);
     return res.json();
   },
 
-  async analyzeHeadline(title: string, summary?: string, symbols: string[] = []): Promise<HeadlineImpact> {
-    const res = await apiRequest("POST", "/api/headlines/analyze", { title, summary, symbols });
+  async analyzeHeadline(
+    title: string,
+    summary?: string,
+    symbols: string[] = [],
+  ): Promise<HeadlineImpact> {
+    const res = await apiRequest("POST", "/api/headlines/analyze", {
+      title,
+      summary,
+      symbols,
+    });
     return res.json();
   },
 
   // Earnings
   async getUpcomingEarnings(limit = 50): Promise<UpcomingEarning[]> {
-    const res = await apiRequest("GET", `/api/earnings/upcoming?limit=${limit}`);
+    const res = await apiRequest(
+      "GET",
+      `/api/earnings/upcoming?limit=${limit}`,
+    );
     return res.json();
   },
 
   async getEarningsHistory(symbol: string): Promise<EarningsHistory[]> {
-    const res = await apiRequest("GET", `/api/earnings/history?symbol=${symbol}`);
+    const res = await apiRequest(
+      "GET",
+      `/api/earnings/history?symbol=${symbol}`,
+    );
     return res.json();
   },
 
@@ -136,42 +178,70 @@ export const api = {
     return res.json();
   },
 
-  async analyzeEconomicEvent(event: string, previous?: string, forecast?: string, importance: string = "medium"): Promise<EconomicImpact> {
-    const res = await apiRequest("POST", "/api/econ/analyze", { event, previous, forecast, importance });
+  async analyzeEconomicEvent(
+    event: string,
+    previous?: string,
+    forecast?: string,
+    importance: string = "medium",
+  ): Promise<EconomicImpact> {
+    const res = await apiRequest("POST", "/api/econ/analyze", {
+      event,
+      previous,
+      forecast,
+      importance,
+    });
     return res.json();
   },
 
   // Asset Search
-  async searchAssets(query: string, types?: string[], limit = 10): Promise<AssetSearchResult[]> {
+  async searchAssets(
+    query: string,
+    types?: string[],
+    limit = 10,
+  ): Promise<AssetSearchResult[]> {
     const params = new URLSearchParams();
-    params.set('q', query);
-    if (types) params.set('types', types.join(','));
-    params.set('limit', limit.toString());
+    params.set("q", query);
+    if (types) params.set("types", types.join(","));
+    params.set("limit", limit.toString());
     const res = await apiRequest("GET", `/api/search?${params}`);
     return res.json();
   },
 
   // Asset Sheet
-  async getAssetSheetData(symbol: string, assetType: string): Promise<AssetSheetData> {
-    const res = await apiRequest("GET", `/api/asset/${symbol}?assetType=${assetType}`);
+  async getAssetSheetData(
+    symbol: string,
+    assetType: string,
+  ): Promise<AssetSheetData> {
+    const res = await apiRequest(
+      "GET",
+      `/api/asset/${symbol}?assetType=${assetType}`,
+    );
     return res.json();
   },
 
   // Transactions
-  async createTransaction(data: InsertTransaction): Promise<{ transaction: Transaction; position: ComputedPosition | null }> {
+  async createTransaction(
+    data: InsertTransaction,
+  ): Promise<{ transaction: Transaction; position: ComputedPosition | null }> {
     const res = await apiRequest("POST", "/api/transactions", data);
     return res.json();
   },
 
-  async getTransactions(portfolioId: string, symbol?: string): Promise<Transaction[]> {
+  async getTransactions(
+    portfolioId: string,
+    symbol?: string,
+  ): Promise<Transaction[]> {
     const params = new URLSearchParams();
-    params.set('portfolioId', portfolioId);
-    if (symbol) params.set('symbol', symbol);
+    params.set("portfolioId", portfolioId);
+    if (symbol) params.set("symbol", symbol);
     const res = await apiRequest("GET", `/api/transactions?${params}`);
     return res.json();
   },
 
-  async updateTransaction(id: string, data: Partial<InsertTransaction>): Promise<Transaction> {
+  async updateTransaction(
+    id: string,
+    data: Partial<InsertTransaction>,
+  ): Promise<Transaction> {
     const res = await apiRequest("PATCH", `/api/transactions/${id}`, data);
     return res.json();
   },
@@ -183,7 +253,10 @@ export const api = {
 
   // Computed Positions
   async getComputedPositions(portfolioId: string): Promise<ComputedPosition[]> {
-    const res = await apiRequest("GET", `/api/positions?portfolioId=${portfolioId}`);
+    const res = await apiRequest(
+      "GET",
+      `/api/positions?portfolioId=${portfolioId}`,
+    );
     return res.json();
   },
 
@@ -204,7 +277,10 @@ export const api = {
   },
 
   // Migration
-  async migratePositionsToTransactions(): Promise<{ success: boolean; message: string }> {
+  async migratePositionsToTransactions(): Promise<{
+    success: boolean;
+    message: string;
+  }> {
     const res = await apiRequest("POST", "/api/migrate");
     return res.json();
   },
@@ -219,18 +295,29 @@ export const api = {
     return response.data || response; // Fallback for backwards compatibility
   },
 
-  async getSentimentNarrative(indexPayload: EnhancedMarketSentiment, contextNote?: string): Promise<SentimentNarrative> {
-    const res = await apiRequest("POST", "/api/sentiment/explain", { indexPayload, contextNote });
+  async getSentimentNarrative(
+    indexPayload: EnhancedMarketSentiment,
+    contextNote?: string,
+  ): Promise<SentimentNarrative> {
+    const res = await apiRequest("POST", "/api/sentiment/explain", {
+      indexPayload,
+      contextNote,
+    });
     return res.json();
   },
 
   // Focus Assets
   async getFocusAssets(portfolioId: string): Promise<FocusAssetWithDetails[]> {
-    const res = await apiRequest("GET", `/api/focus-assets?portfolioId=${portfolioId}`);
+    const res = await apiRequest(
+      "GET",
+      `/api/focus-assets?portfolioId=${portfolioId}`,
+    );
     return res.json();
   },
 
-  async createFocusAsset(data: InsertFocusAsset): Promise<FocusAssetWithDetails> {
+  async createFocusAsset(
+    data: InsertFocusAsset,
+  ): Promise<FocusAssetWithDetails> {
     const res = await apiRequest("POST", "/api/focus-assets", data);
     return res.json();
   },
@@ -240,19 +327,34 @@ export const api = {
     return res.json();
   },
 
-  async reorderFocusAssets(items: { id: string; order: number }[]): Promise<{ success: boolean }> {
-    const res = await apiRequest("PATCH", "/api/focus-assets/reorder", { items });
+  async reorderFocusAssets(
+    items: { id: string; order: number }[],
+  ): Promise<{ success: boolean }> {
+    const res = await apiRequest("PATCH", "/api/focus-assets/reorder", {
+      items,
+    });
     return res.json();
   },
 
   // Asset Overview
-  async getAssetOverview(symbol: string, assetType: string, frames: string[] = ["1h","1d","1w","1m","3m","1y"]): Promise<AssetOverview> {
-    const res = await apiRequest("GET", `/api/asset/overview?symbol=${symbol}&assetType=${assetType}&frames=${frames.join(',')}`);
+  async getAssetOverview(
+    symbol: string,
+    assetType: string,
+    frames: string[] = ["1h", "1d", "1w", "1m", "3m", "1y"],
+  ): Promise<AssetOverview> {
+    const res = await apiRequest(
+      "GET",
+      `/api/asset/overview?symbol=${symbol}&assetType=${assetType}&frames=${frames.join(",")}`,
+    );
     return res.json();
   },
 
-  async getAssetOverviewSummary(overviewPayload: AssetOverview): Promise<AssetOverviewSummary> {
-    const res = await apiRequest("POST", "/api/asset/overview/explain", { overviewPayload });
+  async getAssetOverviewSummary(
+    overviewPayload: AssetOverview,
+  ): Promise<AssetOverviewSummary> {
+    const res = await apiRequest("POST", "/api/asset/overview/explain", {
+      overviewPayload,
+    });
     return res.json();
   },
 
@@ -262,25 +364,45 @@ export const api = {
     return res.json();
   },
 
-  async getMarketRecapSummary(recapPayload: MarketRecap): Promise<MarketRecapSummary> {
-    const res = await apiRequest("POST", "/api/recap/summarize", { recapPayload });
+  async getMarketRecapSummary(
+    recapPayload: MarketRecap,
+  ): Promise<MarketRecapSummary> {
+    const res = await apiRequest("POST", "/api/recap/summarize", {
+      recapPayload,
+    });
     return res.json();
   },
 
   // Enhanced Headlines
-  async getHeadlinesTimeline(symbols?: string[], scope: "all" | "focus" | "watchlist" = "all", limit = 100): Promise<Headline[]> {
+  async getHeadlinesTimeline(
+    symbols?: string[],
+    scope: "all" | "focus" | "watchlist" = "all",
+    limit = 100,
+    opts?: { forceReal?: boolean; noCache?: boolean }, // <— add this
+  ): Promise<Headline[]> {
     const params = new URLSearchParams();
-    if (symbols) params.set('symbols', symbols.join(','));
-    params.set('scope', scope);
-    params.set('limit', limit.toString());
+    if (symbols?.length) params.set("symbols", symbols.join(","));
+    params.set("scope", scope);
+    params.set("limit", String(limit));
+    if (opts?.forceReal) params.set("mock", "0"); // <— tell server: do NOT use mock
+    if (opts?.noCache) params.set("_", String(Date.now())); // <— cache buster
+
     const res = await apiRequest("GET", `/api/headlines/timeline?${params}`);
     const response = await res.json();
-    // Handle new response format with freshness metadata
-    return response.data || response; // Fallback for backwards compatibility
+    // Server wraps as { data, freshness }, keep BC:
+    return response.data || response;
   },
 
-  async analyzeHeadlineImpact(title: string, summary?: string, symbols: string[] = []): Promise<HeadlineImpactAnalysis> {
-    const res = await apiRequest("POST", "/api/headlines/impact", { title, summary, symbols });
+  async analyzeHeadlineImpact(
+    title: string,
+    summary?: string,
+    symbols: string[] = [],
+  ): Promise<HeadlineImpactAnalysis> {
+    const res = await apiRequest("POST", "/api/headlines/impact", {
+      title,
+      summary,
+      symbols,
+    });
     return res.json();
-  }
+  },
 };
