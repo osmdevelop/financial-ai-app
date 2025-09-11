@@ -13,7 +13,7 @@ import { ExternalLink, TrendingUp, TrendingDown, Minus, Search, Clock, Filter, Z
 import { formatDistance, format, isToday, isYesterday } from "date-fns";
 
 export default function Headlines() {
-  const [focusOnly, setFocusOnly] = useState<boolean>(false);
+  const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [focusAssets, setFocusAssets] = useState<string[]>([]);
 
@@ -38,10 +38,22 @@ export default function Headlines() {
     }
   }, [focusAssetsData]);
 
+  // Get watchlist for scope filtering
+  const { data: watchlist } = useQuery({
+    queryKey: ["/api/watchlist"],
+    queryFn: () => api.getWatchlist(),
+  });
+
   const { data: headlines, isLoading, refetch } = useQuery({
-    queryKey: ["/api/headlines/timeline", focusOnly ? focusAssets : undefined],
-    queryFn: () => api.getHeadlinesTimeline(focusOnly ? focusAssets : undefined, 100),
-    enabled: !focusOnly || focusAssets.length > 0,
+    queryKey: ["/api/headlines/timeline", scope, focusAssets],
+    queryFn: () => {
+      let symbols: string[] | undefined;
+      if (scope === "focus") {
+        symbols = focusAssets;
+      }
+      return api.getHeadlinesTimeline(symbols, scope, 100);
+    },
+    enabled: scope !== "focus" || focusAssets.length > 0,
   });
 
   const getImpactIcon = (impact: string) => {
@@ -105,17 +117,6 @@ export default function Headlines() {
             </div>
             
             <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="focus-only"
-                  checked={focusOnly}
-                  onCheckedChange={setFocusOnly}
-                />
-                <Label htmlFor="focus-only" className="text-sm">
-                  Focus Assets Only ({focusAssets.length})
-                </Label>
-              </div>
-              
               <Button onClick={() => refetch()} variant="outline" size="sm">
                 <Filter className="h-4 w-4 mr-1" />
                 Refresh
@@ -123,11 +124,50 @@ export default function Headlines() {
             </div>
           </div>
           
-          {focusOnly && focusAssets.length > 0 && (
+          {/* Scope Filter Chips */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm text-muted-foreground mr-2">Scope:</span>
+            <div className="flex gap-2">
+              <Button
+                data-testid="scope-all"
+                variant={scope === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setScope("all")}
+                className="h-8"
+              >
+                All Markets
+              </Button>
+              <Button
+                data-testid="scope-focus"
+                variant={scope === "focus" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setScope("focus")}
+                className="h-8"
+                disabled={!focusAssets.length}
+              >
+                Focus Assets ({focusAssets.length})
+              </Button>
+              <Button
+                data-testid="scope-watchlist"
+                variant={scope === "watchlist" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setScope("watchlist")}
+                className="h-8"
+                disabled={!watchlist?.length}
+              >
+                Watchlist ({watchlist?.length || 0})
+              </Button>
+            </div>
+          </div>
+          
+          {/* Active Filter Display */}
+          {scope !== "all" && (
             <div className="flex flex-wrap gap-2">
-              <span className="text-sm text-muted-foreground mr-2">Tracking:</span>
-              {focusAssets.map((symbol) => (
-                <Badge key={symbol} variant="secondary" className="text-xs">
+              <span className="text-sm text-muted-foreground mr-2">
+                {scope === "focus" ? "Focus Assets:" : "Watchlist:"}
+              </span>
+              {(scope === "focus" ? focusAssets : watchlist?.map(w => w.symbol) || []).map((symbol) => (
+                <Badge key={symbol} variant="secondary" className="text-xs" data-testid={`badge-${symbol}`}>
                   {symbol}
                 </Badge>
               ))}
@@ -282,8 +322,10 @@ export default function Headlines() {
                     <Newspaper className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                     <h3 className="font-medium mb-2">No headlines found</h3>
                     <p className="text-sm">
-                      {focusOnly 
+                      {scope === "focus" 
                         ? "No news found for your focus assets. Try adding more assets or switch to all headlines."
+                        : scope === "watchlist"
+                        ? "No news found for your watchlist. Try adding more symbols or switch to all headlines."
                         : "Try adjusting your search terms or check back later for new headlines."
                       }
                     </p>

@@ -266,9 +266,10 @@ export const api = {
   },
 
   // Enhanced Headlines
-  async getHeadlinesTimeline(symbols?: string[], limit = 100): Promise<Headline[]> {
+  async getHeadlinesTimeline(symbols?: string[], scope: "all" | "focus" | "watchlist" = "all", limit = 100): Promise<Headline[]> {
     const params = new URLSearchParams();
     if (symbols) params.set('symbols', symbols.join(','));
+    params.set('scope', scope);
     params.set('limit', limit.toString());
     const res = await apiRequest("GET", `/api/headlines/timeline?${params}`);
     return res.json();

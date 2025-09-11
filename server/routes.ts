@@ -112,8 +112,30 @@ const assetOverviewExplainSchema = z.object({
 
 const headlinesTimelineSchema = z.object({
   symbols: z.string().optional(),
+  scope: z.enum(["all", "focus", "watchlist"]).optional().default("all"),
   limit: z.string().optional().transform(val => val ? parseInt(val) : 100)
 });
+
+// Function to calculate impact level for headlines
+function calculateImpactLevel(headline: any): "high" | "medium" | "low" {
+  const sentimentScore = Math.abs(headline.sentimentScore || 0);
+  const symbolCount = headline.symbols?.length || 0;
+  const hasEarnings = headline.title?.toLowerCase().includes("earnings") || false;
+  const hasBreaking = headline.title?.toLowerCase().includes("breaking") || false;
+  
+  // High impact: Strong sentiment + multiple symbols OR earnings/breaking news
+  if ((sentimentScore > 0.3 && symbolCount > 2) || hasEarnings || hasBreaking) {
+    return "high";
+  }
+  
+  // Medium impact: Moderate sentiment + some symbols
+  if (sentimentScore > 0.1 && symbolCount > 0) {
+    return "medium";
+  }
+  
+  // Low impact: everything else
+  return "low";
+}
 
 const headlineImpactSchema = z.object({
   title: z.string(),
@@ -1466,11 +1488,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Enhanced Headlines timeline
+  // Enhanced Headlines timeline with scope filtering and impact levels
   app.get("/api/headlines/timeline", async (req, res) => {
     try {
-      const { symbols, limit } = headlinesTimelineSchema.parse(req.query);
-      const symbolsArray = symbols ? symbols.split(',') : undefined;
+      const { symbols, scope, limit } = headlinesTimelineSchema.parse(req.query);
+      let symbolsArray = symbols ? symbols.split(',') : undefined;
+      
+      // Handle scope-based filtering
+      if (scope === "watchlist" && !symbolsArray) {
+        // Get watchlist symbols
+        const watchlist = await storage.getWatchlist();
+        symbolsArray = watchlist.map(item => item.symbol);
+      }
       
       // Try real data first
       try {
@@ -1479,11 +1508,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           tickers: symbolsArray,
           limit: limit || 50
         });
-        res.json(headlines);
+        
+        // Check if we got empty results and fall back to storage
+        if (!headlines || headlines.length === 0) {
+          console.warn("Headlines empty from HeadlinesService; using storage fallback");
+          const fallbackHeadlines = await storage.getHeadlinesTimeline(symbolsArray, limit);
+          const enhancedFallback = fallbackHeadlines.map(headline => ({
+            ...headline,
+            impactLevel: calculateImpactLevel(headline)
+          }));
+          return res.json(enhancedFallback);
+        }
+        
+        // Add impact levels to headlines
+        const enhancedHeadlines = headlines.map(headline => ({
+          ...headline,
+          impactLevel: calculateImpactLevel(headline)
+        }));
+        
+        res.json(enhancedHeadlines);
       } catch (apiError) {
         console.warn("Headlines API error, falling back to mock data:", apiError);
         const headlines = await storage.getHeadlinesTimeline(symbolsArray, limit);
-        res.json(headlines);
+        
+        // Add impact levels to mock headlines
+        const enhancedHeadlines = headlines.map(headline => ({
+          ...headline,
+          impactLevel: calculateImpactLevel(headline)
+        }));
+        
+        res.json(enhancedHeadlines);
       }
     } catch (error) {
       console.error("Headlines timeline error:", error);

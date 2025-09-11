@@ -572,17 +572,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getHeadlines(limit = 50): Promise<Headline[]> {
-    // Mock implementation
-    return [
+    // Mock implementation with diverse headlines
+    const mockHeadlines = [
       {
         id: "h1",
-        published: "2025-01-19T12:00:00Z",
-        title: "Market Outlook: Tech Stocks Rally Continues",
-        source: "Financial News",
+        published: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 min ago
+        title: "Tech Giants Report Strong Q4 Earnings, Apple Beats Expectations",
+        source: "Market Watch",
         url: "https://example.com/news/1",
         symbols: ["AAPL", "GOOGL", "MSFT"],
-        summary: "Technology stocks continue their upward momentum...",
+        summary: "Major technology companies continue to demonstrate resilience with strong quarterly results, led by Apple's exceptional performance...",
         analyzed: true,
+        sentimentScore: 0.4,
+        sentimentLabel: "Positive",
         impactJson: JSON.stringify({
           whyThisMatters: ["Tech sector strength", "Market confidence"],
           impacts: [
@@ -590,9 +592,90 @@ export class DatabaseStorage implements IStorage {
             { symbol: "GOOGL", direction: "up", confidence: 0.7 }
           ]
         }),
-        createdAt: "2025-01-19T12:00:00Z"
+        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString()
+      },
+      {
+        id: "h2",
+        published: new Date(Date.now() - 1000 * 60 * 120).toISOString(), // 2 hours ago
+        title: "Federal Reserve Signals Potential Rate Changes Amid Economic Uncertainty",
+        source: "Reuters",
+        url: "https://example.com/news/2",
+        symbols: ["SPY", "QQQ", "IWM"],
+        summary: "The Federal Reserve indicates possible monetary policy adjustments as economic indicators show mixed signals...",
+        analyzed: true,
+        sentimentScore: -0.2,
+        sentimentLabel: "Slightly Negative",
+        impactJson: JSON.stringify({
+          whyThisMatters: ["Monetary policy impact", "Market volatility"],
+          impacts: [
+            { symbol: "SPY", direction: "down", confidence: 0.6 },
+            { symbol: "QQQ", direction: "down", confidence: 0.5 }
+          ]
+        }),
+        createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString()
+      },
+      {
+        id: "h3",
+        published: new Date(Date.now() - 1000 * 60 * 180).toISOString(), // 3 hours ago
+        title: "Breaking: Tesla Announces Major Manufacturing Expansion",
+        source: "Bloomberg",
+        url: "https://example.com/news/3",
+        symbols: ["TSLA"],
+        summary: "Tesla reveals plans for significant expansion of manufacturing capabilities, targeting increased production volumes...",
+        analyzed: true,
+        sentimentScore: 0.6,
+        sentimentLabel: "Positive",
+        impactJson: JSON.stringify({
+          whyThisMatters: ["Production capacity", "Growth prospects"],
+          impacts: [
+            { symbol: "TSLA", direction: "up", confidence: 0.9 }
+          ]
+        }),
+        createdAt: new Date(Date.now() - 1000 * 60 * 180).toISOString()
+      },
+      {
+        id: "h4",
+        published: new Date(Date.now() - 1000 * 60 * 240).toISOString(), // 4 hours ago
+        title: "Energy Sector Outlook: Oil Prices Stabilize as Demand Projections Improve",
+        source: "Financial Times",
+        url: "https://example.com/news/4",
+        symbols: ["XLE", "CVX", "XOM"],
+        summary: "Energy markets show signs of stability with improved demand forecasts supporting commodity prices...",
+        analyzed: true,
+        sentimentScore: 0.1,
+        sentimentLabel: "Neutral",
+        impactJson: JSON.stringify({
+          whyThisMatters: ["Energy sector trends", "Commodity outlook"],
+          impacts: [
+            { symbol: "XLE", direction: "up", confidence: 0.4 },
+            { symbol: "CVX", direction: "neutral", confidence: 0.3 }
+          ]
+        }),
+        createdAt: new Date(Date.now() - 1000 * 60 * 240).toISOString()
+      },
+      {
+        id: "h5",
+        published: new Date(Date.now() - 1000 * 60 * 360).toISOString(), // 6 hours ago
+        title: "Cryptocurrency Market Update: Bitcoin Holds Support Levels",
+        source: "CoinDesk",
+        url: "https://example.com/news/5",
+        symbols: ["BTC-USD", "ETH-USD"],
+        summary: "Digital assets maintain key support levels as institutional interest continues to drive market dynamics...",
+        analyzed: true,
+        sentimentScore: 0.05,
+        sentimentLabel: "Neutral",
+        impactJson: JSON.stringify({
+          whyThisMatters: ["Crypto adoption", "Institutional investment"],
+          impacts: [
+            { symbol: "BTC-USD", direction: "neutral", confidence: 0.5 },
+            { symbol: "ETH-USD", direction: "neutral", confidence: 0.4 }
+          ]
+        }),
+        createdAt: new Date(Date.now() - 1000 * 60 * 360).toISOString()
       }
     ];
+    
+    return mockHeadlines.slice(0, limit);
   }
 
   async createHeadline(headline: Omit<Headline, 'id' | 'createdAt'>): Promise<Headline> {
@@ -839,8 +922,20 @@ export class DatabaseStorage implements IStorage {
 
   // Phase 3 - Enhanced Headlines (placeholder implementations)
   async getHeadlinesTimeline(symbols?: string[], limit = 100): Promise<Headline[]> {
-    // This would enhance the existing headlines logic
-    return this.getHeadlines(limit);
+    // Get all mock headlines first
+    const allHeadlines = await this.getHeadlines(limit * 2); // Get more to filter from
+    
+    if (!symbols || symbols.length === 0) {
+      // No symbols filter, return all headlines
+      return allHeadlines.slice(0, limit);
+    }
+    
+    // Filter headlines that mention any of the specified symbols
+    const filteredHeadlines = allHeadlines.filter(headline => 
+      headline.symbols.some(symbol => symbols.includes(symbol))
+    );
+    
+    return filteredHeadlines.slice(0, limit);
   }
 
   async analyzeHeadlineImpact(title: string, summary?: string, symbols: string[] = []): Promise<HeadlineImpactAnalysis> {
