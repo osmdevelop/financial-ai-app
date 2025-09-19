@@ -17,6 +17,7 @@ import Insights from "@/pages/insights";
 import Headlines from "@/pages/headlines";
 import Earnings from "@/pages/earnings";
 import EconomicCalendar from "@/pages/economic-calendar";
+import Events from "@/pages/events";
 import Sentiment from "@/pages/sentiment";
 import AssetOverview from "@/pages/asset-overview";
 import MarketRecap from "@/pages/market-recap";
@@ -45,6 +46,7 @@ function Router() {
       <Route path="/headlines" component={Headlines} />
       <Route path="/earnings" component={Earnings} />
       <Route path="/economic-calendar" component={EconomicCalendar} />
+      <Route path="/events" component={Events} />
       <Route path="/sentiment" component={Sentiment} />
       <Route path="/asset-overview" component={AssetOverview} />
       <Route path="/market-recap" component={MarketRecap} />

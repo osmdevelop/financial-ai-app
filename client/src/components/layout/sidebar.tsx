@@ -28,6 +28,7 @@ const navigation = [
   { name: "Market Recap", href: "/market-recap", icon: Globe },
   { name: "Earnings", href: "/earnings", icon: TrendingUp },
   { name: "Economic Calendar", href: "/economic-calendar", icon: Calendar },
+  { name: "Events Intelligence", href: "/events", icon: Activity },
 ];
 
 const secondaryNavigation = [
