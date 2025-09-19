@@ -100,6 +100,39 @@ export const alerts = pgTable("alerts", {
   portfolioTypeSymbolIdx: index("alerts_portfolio_type_symbol_idx").on(table.portfolioId, table.type, table.symbol),
 }));
 
+// Events Intelligence tables
+export const events = pgTable("events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  timestamp: timestamp("timestamp").notNull(),
+  event: text("event").notNull(),
+  forecast: decimal("forecast"),
+  previous: decimal("previous"),
+  actual: decimal("actual"),
+  importance: text("importance").notNull(), // "high" | "medium" | "low"
+  unit: text("unit"),
+  country: text("country").notNull().default("US"),
+  category: text("category").notNull(), // "inflation" | "employment" | "monetary_policy" | etc
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  timestampIdx: index("events_timestamp_idx").on(table.timestamp),
+  categoryIdx: index("events_category_idx").on(table.category),
+  importanceIdx: index("events_importance_idx").on(table.importance),
+}));
+
+export const eventAlerts = pgTable("event_alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  alertType: text("alert_type").notNull(), // "surprise"
+  threshold: decimal("threshold").notNull(), // Z-score threshold (e.g., 1.0)
+  triggered: text("triggered").notNull().default("false"), // "true" | "false"
+  deviationScore: decimal("deviation_score"), // actual Z-score when triggered
+  notification: text("notification"), // alert message
+  createdAt: timestamp("created_at").defaultNow(),
+  triggeredAt: timestamp("triggered_at"),
+}, (table) => ({
+  eventTypeIdx: index("event_alerts_event_type_idx").on(table.eventId, table.alertType),
+}));
+
 // Insert schemas
 export const insertPortfolioSchema = createInsertSchema(portfolios).pick({
   name: true,
@@ -191,6 +224,35 @@ export const insertAlertSchema = createInsertSchema(alerts).pick({
   windowMin: z.number().optional(),
 });
 
+export const insertEventSchema = createInsertSchema(events).pick({
+  timestamp: true,
+  event: true,
+  forecast: true,
+  previous: true,
+  actual: true,
+  importance: true,
+  unit: true,
+  country: true,
+  category: true,
+}).extend({
+  importance: z.enum(["high", "medium", "low"]),
+  timestamp: z.union([z.date(), z.string().transform(val => new Date(val))]),
+});
+
+export const insertEventAlertSchema = createInsertSchema(eventAlerts).pick({
+  eventId: true,
+  alertType: true,
+  threshold: true,
+  triggered: true,
+  deviationScore: true,
+  notification: true,
+}).extend({
+  alertType: z.enum(["surprise"]),
+  triggered: z.enum(["true", "false"]).optional(),
+  threshold: z.string(),
+  deviationScore: z.string().optional(),
+});
+
 // Types
 export type Portfolio = typeof portfolios.$inferSelect;
 export type Position = typeof positions.$inferSelect;
@@ -208,8 +270,12 @@ export type InsertHiddenAsset = z.infer<typeof insertHiddenAssetSchema>;
 export type InsertFocusAsset = z.infer<typeof insertFocusAssetSchema>;
 export type UserPrefs = typeof userPrefs.$inferSelect;
 export type Alert = typeof alerts.$inferSelect;
+export type Event = typeof events.$inferSelect;
+export type EventAlert = typeof eventAlerts.$inferSelect;
 export type InsertUserPrefs = z.infer<typeof insertUserPrefsSchema>;
 export type InsertAlert = z.infer<typeof insertAlertSchema>;
+export type InsertEvent = z.infer<typeof insertEventSchema>;
+export type InsertEventAlert = z.infer<typeof insertEventAlertSchema>;
 
 // Extended types for API responses
 export type PositionWithPrice = Position & {
@@ -587,3 +653,93 @@ export type TodayDriver = z.infer<typeof todayDriverSchema>;
 export type TodayOverview = z.infer<typeof todayOverviewSchema>;
 export type TodayWrapRequest = z.infer<typeof todayWrapRequestSchema>;
 export type TodayWrapResponse = z.infer<typeof todayWrapResponseSchema>;
+
+// Events Intelligence API types
+export const eventUpcomingSchema = z.object({
+  timestamp: z.string(),
+  event: z.string(),
+  forecast: z.number().optional(),
+  previous: z.number().optional(),
+  importance: z.enum(["high", "medium", "low"]),
+  unit: z.string().optional(),
+  country: z.string(),
+  category: z.string(),
+});
+
+export const eventPrebriefRequestSchema = z.object({
+  eventPayload: z.object({
+    event: z.string(),
+    forecast: z.number().optional(),
+    previous: z.number().optional(),
+    timestamp: z.string(),
+    importance: z.string(),
+    category: z.string(),
+  }),
+});
+
+export const eventPrebriefResponseSchema = z.object({
+  consensus: z.string(),
+  risks: z.array(z.string()),
+  watchPoints: z.array(z.string()),
+  sensitiveAssets: z.array(z.string()),
+  as_of: z.string(),
+});
+
+export const eventPostmortemRequestSchema = z.object({
+  eventPayload: z.object({
+    event: z.string(),
+    forecast: z.number().optional(),
+    previous: z.number().optional(),
+    actual: z.number(),
+    timestamp: z.string(),
+    importance: z.string(),
+    category: z.string(),
+  }),
+});
+
+export const eventPostmortemResponseSchema = z.object({
+  outcome: z.string(), // "beat" | "miss" | "inline"
+  analysis: z.string(),
+  marketReaction: z.string(),
+  followThrough: z.string(),
+  implications: z.array(z.string()),
+  as_of: z.string(),
+});
+
+export const eventStudiesResponseSchema = z.object({
+  event: z.string(),
+  historicalDates: z.array(z.string()),
+  driftAnalysis: z.object({
+    preDays: z.number(),
+    postDays: z.number(),
+    avgReturn: z.number(),
+    winRate: z.number(),
+    maxDrawdown: z.number(),
+    maxUpward: z.number(),
+  }),
+  as_of: z.string(),
+});
+
+export const eventTranslateRequestSchema = z.object({
+  text: z.string(),
+});
+
+export const eventTranslateResponseSchema = z.object({
+  original: z.string(),
+  translation: z.string(),
+  keyTerms: z.array(z.object({
+    term: z.string(),
+    explanation: z.string(),
+  })),
+  tone: z.string(),
+  as_of: z.string(),
+});
+
+export type EventUpcoming = z.infer<typeof eventUpcomingSchema>;
+export type EventPrebriefRequest = z.infer<typeof eventPrebriefRequestSchema>;
+export type EventPrebriefResponse = z.infer<typeof eventPrebriefResponseSchema>;
+export type EventPostmortemRequest = z.infer<typeof eventPostmortemRequestSchema>;
+export type EventPostmortemResponse = z.infer<typeof eventPostmortemResponseSchema>;
+export type EventStudiesResponse = z.infer<typeof eventStudiesResponseSchema>;
+export type EventTranslateRequest = z.infer<typeof eventTranslateRequestSchema>;
+export type EventTranslateResponse = z.infer<typeof eventTranslateResponseSchema>;
