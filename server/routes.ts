@@ -1360,58 +1360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Asset Overview / Multi-timeframe (MUST come before /api/asset/:symbol)
-  app.get("/api/asset/overview", async (req, res) => {
-    try {
-      const { symbol, assetType, frames } = assetOverviewSchema.parse(
-        req.query,
-      );
-
-      // First check if the asset exists in our search results by exact symbol match
-      const searchResults = await storage.searchAssets(symbol);
-      const validAsset = searchResults.find(
-        (asset) =>
-          asset.symbol.toLowerCase() === symbol.toLowerCase() &&
-          asset.assetType === assetType,
-      );
-
-      if (!validAsset) {
-        return res.status(404).json({
-          error: `Asset ${symbol} (${assetType}) not found. Please search for valid assets from our database.`,
-          suggestion: "Try searching for AAPL, GOOGL, BTC, or SPY",
-        });
-      }
-
-      const timeframes = frames.split(",");
-
-      // Use real data service for overview
-      const { assetOverviewService } = await import("./asset-overview");
-      const overview = await assetOverviewService.getAssetOverview(
-        validAsset.symbol,
-        validAsset.assetType,
-        timeframes,
-      );
-
-      res.json({
-        ...overview,
-        name: validAsset.name, // Use the real name from search results
-        symbol: validAsset.symbol, // Ensure consistent symbol casing
-      });
-    } catch (error) {
-      console.error("Asset overview error:", error);
-      // Fallback to mock data on error
-      const timeframes = req.query.frames
-        ? String(req.query.frames).split(",")
-        : ["1d"];
-      const fallbackOverview = await storage.getAssetOverview(
-        String(req.query.symbol),
-        String(req.query.assetType),
-        timeframes,
-      );
-      res.json(fallbackOverview);
-    }
-  });
-
+  // Legacy asset overview explain route (keeping for compatibility)
   app.post("/api/asset/overview/explain", async (req, res) => {
     try {
       const { overviewPayload } = assetOverviewExplainSchema.parse(req.body);
@@ -2389,7 +2338,7 @@ Provide response in JSON format: {
       }
 
       // Import Module D services
-      const { AssetOverviewService } = await import("./asset-overview-service.js");
+      const { AssetOverviewService } = await import("./asset-overview-service");
       
       const assetOverview = new AssetOverviewService();
       const result = await assetOverview.getComprehensiveOverview(
@@ -2415,7 +2364,7 @@ Provide response in JSON format: {
       }
 
       // Import Module D services
-      const { AssetBriefService } = await import("./asset-brief-service.js");
+      const { AssetBriefService } = await import("./asset-brief-service");
       
       const briefService = new AssetBriefService();
       const brief = await briefService.generateAIBrief(overviewPayload);

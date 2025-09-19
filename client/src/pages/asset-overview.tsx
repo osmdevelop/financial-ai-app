@@ -736,9 +736,9 @@ export default function AssetOverview() {
                     <div className="text-xs text-muted-foreground border-t pt-4">
                       <div className="flex items-center gap-2">
                         <Clock className="h-3 w-3" />
-                        Generated: {new Date(aibrief.freshness.lastUpdated).toLocaleString()}
+                        Generated: {new Date(aibrief.freshness?.lastUpdated || new Date()).toLocaleString()}
                       </div>
-                      <p className="mt-1">{aibrief.freshness.disclaimer}</p>
+                      <p className="mt-1">{aibrief.freshness?.disclaimer || "This analysis is generated using AI and should not be considered as investment advice."}</p>
                     </div>
                   </div>
                 ) : (
