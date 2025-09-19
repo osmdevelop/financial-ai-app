@@ -879,3 +879,131 @@ export type EventPostmortemResponse = z.infer<typeof eventPostmortemResponseSche
 export type EventStudiesResponse = z.infer<typeof eventStudiesResponseSchema>;
 export type EventTranslateRequest = z.infer<typeof eventTranslateRequestSchema>;
 export type EventTranslateResponse = z.infer<typeof eventTranslateResponseSchema>;
+
+// MODULE D: Asset Overview 2.0 Types and Schemas
+// ============================================
+
+// OHLC Data Point
+export const ohlcDataPointSchema = z.object({
+  timestamp: z.string(),
+  open: z.number(),
+  high: z.number(),
+  low: z.number(),
+  close: z.number(),
+  volume: z.number().optional(),
+});
+
+// Technical Indicators
+export const technicalIndicatorsSchema = z.object({
+  ma10: z.number().optional(),
+  ma30: z.number().optional(),
+  ma50: z.number().optional(),
+  rsi14: z.number().optional(),
+  atr14: z.number().optional(),
+});
+
+// Probabilistic Statistics
+export const probabilisticStatsSchema = z.object({
+  odds1d: z.object({
+    up: z.number(),
+    down: z.number(),
+  }),
+  odds5d: z.object({
+    up: z.number(),
+    down: z.number(),
+  }),
+  odds30d: z.object({
+    up: z.number(),
+    down: z.number(),
+  }),
+  var95: z.number(), // Value at Risk (95%)
+  es95: z.number(), // Expected Shortfall (95%)
+  upside3pct: z.object({
+    in7days: z.number(),
+    in14days: z.number(),
+    in30days: z.number(),
+  }),
+});
+
+// Support/Resistance Levels
+export const supportResistanceSchema = z.object({
+  support: z.array(z.object({
+    level: z.number(),
+    strength: z.number(), // 0-1 confidence score
+  })),
+  resistance: z.array(z.object({
+    level: z.number(),
+    strength: z.number(), // 0-1 confidence score
+  })),
+});
+
+// Multi-timeframe OHLC Data
+export const multiTimeframeDataSchema = z.object({
+  "1h": z.array(ohlcDataPointSchema),
+  "1d": z.array(ohlcDataPointSchema),
+  "1w": z.array(ohlcDataPointSchema),
+  "1m": z.array(ohlcDataPointSchema),
+  "3m": z.array(ohlcDataPointSchema),
+  "1y": z.array(ohlcDataPointSchema),
+});
+
+// Asset Overview Response
+export const assetOverviewResponseSchema = z.object({
+  symbol: z.string(),
+  assetType: z.enum(["equity", "etf", "crypto"]),
+  currentPrice: z.number(),
+  change: z.number(),
+  changePct: z.number(),
+  ohlcData: multiTimeframeDataSchema,
+  indicators: technicalIndicatorsSchema,
+  stats: probabilisticStatsSchema,
+  supportResistance: supportResistanceSchema,
+  catalysts: z.array(z.object({
+    type: z.string(),
+    title: z.string(),
+    impact: z.enum(["high", "medium", "low"]),
+    date: z.string(),
+  })),
+  freshness: freshnessMetadataSchema,
+});
+
+// Asset Overview Request
+export const assetOverviewRequestSchema = z.object({
+  symbol: z.string().min(1),
+  assetType: z.enum(["equity", "etf", "crypto"]),
+});
+
+// AI Brief Response
+export const assetBriefResponseSchema = z.object({
+  bullCase: z.array(z.string()), // 3 bullets
+  bearCase: z.array(z.string()), // 3 bullets
+  risks: z.array(z.string()), // 3 bullets
+  confidence: z.number(), // 0-100
+  freshness: freshnessMetadataSchema,
+});
+
+// AI Brief Request
+export const assetBriefRequestSchema = z.object({
+  overviewPayload: assetOverviewResponseSchema,
+});
+
+// Price Alert Creation
+export const priceAlertCreateSchema = z.object({
+  symbol: z.string(),
+  alertType: z.enum(["price", "percentage"]),
+  direction: z.enum(["above", "below"]),
+  value: z.number(),
+  label: z.string().optional(),
+});
+
+// Module D Type Exports
+export type OHLCDataPoint = z.infer<typeof ohlcDataPointSchema>;
+export type TechnicalIndicators = z.infer<typeof technicalIndicatorsSchema>;
+export type ProbabilisticStats = z.infer<typeof probabilisticStatsSchema>;
+export type SupportResistance = z.infer<typeof supportResistanceSchema>;
+export type MultiTimeframeData = z.infer<typeof multiTimeframeDataSchema>;
+export type AssetOverviewResponse = z.infer<typeof assetOverviewResponseSchema>;
+export type AssetOverviewRequest = z.infer<typeof assetOverviewRequestSchema>;
+export type AssetBriefResponse = z.infer<typeof assetBriefResponseSchema>;
+export type AssetBriefRequest = z.infer<typeof assetBriefRequestSchema>;
+export type PriceAlertCreate = z.infer<typeof priceAlertCreateSchema>;

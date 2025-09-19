@@ -1788,7 +1788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         symbols = focusAssets.map((fa) => fa.symbol);
       } else if (scope === "portfolio") {
         const portfolios = await storage.getPortfolios();
-        symbols = portfolios.flatMap((p) => p.positions?.map((pos) => pos.symbol) || []);
+        symbols = portfolios.flatMap((p: any) => p.positions?.map((pos: any) => pos.symbol) || []);
       }
       // For "all" scope, symbols remains undefined
       
@@ -2364,6 +2364,66 @@ Provide response in JSON format: {
     } catch (error) {
       console.error("Events translate error:", error);
       res.status(500).json({ error: "Failed to translate text" });
+    }
+  });
+
+  // MODULE D: Asset Overview 2.0 API Endpoints
+  // =============================================
+
+  app.get("/api/asset/overview", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    
+    try {
+      const { symbol, assetType } = req.query;
+      
+      if (!symbol || !assetType) {
+        return res.status(400).json({ 
+          error: "Missing required parameters: symbol and assetType" 
+        });
+      }
+
+      if (!["equity", "etf", "crypto"].includes(assetType as string)) {
+        return res.status(400).json({ 
+          error: "assetType must be one of: equity, etf, crypto" 
+        });
+      }
+
+      // Import Module D services
+      const { AssetOverviewService } = await import("./asset-overview-service.js");
+      
+      const assetOverview = new AssetOverviewService();
+      const result = await assetOverview.getComprehensiveOverview(
+        symbol as string, 
+        assetType as "equity" | "etf" | "crypto"
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error("Asset overview error:", error);
+      res.status(500).json({ error: "Failed to get asset overview" });
+    }
+  });
+
+  app.post("/api/asset/brief", async (req, res) => {
+    try {
+      const { overviewPayload } = req.body;
+      
+      if (!overviewPayload) {
+        return res.status(400).json({ 
+          error: "Missing required parameter: overviewPayload" 
+        });
+      }
+
+      // Import Module D services
+      const { AssetBriefService } = await import("./asset-brief-service.js");
+      
+      const briefService = new AssetBriefService();
+      const brief = await briefService.generateAIBrief(overviewPayload);
+
+      res.json(brief);
+    } catch (error) {
+      console.error("Asset brief error:", error);
+      res.status(500).json({ error: "Failed to generate asset brief" });
     }
   });
 

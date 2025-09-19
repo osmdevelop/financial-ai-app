@@ -48,6 +48,9 @@ import type {
   // News types
   NewsStreamResponse,
   NewsImpactAnalysis,
+  // Module D types
+  AssetOverviewResponse,
+  AssetBriefResponse,
 } from "@shared/schema";
 
 export const api = {
@@ -352,27 +355,7 @@ export const api = {
     return res.json();
   },
 
-  // Asset Overview
-  async getAssetOverview(
-    symbol: string,
-    assetType: string,
-    frames: string[] = ["1h", "1d", "1w", "1m", "3m", "1y"],
-  ): Promise<AssetOverview> {
-    const res = await apiRequest(
-      "GET",
-      `/api/asset/overview?symbol=${symbol}&assetType=${assetType}&frames=${frames.join(",")}`,
-    );
-    return res.json();
-  },
-
-  async getAssetOverviewSummary(
-    overviewPayload: AssetOverview,
-  ): Promise<AssetOverviewSummary> {
-    const res = await apiRequest("POST", "/api/asset/overview/explain", {
-      overviewPayload,
-    });
-    return res.json();
-  },
+  // Legacy asset overview methods removed - replaced by Module D comprehensive endpoints
 
   // Market Recap
   async getMarketRecap(): Promise<MarketRecap> {
@@ -468,6 +451,18 @@ export const api = {
 
   async postNewsAnalyze(request: { title: string; summary?: string; symbols?: string[] }): Promise<{ data: NewsImpactAnalysis; meta: FreshnessMetadata }> {
     const res = await apiRequest("POST", "/api/news/analyze", request);
+    return res.json();
+  },
+
+  // MODULE D: Asset Overview 2.0
+  async getAssetOverview(symbol: string, assetType: 'equity' | 'etf' | 'crypto'): Promise<AssetOverviewResponse> {
+    const params = new URLSearchParams({ symbol, assetType });
+    const res = await apiRequest("GET", `/api/asset/overview?${params}`);
+    return res.json();
+  },
+
+  async getAssetBrief(overviewPayload: AssetOverviewResponse): Promise<AssetBriefResponse> {
+    const res = await apiRequest("POST", "/api/asset/brief", { overviewPayload });
     return res.json();
   },
 };
