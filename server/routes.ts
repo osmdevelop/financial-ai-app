@@ -14,6 +14,9 @@ import {
   eventPrebriefRequestSchema,
   eventPostmortemRequestSchema,
   eventTranslateRequestSchema,
+  // News schemas
+  newsStreamSchema,
+  newsAnalyzeSchema,
 } from "@shared/schema";
 import { spawn } from "child_process";
 import { z } from "zod";
@@ -1768,6 +1771,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Headline impact analysis error:", error);
       res.status(500).json({ error: "Failed to analyze headline impact" });
+    }
+  });
+
+  // MODULE C: Enhanced News & Impact (Real-time Stream)
+  app.get("/api/news/stream", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    
+    try {
+      const { scope, limit } = newsStreamSchema.parse(req.query);
+      
+      // Get symbols based on scope
+      let symbols: string[] | undefined;
+      if (scope === "focus") {
+        const focusAssets = await storage.getFocusAssets("default");
+        symbols = focusAssets.map((fa) => fa.symbol);
+      } else if (scope === "portfolio") {
+        const portfolios = await storage.getPortfolios();
+        if (portfolios.length > 0) {
+          const positions = await storage.getPositionsByPortfolio(portfolios[0].id);
+          symbols = positions.map((p: any) => p.symbol);
+        }
+      }
+      // For "all" scope, symbols remains undefined
+      
+      const { newsClusteringService } = await import("./news-clustering");
+      const result = await newsClusteringService.getClusteredNews({
+        scope,
+        symbols,
+        limit,
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error("News stream error:", error);
+      res.status(500).json({ error: "Failed to get news stream" });
+    }
+  });
+
+  app.post("/api/news/analyze", async (req, res) => {
+    try {
+      const { title, summary, symbols } = newsAnalyzeSchema.parse(req.body);
+      
+      const { newsClusteringService } = await import("./news-clustering");
+      const analysis = await newsClusteringService.analyzeImpact(
+        title,
+        summary,
+        symbols
+      );
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error("News analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze news impact" });
     }
   });
 
