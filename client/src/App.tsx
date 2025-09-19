@@ -15,6 +15,7 @@ import Dashboard from "@/pages/dashboard";
 import Today from "@/pages/today";
 import Insights from "@/pages/insights";
 import Headlines from "@/pages/headlines";
+import NewsStream from "@/pages/news";
 import Earnings from "@/pages/earnings";
 import EconomicCalendar from "@/pages/economic-calendar";
 import Events from "@/pages/events";
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/portfolio-v1" component={PortfolioRedirect} />
       <Route path="/insights" component={Insights} />
       <Route path="/headlines" component={Headlines} />
+      <Route path="/news" component={NewsStream} />
       <Route path="/earnings" component={Earnings} />
       <Route path="/economic-calendar" component={EconomicCalendar} />
       <Route path="/events" component={Events} />

@@ -344,7 +344,7 @@ export const insertHeadlineCacheSchema = createInsertSchema(headlineCache).pick(
 // News API schemas
 export const newsStreamSchema = z.object({
   scope: z.enum(["all", "portfolio", "focus"]).default("all"),
-  limit: z.number().min(1).max(100).default(50),
+  limit: z.coerce.number().min(1).max(100).default(50),
 });
 
 export const newsAnalyzeSchema = z.object({

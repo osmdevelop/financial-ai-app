@@ -13,10 +13,12 @@ import {
   TrendingUp,
   TrendingDown,
   AlertTriangle,
+  Users,
+  Target,
 } from "lucide-react";
 import { RefreshCcw } from "lucide-react";
 import { format, formatDistance, parseISO, isValid } from "date-fns";
-import type { Headline } from "@shared/schema";
+import type { Headline, NewsCluster, NewsStreamResponse } from "@shared/schema";
 
 // --- configuration for "real-time" behavior ---
 const POLL_HEADLINES_MS = 30_000; // refresh feed every 30s
@@ -114,7 +116,7 @@ function TimeAgo({ date }: { date: unknown }) {
   return <>{formatDistance(d, new Date(), { addSuffix: true })}</>;
 }
 
-export default function Headlines() {
+export default function NewsStream() {
   const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
   const [searchTerm, setSearchTerm] = useState("");
 
