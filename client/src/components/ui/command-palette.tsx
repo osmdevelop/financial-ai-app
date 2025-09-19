@@ -135,13 +135,6 @@ export function CommandPalette({ open, onOpenChange, onSelectAsset }: CommandPal
                         
                         {asset.lastPrice && (
                           <div className="flex items-center space-x-2">
-                            {asset.priceChange !== undefined && asset.priceChange !== 0 && (
-                              asset.priceChange > 0 ? (
-                                <TrendingUp className="w-4 h-4 text-green-500" />
-                              ) : (
-                                <TrendingDown className="w-4 h-4 text-red-500" />
-                              )
-                            )}
                             <div className="font-medium text-sm">
                               ${asset.lastPrice.toLocaleString()}
                             </div>
