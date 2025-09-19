@@ -307,7 +307,7 @@ export default function AssetOverview() {
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Clock className="h-4 w-4" />
                       <span>
-                        Updated: {new Date(overview.freshness.lastUpdated).toLocaleString()}
+                        Updated: {new Date(overview.freshness?.lastUpdated || new Date()).toLocaleString()}
                       </span>
                     </div>
                   </div>
