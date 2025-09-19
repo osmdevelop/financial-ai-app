@@ -1007,3 +1007,63 @@ export type AssetOverviewRequest = z.infer<typeof assetOverviewRequestSchema>;
 export type AssetBriefResponse = z.infer<typeof assetBriefResponseSchema>;
 export type AssetBriefRequest = z.infer<typeof assetBriefRequestSchema>;
 export type PriceAlertCreate = z.infer<typeof priceAlertCreateSchema>;
+
+// MODULE E: Policy & Political Indexes Types and Schemas
+// ====================================================
+
+// Trump Index Response
+export const trumpIndexResponseSchema = z.object({
+  zScore: z.number(), // Current Trump index z-score
+  change7d: z.number(), // 7-day change in index
+  lastUpdated: z.string(),
+  sensitiveAssets: z.array(z.object({
+    symbol: z.string(),
+    name: z.string(),
+    correlation: z.number(), // correlation coefficient with Trump index
+    currentPrice: z.number(),
+    change: z.number(),
+    changePct: z.number(),
+    significance: z.enum(["high", "medium", "low"]), // statistical significance
+  })),
+  recentNews: z.array(z.object({
+    title: z.string(),
+    summary: z.string(),
+    url: z.string(),
+    published: z.string(),
+    topics: z.array(z.string()), // detected policy topics
+    intensity: z.number(), // topic intensity score 0-1
+  })),
+  freshness: freshnessMetadataSchema,
+});
+
+// Fedspeak Response  
+export const fedspeakResponseSchema = z.object({
+  currentTone: z.enum(["hawkish", "dovish", "neutral"]),
+  toneScore: z.number(), // -1 (very dovish) to +1 (very hawkish)
+  rollingTone7d: z.number(), // 7-day rolling average
+  change7d: z.number(), // change in tone over 7 days
+  lastUpdated: z.string(),
+  recentQuotes: z.array(z.object({
+    text: z.string(),
+    speaker: z.string(),
+    tone: z.enum(["hawkish", "dovish", "neutral"]),
+    confidence: z.number(), // AI classification confidence 0-1
+    date: z.string(),
+    url: z.string(),
+    impliedOdds: z.string(), // textual odds interpretation
+  })),
+  freshness: freshnessMetadataSchema,
+});
+
+// Policy Topics Filter
+export const policyTopicsSchema = z.object({
+  tariffs: z.number(),
+  trade: z.number(), 
+  immigration: z.number(),
+  defense: z.number(),
+}).partial();
+
+// Module E Type Exports
+export type TrumpIndexResponse = z.infer<typeof trumpIndexResponseSchema>;
+export type FedspeakResponse = z.infer<typeof fedspeakResponseSchema>;
+export type PolicyTopics = z.infer<typeof policyTopicsSchema>;

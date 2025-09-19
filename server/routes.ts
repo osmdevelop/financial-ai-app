@@ -2376,6 +2376,35 @@ Provide response in JSON format: {
     }
   });
 
+  // MODULE E: Policy & Political Indexes API
+  app.get("/api/policy/trump-index", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    
+    try {
+      const { policyService } = await import("./policy");
+      const trumpIndex = await policyService.getTrumpIndex();
+      
+      res.json(trumpIndex);
+    } catch (error) {
+      console.error("Trump Index API error:", error);
+      res.status(500).json({ error: "Failed to get Trump Index" });
+    }
+  });
+
+  app.get("/api/policy/fedspeak", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    
+    try {
+      const { policyService } = await import("./policy");
+      const fedspeak = await policyService.getFedspeak();
+      
+      res.json(fedspeak);
+    } catch (error) {
+      console.error("Fedspeak API error:", error);
+      res.status(500).json({ error: "Failed to get Fedspeak analysis" });
+    }
+  });
+
   // Initialize sample data on startup
   // await storage.initializeSampleData(); // Temporarily disabled due to database connection issue
 

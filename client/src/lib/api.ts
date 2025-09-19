@@ -47,10 +47,12 @@ import type {
   EventStudiesResponse,
   // News types
   NewsStreamResponse,
-  NewsImpactAnalysis,
   // Module D types
   AssetOverviewResponse,
   AssetBriefResponse,
+  // Module E types
+  TrumpIndexResponse,
+  FedspeakResponse,
 } from "@shared/schema";
 
 export const api = {
@@ -449,7 +451,7 @@ export const api = {
     return res.json();
   },
 
-  async postNewsAnalyze(request: { title: string; summary?: string; symbols?: string[] }): Promise<{ data: NewsImpactAnalysis; meta: FreshnessMetadata }> {
+  async postNewsAnalyze(request: { title: string; summary?: string; symbols?: string[] }): Promise<any> {
     const res = await apiRequest("POST", "/api/news/analyze", request);
     return res.json();
   },
@@ -463,6 +465,17 @@ export const api = {
 
   async getAssetBrief(overviewPayload: AssetOverviewResponse): Promise<AssetBriefResponse> {
     const res = await apiRequest("POST", "/api/asset/brief", { overviewPayload });
+    return res.json();
+  },
+
+  // MODULE E: Policy & Political Indexes
+  async getTrumpIndex(): Promise<TrumpIndexResponse> {
+    const res = await apiRequest("GET", "/api/policy/trump-index");
+    return res.json();
+  },
+
+  async getFedspeak(): Promise<FedspeakResponse> {
+    const res = await apiRequest("GET", "/api/policy/fedspeak");
     return res.json();
   },
 };
