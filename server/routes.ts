@@ -1754,7 +1754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Initialize sample data on startup
-  await storage.initializeSampleData();
+  // await storage.initializeSampleData(); // Temporarily disabled due to database connection issue
 
   const httpServer = createServer(app);
   return httpServer;
