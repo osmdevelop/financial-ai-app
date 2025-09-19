@@ -545,3 +545,45 @@ export const freshnessMetadataSchema = z.object({
 });
 
 export type FreshnessMetadata = z.infer<typeof freshnessMetadataSchema>;
+
+// Today Market Drivers types
+export const todaySubscoreSchema = z.object({
+  name: z.string(),
+  score: z.number(),
+  weight: z.number(),
+  change: z.number(),
+  trend: z.enum(["up", "down", "neutral"]),
+});
+
+export const todayDriverSchema = z.object({
+  label: z.string(),
+  value: z.number(),
+  contribution: z.number(),
+  note: z.string(),
+});
+
+export const todayOverviewSchema = z.object({
+  overallIndex: z.number(),
+  regime: z.string(),
+  change: z.number(),
+  subscores: z.array(todaySubscoreSchema),
+  drivers: z.array(todayDriverSchema),
+  as_of: z.string(),
+});
+
+export const todayWrapRequestSchema = z.object({
+  contextNote: z.string().optional(),
+});
+
+export const todayWrapResponseSchema = z.object({
+  summary: z.string(),
+  keyHighlights: z.array(z.string()),
+  disclaimer: z.string(),
+  as_of: z.string(),
+});
+
+export type TodaySubscore = z.infer<typeof todaySubscoreSchema>;
+export type TodayDriver = z.infer<typeof todayDriverSchema>;
+export type TodayOverview = z.infer<typeof todayOverviewSchema>;
+export type TodayWrapRequest = z.infer<typeof todayWrapRequestSchema>;
+export type TodayWrapResponse = z.infer<typeof todayWrapResponseSchema>;

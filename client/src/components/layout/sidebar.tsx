@@ -14,11 +14,13 @@ import {
   Activity,
   Search,
   Globe,
+  Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: BarChart3 },
+  { name: "Market Drivers", href: "/today", icon: Target },
   { name: "AI Insights", href: "/insights", icon: Brain },
   { name: "Sentiment", href: "/sentiment", icon: Activity },
   { name: "Headlines", href: "/headlines", icon: Newspaper },

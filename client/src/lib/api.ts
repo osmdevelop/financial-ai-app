@@ -32,6 +32,11 @@ import type {
   MarketRecap,
   MarketRecapSummary,
   HeadlineImpactAnalysis,
+  // Today Market Drivers types
+  TodayOverview,
+  TodayWrapRequest,
+  TodayWrapResponse,
+  FreshnessMetadata,
 } from "@shared/schema";
 
 export const api = {
@@ -403,6 +408,17 @@ export const api = {
       summary,
       symbols,
     });
+    return res.json();
+  },
+
+  // Today Market Drivers
+  async getTodayOverview(): Promise<{ data: TodayOverview; meta: FreshnessMetadata }> {
+    const res = await apiRequest("GET", "/api/today/overview");
+    return res.json();
+  },
+
+  async generateTodayWrap(request: TodayWrapRequest): Promise<{ data: TodayWrapResponse; meta: FreshnessMetadata }> {
+    const res = await apiRequest("POST", "/api/today/wrap", request);
     return res.json();
   },
 };

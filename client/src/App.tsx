@@ -12,6 +12,7 @@ import { AssetSheetModal } from "@/components/ui/asset-sheet-modal";
 import { TransactionModal } from "@/components/ui/transaction-modal";
 import type { AssetSearchResult } from "@shared/schema";
 import Dashboard from "@/pages/dashboard";
+import Today from "@/pages/today";
 import Insights from "@/pages/insights";
 import Headlines from "@/pages/headlines";
 import Earnings from "@/pages/earnings";
@@ -27,7 +28,7 @@ function PortfolioRedirect() {
   const [, setLocation] = useLocation();
   
   useEffect(() => {
-    setLocation("/");
+    setLocation("/today");
   }, [setLocation]);
   
   return null;
@@ -37,6 +38,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/today" component={Today} />
       <Route path="/portfolio" component={PortfolioRedirect} />
       <Route path="/portfolio-v1" component={PortfolioRedirect} />
       <Route path="/insights" component={Insights} />
