@@ -133,6 +133,54 @@ export const eventAlerts = pgTable("event_alerts", {
   eventTypeIdx: index("event_alerts_event_type_idx").on(table.eventId, table.alertType),
 }));
 
+// News & Headlines tables
+export const headlines = pgTable("headlines", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  published: timestamp("published").notNull(),
+  title: text("title").notNull(),
+  source: text("source").notNull(),
+  url: text("url").notNull(),
+  summary: text("summary"),
+  symbols: text("symbols").array().default([]), // array of tickers
+  sentimentScore: decimal("sentiment_score"),
+  sentimentLabel: text("sentiment_label"),
+  clusterId: varchar("cluster_id").references(() => newsClusters.id),
+  impactDirection: text("impact_direction"), // "up" | "down" | "neutral"
+  impactMagnitude: integer("impact_magnitude"), // 1-3
+  impactConfidence: decimal("impact_confidence"), // 0-1
+  impactReason: text("impact_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  publishedIdx: index("headlines_published_idx").on(table.published),
+  clusterIdx: index("headlines_cluster_idx").on(table.clusterId),
+  symbolsIdx: index("headlines_symbols_idx").on(table.symbols),
+}));
+
+export const newsClusters = pgTable("news_clusters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  topic: text("topic").notNull(), // AI-generated topic name
+  description: text("description"), // brief description of the cluster
+  embedding: text("embedding"), // JSON-serialized OpenAI embedding
+  headlineCount: integer("headline_count").default(0),
+  avgImpactMagnitude: decimal("avg_impact_magnitude"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  topicIdx: index("clusters_topic_idx").on(table.topic),
+  createdAtIdx: index("clusters_created_at_idx").on(table.createdAt),
+}));
+
+export const headlineCache = pgTable("headline_cache", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  headlineId: varchar("headline_id").notNull().references(() => headlines.id, { onDelete: "cascade" }),
+  analysisType: text("analysis_type").notNull(), // "impact" | "clustering" | "sentiment"
+  result: text("result").notNull(), // JSON-serialized analysis result
+  confidence: decimal("confidence"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  headlineAnalysisIdx: index("cache_headline_analysis_idx").on(table.headlineId, table.analysisType),
+}));
+
 // Insert schemas
 export const insertPortfolioSchema = createInsertSchema(portfolios).pick({
   name: true,
@@ -253,6 +301,58 @@ export const insertEventAlertSchema = createInsertSchema(eventAlerts).pick({
   deviationScore: z.string().optional(),
 });
 
+// News & Headlines insert schemas
+export const insertHeadlineSchema = createInsertSchema(headlines).pick({
+  published: true,
+  title: true,
+  source: true,
+  url: true,
+  summary: true,
+  symbols: true,
+  sentimentScore: true,
+  sentimentLabel: true,
+  clusterId: true,
+  impactDirection: true,
+  impactMagnitude: true,
+  impactConfidence: true,
+  impactReason: true,
+}).extend({
+  published: z.union([z.date(), z.string().transform(val => new Date(val))]),
+  impactDirection: z.enum(["up", "down", "neutral"]).optional(),
+  impactMagnitude: z.number().min(1).max(3).optional(),
+  impactConfidence: z.number().min(0).max(1).optional(),
+});
+
+export const insertNewsClusterSchema = createInsertSchema(newsClusters).pick({
+  topic: true,
+  description: true,
+  embedding: true,
+  headlineCount: true,
+  avgImpactMagnitude: true,
+});
+
+export const insertHeadlineCacheSchema = createInsertSchema(headlineCache).pick({
+  headlineId: true,
+  analysisType: true,
+  result: true,
+  confidence: true,
+}).extend({
+  analysisType: z.enum(["impact", "clustering", "sentiment"]),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+// News API schemas
+export const newsStreamSchema = z.object({
+  scope: z.enum(["all", "portfolio", "focus"]).default("all"),
+  limit: z.number().min(1).max(100).default(50),
+});
+
+export const newsAnalyzeSchema = z.object({
+  title: z.string(),
+  summary: z.string().optional(),
+  symbols: z.array(z.string()).default([]),
+});
+
 // Types
 export type Portfolio = typeof portfolios.$inferSelect;
 export type Position = typeof positions.$inferSelect;
@@ -276,6 +376,42 @@ export type InsertUserPrefs = z.infer<typeof insertUserPrefsSchema>;
 export type InsertAlert = z.infer<typeof insertAlertSchema>;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type InsertEventAlert = z.infer<typeof insertEventAlertSchema>;
+
+// News & Headlines types
+export type NewsHeadline = typeof headlines.$inferSelect;
+export type NewsCluster = typeof newsClusters.$inferSelect;
+export type HeadlineCache = typeof headlineCache.$inferSelect;
+export type InsertNewsHeadline = z.infer<typeof insertHeadlineSchema>;
+export type InsertNewsCluster = z.infer<typeof insertNewsClusterSchema>;
+export type InsertHeadlineCache = z.infer<typeof insertHeadlineCacheSchema>;
+
+// News API response types
+export type NewsAnalysisResult = {
+  direction: "up" | "down" | "neutral";
+  magnitude: 1 | 2 | 3;
+  confidence: number; // 0-1
+  why: string;
+};
+
+export type ClusteredHeadline = NewsHeadline & {
+  clusterTopic?: string;
+  impactLevel: "high" | "medium" | "low";
+};
+
+export type NewsStreamResponse = {
+  headlines: ClusteredHeadline[];
+  clusters: {
+    id: string;
+    topic: string;
+    description?: string;
+    headlines: ClusteredHeadline[];
+  }[];
+  freshness: {
+    lastUpdated: string;
+    source: string;
+    isLive: boolean;
+  };
+};
 
 // Extended types for API responses
 export type PositionWithPrice = Position & {
