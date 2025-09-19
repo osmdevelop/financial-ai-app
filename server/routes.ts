@@ -1786,12 +1786,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (scope === "focus") {
         const focusAssets = await storage.getFocusAssets("default");
         symbols = focusAssets.map((fa) => fa.symbol);
-      } else if (scope === "portfolio") {
-        const portfolios = await storage.getPortfolios();
-        if (portfolios.length > 0) {
-          const positions = await storage.getPositionsByPortfolio(portfolios[0].id);
-          symbols = positions.map((p: any) => p.symbol);
-        }
+      } else if (scope === "watchlist") {
+        const watchlist = await storage.getWatchlist();
+        symbols = watchlist.map((item) => item.symbol);
       }
       // For "all" scope, symbols remains undefined
       

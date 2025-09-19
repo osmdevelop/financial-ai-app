@@ -45,6 +45,9 @@ import type {
   EventTranslateRequest,
   EventTranslateResponse,
   EventStudiesResponse,
+  // News types
+  NewsStreamResponse,
+  NewsImpactAnalysis,
 } from "@shared/schema";
 
 export const api = {
@@ -453,6 +456,18 @@ export const api = {
 
   async postEventsTranslate(request: EventTranslateRequest): Promise<{ data: EventTranslateResponse; meta: FreshnessMetadata }> {
     const res = await apiRequest("POST", "/api/events/translate", request);
+    return res.json();
+  },
+
+  // MODULE C: Enhanced News & Impact (Real-time Stream)
+  async getNewsStream(scope: 'all' | 'focus' | 'watchlist' = 'all', limit: number = 20): Promise<{ data: NewsStreamResponse; meta: FreshnessMetadata }> {
+    const params = new URLSearchParams({ scope, limit: limit.toString() });
+    const res = await apiRequest("GET", `/api/news/stream?${params}`);
+    return res.json();
+  },
+
+  async postNewsAnalyze(request: { title: string; summary?: string; symbols?: string[] }): Promise<{ data: NewsImpactAnalysis; meta: FreshnessMetadata }> {
+    const res = await apiRequest("POST", "/api/news/analyze", request);
     return res.json();
   },
 };
