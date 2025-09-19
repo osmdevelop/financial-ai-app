@@ -1,0 +1,193 @@
+You are my senior engineer. Work in this existing codebase (Node/Express under server/*, React client, TanStack Query). Keep all file paths consistent with what’s already here (e.g., server/routes.ts, server/freshness.ts, server/headlines.ts, @/lib/api.ts). Do not create /src/server; use server/*.
+
+Constraints
+
+Use OpenAI (GPT-4o-mini for generation; text-embedding-3-small for clustering).
+
+Use Alpha Vantage for equities/ETFs/FX + News & Sentiment + Earnings (+ Sectors).
+
+Use CoinGecko for crypto.
+
+Provide mock fallbacks when live calls fail or DATA_MODE=mock.
+
+Preserve existing freshness pattern (withFreshness, createLiveFreshness, createFallbackFreshness).
+
+All outputs are informational, not advice.
+
+ENV
+
+Append to .env.example (and read from process.env):
+
+OPENAI_API_KEY=
+ALPHAVANTAGE_KEY=
+COINGECKO_BASE=https://api.coingecko.com/api/v3
+DATA_MODE=mock            # mock | live
+CACHE_TTL_PRICE_SEC=900   # 15m
+CACHE_TTL_NEWS_SEC=600
+CACHE_TTL_ECON_SEC=10800
+
+Infra helpers (server/)
+
+server/cache.ts
+
+Implement:
+
+export async function getCachedOrFetch<T>(key: string, ttlSec: number, fetcher: () => Promise<T>): Promise<{data:T; source:'cache'|'live'|'mock'; as_of:string; fresh:boolean}>
+
+
+Use an in-memory LRU (Map + expiry). Return { data, source, as_of: new Date().toISOString(), fresh: source !== 'mock' }.
+
+server/alpha.ts and server/cg.ts
+
+Wrap Alpha Vantage and CoinGecko calls with:
+
+A simple queue throttled to 5 req/min per provider.
+
+getCachedOrFetch for responses keyed by URL.
+
+Respect DATA_MODE=mock: if set or if a call fails/rate-limits, return mock objects shaped like the live responses.
+
+Phase 0 — Remove Portfolio UI (keep server routes)
+
+Remove Portfolio from sidebar/nav and router; redirect /portfolio → /today.
+
+Ensure FocusAssetsPicker uses portfolioId="default" everywhere.
+
+Module A — /today (Market Drivers)
+
+Server
+
+Add GET /api/today/overview in server/routes.ts.
+
+Pull (live or mock):
+
+Indices: SPY, QQQ, IWM, DIA (AV)
+
+Credit: HYG, LQD (AV)
+
+Crypto: BTC, ETH (CG)
+
+Vol proxy: realized 10D vol from SPY returns (compute)
+
+Sector breadth: % of sectors XLK..XLU up on day (AV Sectors)
+
+Compute subscores:
+
+risk = avg(d1% SPY, QQQ, IWM)
+
+credit = d1% HYG - d1% LQD
+
+volInv = inverse-normalized realized vol (lower vol → higher score)
+
+breadth = % of sectors green
+
+score = 0.4*risk + 0.25*credit + 0.35*volInv (clamp 0..100)
+
+regime = 'Risk-On' | 'Neutral' | 'Risk-Off' by thresholds
+
+Return withFreshness({ score, regime, subscores:{risk,credit,volInv,breadth}, movers:[], as_of }, freshness); movers can be empty for now.
+
+Add POST /api/today/wrap:
+
+Body { overviewPayload, topDrivers: string[] }
+
+Use OpenAI (gpt-4o-mini) to produce 5 sentences with inline bracketed labels like [SPY +1.1%].
+
+Return JSON and include a footer field disclaimer: "Generated summary — informational only."
+
+Client
+
+Create client/src/pages/today.tsx and nav item “Today”.
+
+Tile shows gauge (use existing SentimentGauge), subscores list, and the 5-sentence wrap. Add a FreshnessBadge (reuse your component) and a Refresh button that calls refetch() without full-page re-mount. Disable refetchOnWindowFocus to avoid flicker.
+
+Module C — News & Impact (replace/extend Headlines)
+
+Server
+
+Extend existing GET /api/headlines/timeline to support optional cluster=true.
+
+When cluster=true:
+
+Embed titles with text-embedding-3-small.
+
+Simple cosine clustering (single-link, threshold ~0.85).
+
+Add clusterId & clusterLabel (label = first title or a short LLM-generated 3–5 word topic).
+
+Cache clusters for CACHE_TTL_NEWS_SEC.
+
+Add POST /api/news/analyze (you already have /api/headlines/impact; you may reuse it) to return:
+
+{ direction: 'up'|'down'|'neutral', magnitude: 1|2|3, confidence: number, why: string, as_of }
+
+
+Persist minimal result to your storage (you already write headlines).
+
+Client
+
+In Headlines page:
+
+Add a Manual Refresh button (no full page rerender).
+
+Add optional “Group by Topic” toggle → calls cluster=true.
+
+Show per-row impact badges if analysis exists.
+
+Module D — Asset Overview 2.0 (server stubs + UI)
+
+Server
+
+Keep your current /api/asset/overview but add:
+
+Indicators: MA(10/30/50), RSI(14), ATR(14) computed server-side.
+
+Simple distribution stats from recent returns: 1D/5D/30D up odds, VaR(95), ES(95).
+
+Include these fields in the response (mock if needed).
+
+Add POST /api/asset/brief → OpenAI returns 3 bullets each: Bull, Bear, Risks. Include disclaimer.
+
+Client
+
+Add toggles for MA/RSI/ATR overlays and a side panel that displays Odds/VaR/ES and the AI brief.
+
+Policy Indexes (stubs only for now)
+
+Add endpoints stubs to server/routes.ts:
+
+GET /api/policy/trump-index → returns { score: 50, sensitiveAssets: [], as_of, source:'mock', fresh:false }
+
+GET /api/policy/fedspeak → returns { tone:'neutral', quotes:[], as_of, source:'mock', fresh:false }
+
+Add api.getTrumpIndex() and api.getFedspeakIndex() wrappers in @/lib/api.ts.
+
+Caching & Freshness
+
+Wire all new endpoints through getCachedOrFetch and wrap responses with existing withFreshness(...).
+
+Respect DATA_MODE:
+
+mock: return shaped mock data; set fresh:false via createFallbackFreshness('mock mode').
+
+live: on error or rate limit → fallback to mock with createFallbackFreshness('API rate limit').
+
+UX Guardrails
+
+Avoid spinners; prefer skeletons. Hide N/A cells as —.
+
+Every AI card footer: “Generated summary — informational only.”
+
+Disable refetchOnWindowFocus on live lists to prevent visible flicker.
+
+Acceptance (Phase 1)
+
+/today renders gauge + subscores + wrap + freshness + manual refresh.
+
+Headlines page has Manual Refresh and optional Topic Grouping via cluster=true.
+
+Asset Overview shows overlays + Odds/VaR/ES fields (numbers can be mock if DATA_MODE=mock).
+
+Portfolio nav/route removed or redirected. Focus Assets still work with portfolioId="default".
+
+Please implement the above with minimal disruptive changes, reusing existing helpers (freshness.ts, storage fallbacks) and keeping TypeScript types consistent. Ensure all new API methods are added to @/lib/api.ts and used by the client.
