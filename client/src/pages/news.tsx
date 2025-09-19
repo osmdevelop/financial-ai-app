@@ -159,6 +159,21 @@ function NewsClusterCard({ cluster }: { cluster: NewsStreamResponse['clusters'][
                       )}
                     </div>
                   )}
+                  {/* Impact Badge */}
+                  {headline.impactLevel && (
+                    <div className="mt-2">
+                      <Badge 
+                        className={`text-xs ${getImpactColor(headline.impactLevel)}`}
+                        variant="secondary"
+                        data-testid={`badge-impact-${headline.id}`}
+                      >
+                        <span className="flex items-center gap-1">
+                          {getImpactIcon(headline.impactLevel)}
+                          {headline.impactLevel.toUpperCase()} IMPACT
+                        </span>
+                      </Badge>
+                    </div>
+                  )}
                 </div>
                 {headline.url && (
                   <Button
@@ -197,19 +212,19 @@ function NewsClusterCard({ cluster }: { cluster: NewsStreamResponse['clusters'][
 }
 
 export default function NewsStream() {
-  const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
+  const [scope, setScope] = useState<"all" | "focus" | "portfolio">("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Focus assets & watchlist (disabled due to database issues)
+  // Focus assets & portfolio (disabled due to database issues)
   const { data: focusAssets = [] } = useQuery({
     queryKey: ["/api/focus-assets"],
     queryFn: () => api.getFocusAssets("default"),
     enabled: false, // Disabled due to Neon endpoint issues
   });
 
-  const { data: watchlist = [] } = useQuery({
-    queryKey: ["/api/watchlist"],
-    queryFn: () => api.getWatchlist(),
+  const { data: portfolios = [] } = useQuery({
+    queryKey: ["/api/portfolios"],
+    queryFn: () => api.getPortfolios(),
     enabled: false, // Disabled due to Neon endpoint issues
   });
 
@@ -217,9 +232,14 @@ export default function NewsStream() {
     () => focusAssets.map((fa: any) => fa.symbol),
     [focusAssets],
   );
-  const watchlistSymbols = useMemo(
-    () => watchlist?.map((w: any) => w.symbol) ?? [],
-    [watchlist],
+  const portfolioSymbols = useMemo(
+    () => {
+      // Extract symbols from portfolios or provide fallback for testing
+      const symbols = portfolios?.flatMap((p: any) => p.positions?.map((pos: any) => pos.symbol) || []) ?? [];
+      // Fallback symbols for testing when database is disabled
+      return symbols.length > 0 ? symbols : ['AAPL', 'GOOGL', 'MSFT', 'TSLA'];
+    },
+    [portfolios],
   );
 
   // Enhanced News Stream with clustering
@@ -341,14 +361,14 @@ export default function NewsStream() {
                 Focus Assets ({focusSymbols.length})
               </Button>
               <Button
-                data-testid="scope-watchlist"
-                variant={scope === "watchlist" ? "default" : "outline"}
+                data-testid="scope-portfolio"
+                variant={scope === "portfolio" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setScope("watchlist")}
+                onClick={() => setScope("portfolio")}
                 className="h-8"
-                disabled={!watchlistSymbols.length}
+                disabled={!portfolioSymbols.length}
               >
-                Watchlist ({watchlistSymbols.length})
+                Portfolio ({portfolioSymbols.length})
               </Button>
             </div>
           </div>
@@ -357,9 +377,9 @@ export default function NewsStream() {
           {scope !== "all" && (
             <div className="flex flex-wrap gap-2">
               <span className="text-sm text-muted-foreground mr-2">
-                {scope === "focus" ? "Focus Assets:" : "Watchlist:"}
+                {scope === "focus" ? "Focus Assets:" : "Portfolio:"}
               </span>
-              {(scope === "focus" ? focusSymbols : watchlistSymbols).map(
+              {(scope === "focus" ? focusSymbols : portfolioSymbols).map(
                 (symbol) => (
                   <Badge
                     key={symbol}
@@ -471,6 +491,21 @@ export default function NewsStream() {
                                     +{headline.symbols.length - 5} more
                                   </Badge>
                                 )}
+                              </div>
+                            )}
+                            {/* Impact Badge */}
+                            {headline.impactLevel && (
+                              <div className="mt-2">
+                                <Badge 
+                                  className={`text-xs ${getImpactColor(headline.impactLevel)}`}
+                                  variant="secondary"
+                                  data-testid={`badge-impact-${headline.id}`}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    {getImpactIcon(headline.impactLevel)}
+                                    {headline.impactLevel.toUpperCase()} IMPACT
+                                  </span>
+                                </Badge>
                               </div>
                             )}
                           </div>

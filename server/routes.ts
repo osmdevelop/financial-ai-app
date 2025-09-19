@@ -1786,11 +1786,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (scope === "focus") {
         const focusAssets = await storage.getFocusAssets("default");
         symbols = focusAssets.map((fa) => fa.symbol);
-      } else if (scope === "watchlist") {
-        const watchlist = await storage.getWatchlist();
-        symbols = watchlist.map((item) => item.symbol);
+      } else if (scope === "portfolio") {
+        const portfolios = await storage.getPortfolios();
+        symbols = portfolios.flatMap((p) => p.positions?.map((pos) => pos.symbol) || []);
       }
       // For "all" scope, symbols remains undefined
+      
+      // Guard: if scope is not "all" but symbols array is empty, treat as "all" 
+      if (scope !== "all" && (!symbols || symbols.length === 0)) {
+        symbols = undefined; // This makes the backend treat it as "all" scope
+      }
       
       const { newsClusteringService } = await import("./news-clustering");
       const result = await newsClusteringService.getClusteredNews({
