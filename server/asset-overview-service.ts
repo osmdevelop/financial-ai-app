@@ -7,13 +7,13 @@ import {
 import { TechnicalIndicatorCalculator } from "./technical-indicators.js";
 import { ProbabilisticStatsCalculator } from "./probabilistic-stats.js";
 import { SupportResistanceCalculator } from "./support-resistance.js";
-import { AlphaVantageAPI } from "./alpha.js";
+import { alphaVantage } from "./alpha.js";
 
 export class AssetOverviewService {
-  private alphaVantage: AlphaVantageAPI;
+  private alphaVantage = alphaVantage;
 
   constructor() {
-    this.alphaVantage = new AlphaVantageAPI();
+    // alphaVantage instance is now imported and used directly
   }
 
   /**
@@ -255,17 +255,17 @@ export class AssetOverviewService {
       });
       
       const catalysts = newsData.headlines
-        .filter(headline => 
+        .filter((headline: any) => 
           headline.symbols?.includes(symbol) && 
           headline.impactLevel && 
           ["high", "medium"].includes(headline.impactLevel)
         )
         .slice(0, 5) // Top 5 catalysts
-        .map(headline => ({
+        .map((headline: any) => ({
           type: "news",
           title: headline.title,
           impact: headline.impactLevel as "high" | "medium" | "low",
-          date: headline.time_published
+          date: headline.published
         }));
 
       return catalysts;
