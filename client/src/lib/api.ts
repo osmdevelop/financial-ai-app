@@ -37,6 +37,14 @@ import type {
   TodayWrapRequest,
   TodayWrapResponse,
   FreshnessMetadata,
+  // Events Intelligence types
+  EventPrebriefRequest,
+  EventPrebriefResponse,
+  EventPostmortemRequest,
+  EventPostmortemResponse,
+  EventTranslateRequest,
+  EventTranslateResponse,
+  EventStudiesResponse,
 } from "@shared/schema";
 
 export const api = {
@@ -419,6 +427,32 @@ export const api = {
 
   async generateTodayWrap(request: TodayWrapRequest): Promise<{ data: TodayWrapResponse; meta: FreshnessMetadata }> {
     const res = await apiRequest("POST", "/api/today/wrap", request);
+    return res.json();
+  },
+
+  // Events Intelligence
+  async getEventsUpcoming(days: number = 14): Promise<{ data: any[]; meta: FreshnessMetadata }> {
+    const res = await apiRequest("GET", `/api/events/upcoming?days=${days}`);
+    return res.json();
+  },
+
+  async postEventsPrebrief(request: EventPrebriefRequest): Promise<{ data: EventPrebriefResponse; meta: FreshnessMetadata }> {
+    const res = await apiRequest("POST", "/api/events/prebrief", request);
+    return res.json();
+  },
+
+  async postEventsPostmortem(request: EventPostmortemRequest): Promise<{ data: EventPostmortemResponse; meta: FreshnessMetadata }> {
+    const res = await apiRequest("POST", "/api/events/postmortem", request);
+    return res.json();
+  },
+
+  async getEventsStudies(event: string): Promise<{ data: EventStudiesResponse; meta: FreshnessMetadata }> {
+    const res = await apiRequest("GET", `/api/events/studies?event=${encodeURIComponent(event)}`);
+    return res.json();
+  },
+
+  async postEventsTranslate(request: EventTranslateRequest): Promise<{ data: EventTranslateResponse; meta: FreshnessMetadata }> {
+    const res = await apiRequest("POST", "/api/events/translate", request);
     return res.json();
   },
 };
