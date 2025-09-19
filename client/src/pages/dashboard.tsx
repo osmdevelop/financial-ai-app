@@ -389,7 +389,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <FocusAssetsPicker portfolioId={demoPortfolioId || ""} />
+              <FocusAssetsPicker portfolioId="default" />
             </CardContent>
           </Card>
         </div>
