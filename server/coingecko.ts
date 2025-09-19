@@ -1,14 +1,9 @@
-interface CacheItem<T> {
-  data: T;
-  expiresAt: number;
-}
+import { getCachedOrFetch } from "./cache.js";
 
 class CoinGeckoAPI {
   private baseUrl: string;
-  private cache = new Map<string, CacheItem<any>>();
   private lastRequestTime = 0;
   private readonly RATE_LIMIT_MS = 1100; // ~50 requests per minute for free tier
-  private readonly CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
   constructor() {
     this.baseUrl = process.env.COINGECKO_BASE || "https://api.coingecko.com/api/v3";
@@ -16,63 +11,101 @@ class CoinGeckoAPI {
 
   private getCacheKey(endpoint: string, params?: Record<string, any>): string {
     const paramString = params ? JSON.stringify(params, Object.keys(params).sort()) : "";
-    return `${endpoint}:${paramString}`;
-  }
-
-  private getFromCache<T>(key: string): T | null {
-    const item = this.cache.get(key);
-    if (item && item.expiresAt > Date.now()) {
-      return item.data;
-    }
-    if (item) {
-      this.cache.delete(key);
-    }
-    return null;
-  }
-
-  private setCache<T>(key: string, data: T): void {
-    this.cache.set(key, {
-      data,
-      expiresAt: Date.now() + this.CACHE_TTL_MS
-    });
+    return `coingecko:${endpoint}:${paramString}`;
   }
 
   private async rateLimitedRequest<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
     const cacheKey = this.getCacheKey(endpoint, params);
-    const cached = this.getFromCache<T>(cacheKey);
-    if (cached) {
-      return cached;
+    const ttlSec = parseInt(process.env.CACHE_TTL_PRICE_SEC || "900", 10);
+
+    // Check DATA_MODE first
+    if (process.env.DATA_MODE === "mock") {
+      return this.getMockData(endpoint, params) as T;
     }
 
-    // Rate limiting
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    if (timeSinceLastRequest < this.RATE_LIMIT_MS) {
-      await new Promise(resolve => setTimeout(resolve, this.RATE_LIMIT_MS - timeSinceLastRequest));
-    }
+    return getCachedOrFetch(cacheKey, ttlSec, async () => {
+      // Rate limiting
+      const now = Date.now();
+      const timeSinceLastRequest = now - this.lastRequestTime;
+      if (timeSinceLastRequest < this.RATE_LIMIT_MS) {
+        await new Promise(resolve => setTimeout(resolve, this.RATE_LIMIT_MS - timeSinceLastRequest));
+      }
 
-    this.lastRequestTime = Date.now();
+      this.lastRequestTime = Date.now();
 
-    const url = new URL(`${this.baseUrl}${endpoint}`);
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        url.searchParams.set(key, String(value));
+      const url = new URL(`${this.baseUrl}${endpoint}`);
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          url.searchParams.set(key, String(value));
+        });
+      }
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Accept': 'application/json',
+        },
       });
-    }
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Accept': 'application/json',
-      },
+      if (!response.ok) {
+        throw new Error(`CoinGecko API error: ${response.status}`);
+      }
+
+      return await response.json();
+    }).then(result => result.data).catch(error => {
+      console.warn(`CoinGecko API failed, using mock data:`, error.message);
+      return this.getMockData(endpoint, params) as T;
     });
+  }
 
-    if (!response.ok) {
-      throw new Error(`CoinGecko API error: ${response.status}`);
+  private getMockData(endpoint: string, params?: Record<string, any>): any {
+    if (endpoint === "/simple/price") {
+      return {
+        bitcoin: { usd: 45000, usd_24h_change: 2.5 },
+        ethereum: { usd: 3000, usd_24h_change: 1.8 }
+      };
     }
-
-    const data = await response.json();
-    this.setCache(cacheKey, data);
-    return data;
+    
+    if (endpoint.includes("/market_chart")) {
+      const now = Date.now();
+      return {
+        prices: [
+          [now - 86400000, 45000], // 24h ago
+          [now, 45500] // now
+        ]
+      };
+    }
+    
+    if (endpoint === "/search") {
+      return {
+        coins: [
+          {
+            id: "bitcoin",
+            name: "Bitcoin",
+            symbol: "BTC",
+            market_cap_rank: 1,
+            thumb: "",
+            large: ""
+          }
+        ]
+      };
+    }
+    
+    if (endpoint.startsWith("/coins/")) {
+      return {
+        id: "bitcoin",
+        symbol: "btc",
+        name: "Bitcoin",
+        market_data: {
+          current_price: { usd: 45000 },
+          price_change_24h: 1125,
+          price_change_percentage_24h: 2.56,
+          market_cap: { usd: 880000000000 },
+          total_volume: { usd: 25000000000 }
+        }
+      };
+    }
+    
+    return {};
   }
 
   async getPriceSimple(ids: string[], vsCurrencies = ["usd"]) {

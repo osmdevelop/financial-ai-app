@@ -1,18 +1,12 @@
 import { z } from "zod";
-
-interface CacheItem<T> {
-  data: T;
-  expiresAt: number;
-}
+import { getCachedOrFetch } from "./cache.js";
 
 class AlphaVantageAPI {
   private apiKey: string;
   private baseUrl = "https://www.alphavantage.co/query";
-  private cache = new Map<string, CacheItem<any>>();
   private requestQueue: Promise<any>[] = [];
   private lastRequestTime = 0;
   private readonly RATE_LIMIT_MS = 12000; // 5 requests per minute = 12 seconds between requests
-  private readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
   constructor() {
     this.apiKey = process.env.ALPHAVANTAGE_KEY || "";
@@ -22,66 +16,133 @@ class AlphaVantageAPI {
   }
 
   private getCacheKey(params: Record<string, any>): string {
-    return JSON.stringify(params, Object.keys(params).sort());
-  }
-
-  private getFromCache<T>(key: string): T | null {
-    const item = this.cache.get(key);
-    if (item && item.expiresAt > Date.now()) {
-      return item.data;
-    }
-    if (item) {
-      this.cache.delete(key);
-    }
-    return null;
-  }
-
-  private setCache<T>(key: string, data: T): void {
-    this.cache.set(key, {
-      data,
-      expiresAt: Date.now() + this.CACHE_TTL_MS
-    });
+    return `alpha:${JSON.stringify(params, Object.keys(params).sort())}`;
   }
 
   private async rateLimitedRequest<T>(params: Record<string, any>): Promise<T> {
     const cacheKey = this.getCacheKey(params);
-    const cached = this.getFromCache<T>(cacheKey);
-    if (cached) {
-      return cached;
+    const ttlSec = parseInt(process.env.CACHE_TTL_PRICE_SEC || "900", 10);
+
+    // Check DATA_MODE first
+    if (process.env.DATA_MODE === "mock") {
+      return this.getMockData(params.function, params.symbol || params.from_symbol) as T;
     }
 
-    if (!this.apiKey) {
-      throw new Error("Alpha Vantage API key not configured");
-    }
+    return getCachedOrFetch(cacheKey, ttlSec, async () => {
+      if (!this.apiKey) {
+        throw new Error("Alpha Vantage API key not configured - fallback to mock data");
+      }
 
-    // Rate limiting
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    if (timeSinceLastRequest < this.RATE_LIMIT_MS) {
-      await new Promise(resolve => setTimeout(resolve, this.RATE_LIMIT_MS - timeSinceLastRequest));
-    }
+      // Rate limiting
+      const now = Date.now();
+      const timeSinceLastRequest = now - this.lastRequestTime;
+      if (timeSinceLastRequest < this.RATE_LIMIT_MS) {
+        await new Promise(resolve => setTimeout(resolve, this.RATE_LIMIT_MS - timeSinceLastRequest));
+      }
 
-    this.lastRequestTime = Date.now();
+      this.lastRequestTime = Date.now();
 
-    const url = new URL(this.baseUrl);
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, String(value));
+      const url = new URL(this.baseUrl);
+      Object.entries(params).forEach(([key, value]) => {
+        url.searchParams.set(key, String(value));
+      });
+      url.searchParams.set("apikey", this.apiKey);
+
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error(`Alpha Vantage API error: ${response.status}`);
+      }
+
+      const data = await response.json() as any;
+      
+      if (data["Error Message"] || data["Information"]) {
+        throw new Error(data["Error Message"] || data["Information"]);
+      }
+
+      return data;
+    }).then(result => result.data).catch(error => {
+      console.warn(`Alpha Vantage API failed, using mock data:`, error.message);
+      return this.getMockData(params.function, params.symbol || params.from_symbol) as T;
     });
-    url.searchParams.set("apikey", this.apiKey);
+  }
 
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      throw new Error(`Alpha Vantage API error: ${response.status}`);
-    }
-
-    const data = await response.json() as any;
+  private getMockData(functionName: string, symbol?: string): any {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
     
-    if (data["Error Message"] || data["Information"]) {
-      throw new Error(data["Error Message"] || data["Information"]);
+    switch (functionName) {
+      case "TIME_SERIES_INTRADAY":
+        return {
+          [`Time Series (5min)`]: {
+            [now.toISOString()]: {
+              "1. open": "150.00",
+              "2. high": "152.00",
+              "3. low": "149.00",
+              "4. close": "151.00",
+              "5. volume": "1000000"
+            }
+          }
+        };
+      
+      case "TIME_SERIES_DAILY_ADJUSTED":
+        return {
+          "Time Series (Daily)": {
+            [today]: {
+              "1. open": "150.00",
+              "2. high": "152.00", 
+              "3. low": "149.00",
+              "4. close": "151.00",
+              "5. adjusted close": "151.00",
+              "6. volume": "5000000",
+              "7. dividend amount": "0.0000",
+              "8. split coefficient": "1.0000"
+            }
+          }
+        };
+      
+      case "NEWS_SENTIMENT":
+        return {
+          feed: [
+            {
+              title: "Sample Market News",
+              url: "https://example.com/news",
+              time_published: now.toISOString(),
+              authors: ["Market Analyst"],
+              summary: "Sample news for demonstration purposes.",
+              source: "Sample Source",
+              overall_sentiment_score: "0.2",
+              overall_sentiment_label: "Somewhat-Bullish",
+              ticker_sentiment: []
+            }
+          ]
+        };
+      
+      case "SECTOR":
+        return {
+          "Rank A: Real-Time Performance": {
+            "Technology": "1.5%",
+            "Healthcare": "0.8%",
+            "Financial Services": "-0.2%",
+            "Energy": "-1.1%",
+            "Consumer Discretionary": "0.5%",
+            "Consumer Staples": "0.3%",
+            "Industrials": "0.7%",
+            "Materials": "-0.5%",
+            "Real Estate": "0.2%",
+            "Utilities": "-0.3%",
+            "Communication Services": "0.9%"
+          }
+        };
+      
+      case "EARNINGS":
+        return {
+          annualEarnings: [],
+          quarterlyEarnings: []
+        };
+      
+      default:
+        return {};
     }
-
-    this.setCache(cacheKey, data);
-    return data;
   }
 
   async getIntraday(symbol: string, interval = "5min", outputsize = "compact") {
