@@ -168,6 +168,11 @@ const headlineImpactSchema = z.object({
   symbols: z.array(z.string()).default([]),
 });
 
+// Schema for today wrap generation
+const todayWrapSchema = z.object({
+  contextNote: z.string().optional(),
+});
+
 const recapSummarizeSchema = z.object({
   recapPayload: z.any(),
 });
@@ -1750,6 +1755,178 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Headline impact analysis error:", error);
       res.status(500).json({ error: "Failed to analyze headline impact" });
+    }
+  });
+
+  // Shared function to get today's market overview data
+  async function getTodayOverviewData(useMock: boolean = false) {
+    const { SentimentAnalyzer } = await import("./sentiment");
+    const { createLiveFreshness, createFallbackFreshness } = await import("./freshness");
+
+    try {
+      if (useMock) {
+        throw new Error("Mock mode requested");
+      }
+
+      // Use the sentiment analyzer as the market drivers system
+      const sentimentAnalyzer = new SentimentAnalyzer();
+      const marketIndex = await sentimentAnalyzer.calculateSentimentIndex();
+
+      // Transform the sentiment index into market drivers format
+      const todayOverview = {
+        overallIndex: marketIndex.score,
+        regime: marketIndex.regime,
+        change: marketIndex.change,
+        subscores: marketIndex.subscores.map(subscore => ({
+          name: subscore.name,
+          score: subscore.score,
+          weight: subscore.weight,
+          change: subscore.change || 0,
+          trend: subscore.trend
+        })),
+        drivers: marketIndex.drivers.map(driver => ({
+          label: driver.label,
+          value: driver.value,
+          contribution: driver.contribution,
+          note: driver.note
+        })),
+        as_of: marketIndex.as_of
+      };
+
+      const freshness = createLiveFreshness("Market Data APIs", 5);
+      return { data: todayOverview, freshness };
+    } catch (error) {
+      console.error("Market overview data error:", error);
+      
+      // Fallback to mock data
+      const mockOverview = {
+        overallIndex: 65,
+        regime: "Risk-On",
+        change: 3,
+        subscores: [
+          { name: "Risk Appetite", score: 72, weight: 0.4, change: 5, trend: "up" },
+          { name: "Credit Conditions", score: 58, weight: 0.25, change: -2, trend: "down" },
+          { name: "Volatility Environment", score: 63, weight: 0.35, change: 1, trend: "neutral" }
+        ],
+        drivers: [
+          { label: "Equity Performance", value: 1.2, contribution: 29, note: "SPY: +1.1%, QQQ: +1.4%, IWM: +1.0%" },
+          { label: "Credit Conditions", value: -0.3, contribution: 15, note: "HYG underperformance vs LQD: -0.3%" },
+          { label: "Market Volatility", value: 18.5, contribution: 22, note: "10-day realized volatility: 18.5% (lower is better)" }
+        ],
+        as_of: new Date().toISOString()
+      };
+      
+      const fallbackFreshness = createFallbackFreshness("API service unavailable");
+      return { data: mockOverview, freshness: fallbackFreshness };
+    }
+  }
+
+  // Today Market Drivers endpoints
+  app.get("/api/today/overview", async (req, res) => {
+    try {
+      const { withFreshness } = await import("./freshness");
+      
+      // Honor DATA_MODE configuration
+      const dataMode = process.env.DATA_MODE || "live";
+      const forceMock = dataMode === "mock";
+      
+      const { data: todayOverview, freshness } = await getTodayOverviewData(forceMock);
+      res.json(withFreshness(todayOverview, freshness));
+    } catch (error) {
+      console.error("Today overview endpoint error:", error);
+      res.status(500).json({ error: "Failed to get today's market overview" });
+    }
+  });
+
+  app.post("/api/today/wrap", async (req, res) => {
+    try {
+      const { contextNote } = todayWrapSchema.parse(req.body);
+      const { withFreshness, createLiveFreshness, createFallbackFreshness } = await import("./freshness");
+      
+      // Honor DATA_MODE configuration
+      const dataMode = process.env.DATA_MODE || "live";
+      const forceMock = dataMode === "mock";
+
+      // Get the current market overview data directly (no HTTP call)
+      const { data: marketOverview } = await getTodayOverviewData(forceMock);
+
+      // Generate market wrap
+      let wrapData;
+      let freshness;
+
+      // Check if OpenAI API key is available and not in mock mode
+      if (!process.env.OPENAI_API_KEY || forceMock) {
+        // Mock wrap response
+        wrapData = {
+          summary: `Market sentiment stands at ${marketOverview.overallIndex}/100 in ${marketOverview.regime} territory. Today's session reflects ${marketOverview.change > 0 ? 'improved' : marketOverview.change < 0 ? 'weakened' : 'stable'} risk appetite with equity markets showing ${marketOverview.drivers[0]?.note || 'mixed performance'}. Credit conditions remain ${marketOverview.subscores.find((s: any) => s.name.includes('Credit'))?.trend || 'stable'} while volatility continues ${marketOverview.subscores.find((s: any) => s.name.includes('Volatility'))?.trend || 'unchanged'}.`,
+          keyHighlights: [
+            `Overall market regime: ${marketOverview.regime}`,
+            `Risk appetite ${marketOverview.subscores.find((s: any) => s.name.includes('Risk'))?.trend === 'up' ? 'strengthening' : marketOverview.subscores.find((s: any) => s.name.includes('Risk'))?.trend === 'down' ? 'weakening' : 'stable'}`,
+            `Volatility environment: ${marketOverview.drivers.find((d: any) => d.label.includes('Volatility'))?.note || 'Within normal ranges'}`
+          ],
+          disclaimer: "This is an informational analysis only and not investment advice.",
+          as_of: new Date().toISOString()
+        };
+        freshness = createFallbackFreshness(forceMock ? "Mock mode enabled" : "OpenAI API key not available");
+      } else {
+        // Use real OpenAI API for market wrap
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        
+        const systemPrompt = `You are a professional financial market analyst. Generate a concise, professional market wrap based on today's market drivers data. Focus on the overall sentiment, key drivers, and regime. Keep it informational and avoid investment advice. Today's date is ${new Date().toLocaleDateString()}.`;
+        
+        const userPrompt = `Based on this market data, provide a professional market wrap:
+
+Overall Index: ${marketOverview.overallIndex}/100 (${marketOverview.regime})
+Day-over-day change: ${marketOverview.change > 0 ? '+' : ''}${marketOverview.change}
+
+Key Drivers:
+${marketOverview.drivers.map((d: any) => `- ${d.label}: ${d.note}`).join('\n')}
+
+Subscores:
+${marketOverview.subscores.map((s: any) => `- ${s.name}: ${s.score}/100 (${s.trend}, change: ${s.change > 0 ? '+' : ''}${s.change})`).join('\n')}
+
+${contextNote ? `Additional context: ${contextNote}` : ''}
+
+Provide response in JSON format: { "summary": "...", "keyHighlights": ["...", "...", "..."], "disclaimer": "...", "as_of": "..." }`;
+
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          response_format: { type: "json_object" }
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+        result.as_of = new Date().toISOString();
+        wrapData = result;
+        freshness = createLiveFreshness("OpenAI GPT-4o-mini", 30);
+      }
+      
+      res.json(withFreshness(wrapData, freshness));
+      
+    } catch (error) {
+      console.error("Today wrap generation error:", error);
+      
+      try {
+        // Emergency fallback
+        const { withFreshness, createFallbackFreshness } = await import("./freshness");
+        const emergencyWrap = {
+          summary: "Market analysis temporarily unavailable. Please try again in a few minutes.",
+          keyHighlights: [
+            "System is experiencing technical difficulties",
+            "Market data services may be temporarily offline",
+            "Normal service will resume shortly"
+          ],
+          disclaimer: "This is an informational message only and not investment advice.",
+          as_of: new Date().toISOString()
+        };
+        const fallbackFreshness = createFallbackFreshness("Emergency fallback");
+        res.json(withFreshness(emergencyWrap, fallbackFreshness));
+      } catch (fallbackError) {
+        res.status(500).json({ error: "Failed to generate market wrap" });
+      }
     }
   });
 
