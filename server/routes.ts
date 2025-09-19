@@ -10,6 +10,10 @@ import {
   insertFocusAssetSchema,
   insertUserPrefsSchema,
   insertAlertSchema,
+  // Events Intelligence schemas
+  eventPrebriefRequestSchema,
+  eventPostmortemRequestSchema,
+  eventTranslateRequestSchema,
 } from "@shared/schema";
 import { spawn } from "child_process";
 import { z } from "zod";
@@ -171,6 +175,15 @@ const headlineImpactSchema = z.object({
 // Schema for today wrap generation
 const todayWrapSchema = z.object({
   contextNote: z.string().optional(),
+});
+
+// Events Intelligence schemas
+const eventsUpcomingSchema = z.object({
+  days: z.string().optional().default("14").transform(val => parseInt(val)),
+});
+
+const eventsStudiesSchema = z.object({
+  event: z.string(),
 });
 
 const recapSummarizeSchema = z.object({
@@ -1927,6 +1940,372 @@ Provide response in JSON format: { "summary": "...", "keyHighlights": ["...", ".
       } catch (fallbackError) {
         res.status(500).json({ error: "Failed to generate market wrap" });
       }
+    }
+  });
+
+  // Events Intelligence utility function
+  async function loadEventsData() {
+    try {
+      const eventsPath = path.join(process.cwd(), 'infra/dev/events.sample.json');
+      const data = await fs.readFile(eventsPath, 'utf8');
+      return JSON.parse(data);
+    } catch (error) {
+      console.error("Failed to load events sample data:", error);
+      return null;
+    }
+  }
+
+  // Events Intelligence endpoints
+  
+  // GET /api/events/upcoming?days=14
+  app.get("/api/events/upcoming", async (req, res) => {
+    try {
+      const { days } = eventsUpcomingSchema.parse(req.query);
+      const { withFreshness, createLiveFreshness, createFallbackFreshness } = await import("./freshness");
+      
+      // Honor DATA_MODE configuration
+      const dataMode = process.env.DATA_MODE || "live";
+      const forceMock = dataMode === "mock";
+      
+      let eventsData;
+      let freshness;
+      
+      if (forceMock || !process.env.OPENAI_API_KEY) {
+        // Load mock events data
+        const mockData = await loadEventsData();
+        if (!mockData) {
+          throw new Error("Failed to load mock events data");
+        }
+        
+        // Filter events to upcoming ones within the specified days
+        const now = new Date();
+        const futureDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+        
+        eventsData = mockData.upcoming_events.filter((event: any) => {
+          const eventDate = new Date(event.timestamp);
+          return eventDate >= now && eventDate <= futureDate;
+        });
+        
+        freshness = createFallbackFreshness(forceMock ? "Mock mode enabled" : "No real economic calendar provider configured");
+      } else {
+        // For now, use mock data even in live mode since AV lacks full econ calendar
+        const mockData = await loadEventsData();
+        if (!mockData) {
+          throw new Error("Failed to load mock events data");
+        }
+        
+        const now = new Date();
+        const futureDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+        
+        eventsData = mockData.upcoming_events.filter((event: any) => {
+          const eventDate = new Date(event.timestamp);
+          return eventDate >= now && eventDate <= futureDate;
+        });
+        
+        freshness = createLiveFreshness("Mock Economic Calendar", 60); // 1 hour cache
+      }
+      
+      res.json(withFreshness(eventsData, freshness));
+      
+    } catch (error) {
+      console.error("Events upcoming error:", error);
+      res.status(500).json({ error: "Failed to fetch upcoming events" });
+    }
+  });
+
+  // POST /api/events/prebrief
+  app.post("/api/events/prebrief", async (req, res) => {
+    try {
+      const { eventPayload } = eventPrebriefRequestSchema.parse(req.body);
+      const { withFreshness, createLiveFreshness, createFallbackFreshness } = await import("./freshness");
+      
+      // Honor DATA_MODE configuration
+      const dataMode = process.env.DATA_MODE || "live";
+      const forceMock = dataMode === "mock";
+      
+      let prebriefData;
+      let freshness;
+      
+      if (!process.env.OPENAI_API_KEY || forceMock) {
+        // Mock prebrief response
+        prebriefData = {
+          consensus: `Market consensus for ${eventPayload.event} is ${eventPayload.forecast || 'not available'}. Previous reading was ${eventPayload.previous || 'N/A'}.`,
+          risks: [
+            "Economic data surprise could trigger volatility",
+            "Market positioning may amplify reaction",
+            "Cross-asset correlations could spread impact"
+          ],
+          watchPoints: [
+            "Initial market reaction in first 15 minutes",
+            "Bond market response to data release",
+            "Currency pair movements vs major crosses"
+          ],
+          sensitiveAssets: ["SPY", "QQQ", "TLT", "DXY", "EURUSD"],
+          as_of: new Date().toISOString()
+        };
+        freshness = createFallbackFreshness(forceMock ? "Mock mode enabled" : "OpenAI API key not available");
+      } else {
+        // Use real OpenAI API for prebrief
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        
+        const systemPrompt = `You are a professional financial market analyst providing pre-event briefings for economic releases. Focus on consensus expectations, risk factors, key things to watch, and assets likely to be sensitive to the event. Keep it practical and actionable for traders and investors.`;
+        
+        const userPrompt = `Provide a pre-event briefing for: ${eventPayload.event}
+        
+Event Details:
+- Forecast: ${eventPayload.forecast || 'N/A'}
+- Previous: ${eventPayload.previous || 'N/A'}  
+- Importance: ${eventPayload.importance}
+- Category: ${eventPayload.category}
+- Timestamp: ${eventPayload.timestamp}
+
+Provide analysis in JSON format: { 
+  "consensus": "...", 
+  "risks": ["...", "...", "..."], 
+  "watchPoints": ["...", "...", "..."], 
+  "sensitiveAssets": ["...", "...", "..."],
+  "as_of": "..." 
+}`;
+
+        const response = await openai.chat.completions.create({
+          model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          response_format: { type: "json_object" }
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+        result.as_of = new Date().toISOString();
+        prebriefData = result;
+        freshness = createLiveFreshness("OpenAI GPT-5", 60); // 1 hour cache
+      }
+      
+      res.json(withFreshness(prebriefData, freshness));
+      
+    } catch (error) {
+      console.error("Events prebrief error:", error);
+      res.status(500).json({ error: "Failed to generate event prebrief" });
+    }
+  });
+
+  // POST /api/events/postmortem
+  app.post("/api/events/postmortem", async (req, res) => {
+    try {
+      const { eventPayload } = eventPostmortemRequestSchema.parse(req.body);
+      const { withFreshness, createLiveFreshness, createFallbackFreshness } = await import("./freshness");
+      
+      // Honor DATA_MODE configuration
+      const dataMode = process.env.DATA_MODE || "live";
+      const forceMock = dataMode === "mock";
+      
+      let postmortemData;
+      let freshness;
+      
+      if (!process.env.OPENAI_API_KEY || forceMock) {
+        // Mock postmortem response
+        const forecast = eventPayload.forecast || 0;
+        const actual = eventPayload.actual;
+        const deviation = actual - forecast;
+        const outcome = Math.abs(deviation) < 0.1 ? "inline" : actual > forecast ? "beat" : "miss";
+        
+        postmortemData = {
+          outcome,
+          analysis: `${eventPayload.event} came in at ${actual} vs forecast of ${forecast}, representing a ${outcome}. The ${Math.abs(deviation)} deviation ${deviation > 0 ? 'above' : 'below'} expectations is ${Math.abs(deviation) > 0.2 ? 'significant' : 'modest'}.`,
+          marketReaction: "Initial market reaction was muted with equity futures showing minimal movement. Bond yields ticked slightly higher reflecting the data print.",
+          followThrough: "Markets are likely to focus on the underlying trends rather than the headline number. Watch for sustained moves beyond initial reaction.",
+          implications: [
+            "Federal Reserve policy path expectations may adjust slightly",
+            "Market volatility could increase in related asset classes",
+            "Cross-asset correlation patterns may shift temporarily"
+          ],
+          as_of: new Date().toISOString()
+        };
+        freshness = createFallbackFreshness(forceMock ? "Mock mode enabled" : "OpenAI API key not available");
+      } else {
+        // Use real OpenAI API for postmortem
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        
+        const systemPrompt = `You are a professional financial market analyst providing post-event analysis for economic releases. Analyze whether the data beat, missed, or came in line with expectations, assess market reaction, and discuss follow-through implications. Keep it practical and focused on market impact.`;
+        
+        const userPrompt = `Provide a post-event analysis for: ${eventPayload.event}
+        
+Event Results:
+- Actual: ${eventPayload.actual}
+- Forecast: ${eventPayload.forecast || 'N/A'}
+- Previous: ${eventPayload.previous || 'N/A'}
+- Importance: ${eventPayload.importance}
+- Category: ${eventPayload.category}
+- Timestamp: ${eventPayload.timestamp}
+
+Provide analysis in JSON format: { 
+  "outcome": "beat|miss|inline", 
+  "analysis": "...", 
+  "marketReaction": "...", 
+  "followThrough": "...",
+  "implications": ["...", "...", "..."],
+  "as_of": "..." 
+}`;
+
+        const response = await openai.chat.completions.create({
+          model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          response_format: { type: "json_object" }
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+        result.as_of = new Date().toISOString();
+        postmortemData = result;
+        freshness = createLiveFreshness("OpenAI GPT-5", 60); // 1 hour cache
+      }
+      
+      res.json(withFreshness(postmortemData, freshness));
+      
+    } catch (error) {
+      console.error("Events postmortem error:", error);
+      res.status(500).json({ error: "Failed to generate event postmortem" });
+    }
+  });
+
+  // GET /api/events/studies?event=CPI  
+  app.get("/api/events/studies", async (req, res) => {
+    try {
+      const { event } = eventsStudiesSchema.parse(req.query);
+      const { withFreshness, createLiveFreshness, createFallbackFreshness } = await import("./freshness");
+      
+      // Honor DATA_MODE configuration
+      const dataMode = process.env.DATA_MODE || "live";
+      const forceMock = dataMode === "mock";
+      
+      let studiesData;
+      let freshness;
+      
+      if (forceMock || !process.env.OPENAI_API_KEY) {
+        // Load mock historical dates
+        const mockData = await loadEventsData();
+        if (!mockData) {
+          throw new Error("Failed to load mock events data");
+        }
+        
+        const eventKey = event.toUpperCase();
+        const historicalDates = mockData.historical_event_dates[eventKey] || [];
+        
+        // Generate mock drift analysis
+        studiesData = {
+          event,
+          historicalDates,
+          driftAnalysis: {
+            preDays: 5,
+            postDays: 5,
+            avgReturn: eventKey === "CPI" ? -0.15 : eventKey === "NFP" ? 0.25 : 0.05,
+            winRate: eventKey === "CPI" ? 0.35 : eventKey === "NFP" ? 0.65 : 0.50,
+            maxDrawdown: eventKey === "CPI" ? -2.1 : eventKey === "NFP" ? -1.8 : -1.5,
+            maxUpward: eventKey === "CPI" ? 1.8 : eventKey === "NFP" ? 2.4 : 1.9,
+          },
+          as_of: new Date().toISOString()
+        };
+        freshness = createFallbackFreshness(forceMock ? "Mock mode enabled" : "No live event study provider configured");
+      } else {
+        // For now, use mock data for event studies since we don't have live provider
+        const mockData = await loadEventsData();
+        if (!mockData) {
+          throw new Error("Failed to load mock events data");
+        }
+        
+        const eventKey = event.toUpperCase();
+        const historicalDates = mockData.historical_event_dates[eventKey] || [];
+        
+        studiesData = {
+          event,
+          historicalDates,
+          driftAnalysis: {
+            preDays: 5,
+            postDays: 5,
+            avgReturn: eventKey === "CPI" ? -0.15 : eventKey === "NFP" ? 0.25 : 0.05,
+            winRate: eventKey === "CPI" ? 0.35 : eventKey === "NFP" ? 0.65 : 0.50,
+            maxDrawdown: eventKey === "CPI" ? -2.1 : eventKey === "NFP" ? -1.8 : -1.5,
+            maxUpward: eventKey === "CPI" ? 1.8 : eventKey === "NFP" ? 2.4 : 1.9,
+          },
+          as_of: new Date().toISOString()
+        };
+        freshness = createLiveFreshness("Mock Event Studies", 240); // 4 hour cache
+      }
+      
+      res.json(withFreshness(studiesData, freshness));
+      
+    } catch (error) {
+      console.error("Events studies error:", error);
+      res.status(500).json({ error: "Failed to fetch event studies" });
+    }
+  });
+
+  // POST /api/events/translate
+  app.post("/api/events/translate", async (req, res) => {
+    try {
+      const { text } = eventTranslateRequestSchema.parse(req.body);
+      const { withFreshness, createLiveFreshness, createFallbackFreshness } = await import("./freshness");
+      
+      // Honor DATA_MODE configuration
+      const dataMode = process.env.DATA_MODE || "live";
+      const forceMock = dataMode === "mock";
+      
+      let translationData;
+      let freshness;
+      
+      if (!process.env.OPENAI_API_KEY || forceMock) {
+        // Mock translation response
+        translationData = {
+          original: text,
+          translation: "The Federal Reserve is carefully watching economic indicators to determine the appropriate path for monetary policy. They want to balance supporting economic growth with keeping inflation under control.",
+          keyTerms: [
+            { term: "monetary policy", explanation: "Actions taken by central banks to influence economic activity" },
+            { term: "inflation expectations", explanation: "What people think inflation will be in the future" },
+            { term: "dovish/hawkish", explanation: "Dovish means favoring lower rates, hawkish means favoring higher rates" }
+          ],
+          tone: "cautiously optimistic",
+          as_of: new Date().toISOString()
+        };
+        freshness = createFallbackFreshness(forceMock ? "Mock mode enabled" : "OpenAI API key not available");
+      } else {
+        // Use real OpenAI API for Fed translator
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        
+        const systemPrompt = `You are a "Fed translator" that converts complex central bank and financial jargon into plain English that regular people can understand. Break down technical terms, explain what they mean in practice, and identify the overall tone. Make it accessible without losing important meaning.`;
+        
+        const userPrompt = `Translate this central bank/financial text into plain English: "${text}"
+
+Provide response in JSON format: { 
+  "original": "${text}", 
+  "translation": "...", 
+  "keyTerms": [{"term": "...", "explanation": "..."}, ...], 
+  "tone": "...",
+  "as_of": "..." 
+}`;
+
+        const response = await openai.chat.completions.create({
+          model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          response_format: { type: "json_object" }
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+        result.as_of = new Date().toISOString();
+        translationData = result;
+        freshness = createLiveFreshness("OpenAI GPT-5", 30); // 30 minute cache
+      }
+      
+      res.json(withFreshness(translationData, freshness));
+      
+    } catch (error) {
+      console.error("Events translate error:", error);
+      res.status(500).json({ error: "Failed to translate text" });
     }
   });
 
