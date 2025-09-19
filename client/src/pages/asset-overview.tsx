@@ -312,7 +312,7 @@ export default function AssetOverview() {
                     </div>
                   </div>
                   <Badge variant="secondary" className="text-sm px-3 py-1">
-                    {overview.freshness.sourceName}
+                    {overview.freshness?.sourceName || "Data Source"}
                   </Badge>
                 </div>
 
@@ -336,10 +336,10 @@ export default function AssetOverview() {
                   <div>
                     <div className="text-sm text-muted-foreground mb-1">Market Status</div>
                     <Badge 
-                      variant={overview.freshness.freshness === "realtime" ? "default" : "secondary"}
+                      variant={overview.freshness?.freshness === "realtime" ? "default" : "secondary"}
                       className="text-sm"
                     >
-                      {overview.freshness.freshness === "realtime" ? "Live" : "Delayed"}
+                      {overview.freshness?.freshness === "realtime" ? "Live" : "Delayed"}
                     </Badge>
                   </div>
                 </div>
@@ -389,14 +389,14 @@ export default function AssetOverview() {
                   className="space-y-4"
                 >
                   <TabsList className="grid w-full grid-cols-6">
-                    {Object.keys(overview.ohlcData).map((timeframe) => (
+                    {Object.keys(overview.ohlcData || {}).map((timeframe) => (
                       <TabsTrigger key={timeframe} value={timeframe} data-testid={`tab-${timeframe}`}>
                         {timeframe}
                       </TabsTrigger>
                     ))}
                   </TabsList>
 
-                  {Object.entries(overview.ohlcData).map(([timeframe, data]) => (
+                  {Object.entries(overview.ohlcData || {}).map(([timeframe, data]) => (
                     <TabsContent key={timeframe} value={timeframe} className="space-y-4">
                       <div className="h-64 bg-muted/20 rounded-lg flex items-center justify-center">
                         <div className="text-center text-muted-foreground">
