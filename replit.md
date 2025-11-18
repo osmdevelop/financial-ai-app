@@ -16,6 +16,11 @@ This is a full-stack market intelligence and research platform built as a monore
 2. **Policy Sensitivity Labels**: Assets in the policy-sensitive table now display color-coded sensitivity badges (Low/Moderate/High) based on correlation thresholds (>0.7 = High, 0.5-0.7 = Moderate, <0.5 = Low) and rolling impact calculations.
 3. **Policy Context in AI Insights**: The `/insights` page now fetches Trump Index and Fedspeak data to enrich AI analysis prompts. Template buttons for policy-related questions ("Policy risk impact", "Policy-sensitive assets") provide quick access to contextual analysis. AI responses incorporate current policy risk levels, sensitive asset exposure, and Fed tone when answering user queries.
 
+**Policy Integration Features (November 18, 2025)**:
+1. **Portfolio Policy Exposure Card**: Added to `/today` page showing portfolio-level breakdown of policy-sensitive holdings. Displays High/Moderate/Low sensitivity counts, total exposure percentage, and top 3 sensitive holdings with their values and correlation strength.
+2. **Asset Overview Policy Impact Panel**: Added to `/asset-overview` page detecting policy-sensitive assets and displaying correlation scores, relevant policy topics, AI-generated mini-summary, and recent policy headlines. Shows "No significant policy sensitivity" message for non-sensitive assets.
+3. **AI Insights Policy Templates**: Added 3 preset policy-aware template buttons to `/insights` page: "How did policy affect my portfolio today?", "Explain my policy-sensitive holdings", and "Is Fed tone influencing markets today?". Templates pre-fill the insights textarea with detailed prompts that incorporate current Trump Index, Fedspeak tone, and sensitive asset data.
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
