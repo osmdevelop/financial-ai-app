@@ -296,6 +296,10 @@ export type Headline = {
   analyzed: boolean;
   impactJson?: string;
   createdAt: string;
+  // Policy metadata
+  isPolicy?: boolean;
+  policyTopics?: string[];
+  policyIntensity?: number; // 0-1
 };
 
 export type HeadlineImpact = {
@@ -867,3 +871,28 @@ export const policyTopicsSchema = z.object({
 export type TrumpIndexResponse = z.infer<typeof trumpIndexResponseSchema>;
 export type FedspeakResponse = z.infer<typeof fedspeakResponseSchema>;
 export type PolicyTopics = z.infer<typeof policyTopicsSchema>;
+
+// Alert System
+export const alertSchema = z.object({
+  id: z.string(),
+  portfolioId: z.string().optional(),
+  type: z.enum(["price", "pct", "earnings", "sentiment", "policy_index", "fedspeak_regime"]),
+  symbol: z.string().nullable(),
+  threshold: z.number().nullable(),
+  direction: z.enum(["above", "below", "crosses"]).nullable(),
+  meta: z.record(z.any()).nullable(), // for storing previousRegime, etc.
+  enabled: z.boolean(),
+  lastTriggered: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const insertAlertSchema = alertSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastTriggered: true,
+});
+
+export type Alert = z.infer<typeof alertSchema>;
+export type InsertAlert = z.infer<typeof insertAlertSchema>;

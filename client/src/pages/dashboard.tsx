@@ -8,6 +8,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, Rocket, Activity } from "lucide-react";
+import { PolicySnapshotCard } from "@/components/dashboard/PolicySnapshotCard";
 import { formatCurrency, formatPercent } from "@/lib/constants";
 import {
   LineChart,
@@ -283,6 +284,11 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
+        </div>
+
+        {/* Policy Snapshot Card */}
+        <div className="mb-4 sm:mb-6 lg:mb-8">
+          <PolicySnapshotCard />
         </div>
 
         {/* Charts Section */}

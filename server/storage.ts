@@ -16,6 +16,8 @@ import {
   MarketRecapSummary,
   HeadlineImpactAnalysis,
   EnhancedSentimentIndex,
+  Alert,
+  InsertAlert,
   prices,
   watchlist
 } from "@shared/schema";
@@ -67,6 +69,14 @@ export interface IStorage {
   
   // Phase 4 - Enhanced Sentiment Index
   getEnhancedSentimentIndex(): Promise<EnhancedSentimentIndex>;
+  
+  // Alert methods
+  createAlert(alert: InsertAlert): Promise<Alert>;
+  getAlerts(portfolioId?: string): Promise<Alert[]>;
+  getAlert(id: string): Promise<Alert | null>;
+  updateAlert(id: string, updates: Partial<Alert>): Promise<Alert | null>;
+  deleteAlert(id: string): Promise<void>;
+  getEnabledAlerts(): Promise<Alert[]>;
   
   // Initialize sample data
   initializeSampleData(): Promise<void>;
@@ -555,6 +565,55 @@ export class DatabaseStorage implements IStorage {
         vsLastWeek: (Math.random() - 0.5) * 20, // -10 to +10 points
       },
     };
+  }
+
+  // Alert methods (in-memory storage)
+  private alerts: Alert[] = [];
+
+  async createAlert(alert: InsertAlert): Promise<Alert> {
+    const newAlert: Alert = {
+      ...alert,
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      lastTriggered: null,
+    };
+    this.alerts.push(newAlert);
+    return newAlert;
+  }
+
+  async getAlerts(portfolioId?: string): Promise<Alert[]> {
+    if (portfolioId) {
+      return this.alerts.filter(a => a.portfolioId === portfolioId);
+    }
+    return [...this.alerts];
+  }
+
+  async getAlert(id: string): Promise<Alert | null> {
+    return this.alerts.find(a => a.id === id) || null;
+  }
+
+  async updateAlert(id: string, updates: Partial<Alert>): Promise<Alert | null> {
+    const index = this.alerts.findIndex(a => a.id === id);
+    if (index === -1) return null;
+
+    this.alerts[index] = {
+      ...this.alerts[index],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    return this.alerts[index];
+  }
+
+  async deleteAlert(id: string): Promise<void> {
+    const index = this.alerts.findIndex(a => a.id === id);
+    if (index !== -1) {
+      this.alerts.splice(index, 1);
+    }
+  }
+
+  async getEnabledAlerts(): Promise<Alert[]> {
+    return this.alerts.filter(a => a.enabled);
   }
 
   async initializeSampleData(): Promise<void> {

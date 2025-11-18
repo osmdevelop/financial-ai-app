@@ -668,6 +668,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to classify policy relevance
+  function classifyPolicyRelevance(headline: any): {
+    isPolicy: boolean;
+    policyTopics: string[];
+    policyIntensity: number;
+  } {
+    const policyKeywords = {
+      tariffs: ["tariff", "import duty", "trade tax", "customs duty"],
+      trade: ["trade deal", "trade war", "export", "import", "wto", "nafta", "usmca"],
+      immigration: ["immigration", "border", "visa", "refugee", "deportation", "asylum"],
+      defense: ["defense", "military", "pentagon", "nato", "armed forces", "weapons"],
+    };
+
+    const text = `${headline.title} ${headline.summary || ""}`.toLowerCase();
+    const matchedTopics: string[] = [];
+    let intensity = 0;
+
+    for (const [topic, keywords] of Object.entries(policyKeywords)) {
+      const matches = keywords.filter(keyword => text.includes(keyword));
+      if (matches.length > 0) {
+        matchedTopics.push(topic.charAt(0).toUpperCase() + topic.slice(1));
+        intensity += matches.length * 0.2; // Each keyword match adds 0.2 to intensity
+      }
+    }
+
+    return {
+      isPolicy: matchedTopics.length > 0,
+      policyTopics: matchedTopics,
+      policyIntensity: Math.min(1, intensity), // Cap at 1.0
+    };
+  }
+
+  // Helper to enrich headlines with policy metadata
+  function enrichHeadlinesWithPolicy(headlines: any[]): any[] {
+    return headlines.map(headline => {
+      const { isPolicy, policyTopics, policyIntensity } = classifyPolicyRelevance(headline);
+      return {
+        ...headline,
+        isPolicy,
+        policyTopics,
+        policyIntensity,
+      };
+    });
+  }
+
   // Headlines routes
   app.get("/api/headlines", async (req, res) => {
     try {
@@ -722,7 +767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               headlines.push(headline);
             }
 
-            return res.json(headlines);
+            return res.json(enrichHeadlinesWithPolicy(headlines));
           }
         } catch (error) {
           console.error("NewsAPI error:", error);
@@ -750,7 +795,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        res.json(headlines.slice(0, limit));
+        res.json(enrichHeadlinesWithPolicy(headlines.slice(0, limit)));
       } catch (error) {
         res.status(500).json({ error: "Failed to load sample headlines" });
       }
@@ -1964,6 +2009,66 @@ Provide response in JSON format: {
       res.status(500).json({ error: "Failed to get Fedspeak analysis" });
     }
   });
+
+  // Alert routes
+  app.post("/api/alerts", async (req, res) => {
+    try {
+      const { insertAlertSchema } = await import("@shared/schema");
+      const alertData = insertAlertSchema.parse(req.body);
+      const alert = await storage.createAlert(alertData);
+      res.json(alert);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid alert data" });
+    }
+  });
+
+  app.get("/api/alerts", async (req, res) => {
+    try {
+      const portfolioId = req.query.portfolioId as string | undefined;
+      const alerts = await storage.getAlerts(portfolioId);
+      res.json(alerts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch alerts" });
+    }
+  });
+
+  app.get("/api/alerts/:id", async (req, res) => {
+    try {
+      const alert = await storage.getAlert(req.params.id);
+      if (!alert) {
+        return res.status(404).json({ error: "Alert not found" });
+      }
+      res.json(alert);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch alert" });
+    }
+  });
+
+  app.put("/api/alerts/:id", async (req, res) => {
+    try {
+      const updates = req.body;
+      const alert = await storage.updateAlert(req.params.id, updates);
+      if (!alert) {
+        return res.status(404).json({ error: "Alert not found" });
+      }
+      res.json(alert);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update alert" });
+    }
+  });
+
+  app.delete("/api/alerts/:id", async (req, res) => {
+    try {
+      await storage.deleteAlert(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete alert" });
+    }
+  });
+
+  // Start alert evaluator
+  const { alertEvaluator } = await import("./alert-evaluator");
+  alertEvaluator.startEvaluationLoop(5); // Check every 5 minutes
 
   // Initialize sample data on startup
   // await storage.initializeSampleData(); // Temporarily disabled due to database connection issue

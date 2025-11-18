@@ -119,6 +119,7 @@ function TimeAgo({ date }: { date: unknown }) {
 export default function NewsStream() {
   const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [policyFilter, setPolicyFilter] = useState<"all" | "policy">("all");
 
   // Focus assets & watchlist
   const { data: focusAssets = [] } = useQuery({
@@ -174,13 +175,15 @@ export default function NewsStream() {
   // Memoize filter & grouping so they don’t recompute on each minute tick
   const filtered = useMemo(
     () =>
-      (headlines as Headline[]).filter(
-        (h: any) =>
+      (headlines as Headline[]).filter((h: any) => {
+        const matchesSearch =
           !searchTerm ||
           h.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          h.summary?.toLowerCase().includes(searchTerm.toLowerCase()),
-      ),
-    [headlines, searchTerm],
+          h.summary?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesPolicy = policyFilter === "all" || h.isPolicy === true;
+        return matchesSearch && matchesPolicy;
+      }),
+    [headlines, searchTerm, policyFilter],
   );
 
   const grouped = useMemo(() => groupHeadlinesByDate(filtered), [filtered]);
@@ -235,8 +238,8 @@ export default function NewsStream() {
             </div>
           </div>
 
-          {/* Scope buttons row (unchanged) */}
-          <div className="flex flex-wrap gap-2">
+          {/* Scope buttons row */}
+          <div className="flex flex-wrap gap-4">
             <div className="flex gap-2">
               <Button
                 data-testid="scope-all"
@@ -266,6 +269,29 @@ export default function NewsStream() {
                 disabled={!watchlistSymbols.length}
               >
                 Watchlist ({watchlistSymbols.length})
+              </Button>
+            </div>
+            
+            {/* Policy Filter */}
+            <div className="flex gap-2 items-center border-l border-border pl-4">
+              <span className="text-xs text-muted-foreground">Filter:</span>
+              <Button
+                data-testid="filter-all"
+                variant={policyFilter === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPolicyFilter("all")}
+                className="h-8"
+              >
+                All
+              </Button>
+              <Button
+                data-testid="filter-policy"
+                variant={policyFilter === "policy" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPolicyFilter("policy")}
+                className="h-8"
+              >
+                Policy
               </Button>
             </div>
           </div>
@@ -405,6 +431,22 @@ export default function NewsStream() {
                                           more
                                         </Badge>
                                       )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Policy Topics */}
+                                  {(headline as any).isPolicy && (headline as any).policyTopics?.length > 0 && (
+                                    <div className="flex gap-1">
+                                      {(headline as any).policyTopics.map((topic: string) => (
+                                        <Badge
+                                          key={topic}
+                                          variant="outline"
+                                          className="text-xs bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400"
+                                          data-testid={`policy-chip-${topic}`}
+                                        >
+                                          {topic}
+                                        </Badge>
+                                      ))}
                                     </div>
                                   )}
                                 </div>

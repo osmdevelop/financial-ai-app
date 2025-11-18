@@ -1,0 +1,289 @@
+- Backend:
+  - /api/policy/trump-index
+  - /api/policy/fedspeak
+- Frontend:
+  - /policy page with Trump Index, Fedspeak, clusters, sensitivity labels
+  - /insights page uses policy context in AI prompts
+- Headlines/News page exists (with AI impact features)
+- Dashboard page exists
+
+Your task: implement 3 features ONLY:
+1) Dashboard “Policy Snapshot” card
+2) Policy-based alerts
+3) Policy chips on the Headlines page
+
+Do NOT add new top-level routes. Reuse existing patterns and styling.
+
+========================================
+CONTEXT (ASSUMED TYPES)
+========================================
+Use the same client methods / types you already have for policy:
+
+- getTrumpIndex(): Promise<TrumpIndexResponse>
+- getFedspeak(): Promise<FedspeakResponse>
+
+Assume TrumpIndexResponse contains:
+- index: { zScore: number; regime: string; asOf: string }
+- history: Array<{ date: string; zScore: number }>
+- sensitiveAssets: Array<{
+    symbol: string;
+    name: string;
+    correlation: number;
+    rollingImpact: number;
+    lastChangePct: number;
+    sensitivity?: "High" | "Moderate" | "Low" | "None";
+  }>
+- clusters?: Array<{
+    id: string;
+    label: string;
+    topics: string[];
+    intensity: number;   // 0..1
+    newsIds: string[];
+    summary: string;
+  }>
+
+Assume FedspeakResponse contains:
+- tone: {
+    current: "Hawkish" | "Dovish" | "Neutral";
+    score: number;
+    rolling7d: Array<{ date: string; score: number }>;
+  }
+- quotes: Array<{
+    id: string;
+    speaker: string;
+    date: string;
+    excerpt: string;
+    impliedOdds?: string;
+    source: string;
+    url: string;
+  }>
+- asOf: string
+
+Use real interfaces from the codebase where available and adapt accordingly.
+
+========================================
+FEATURE 1 — DASHBOARD “POLICY SNAPSHOT” CARD
+========================================
+
+Goal: Surface key policy risk info directly on the main Dashboard.
+
+IMPLEMENTATION
+
+A) Data hook
+- Create a hook (if not already existing) in /client/src/hooks:
+
+  - usePolicySnapshot()
+    - Internally calls getTrumpIndex() and getFedspeak()
+    - Returns { data, isLoading, isError, refetch }
+    - data shape:
+
+      type PolicySnapshot = {
+        trumpZScore: number;
+        trumpRegime: string;
+        trumpAsOf: string;
+        trumpDelta7d?: number;             // optional computed from history if >=7 pts
+        fedspeakTone: string;
+        fedspeakScore: number;
+        fedspeakAsOf: string;
+        topSensitiveAssets: Array<{ symbol: string; name: string; sensitivity: string; lastChangePct: number }>;
+        highlightClusterSummary?: string;  // from first cluster.summary, optional
+      }
+
+    - trumpDelta7d:
+      - If history.length >= 7: difference between latest zScore and value ~7 entries back (or last week).
+      - If not enough history, set undefined.
+
+    - topSensitiveAssets:
+      - Take up to 3 entries from sensitiveAssets sorted by:
+        - sensitivity (High > Moderate > Low)
+        - then by |correlation| desc.
+
+    - highlightClusterSummary:
+      - If clusters && clusters[0]?.summary exists, use that.
+
+B) Card component
+- Create a PolicySnapshotCard component in e.g. /client/src/components/dashboard/PolicySnapshotCard.tsx
+- Content:
+  - Title: “Policy Snapshot”
+  - Main line:
+    - “Trump Index: {zScore.toFixed(2)}σ — {trumpRegime}”
+    - Subtext: “As of {formattedDateFrom trumpAsOf}”
+  - Delta pill:
+    - If trumpDelta7d != null:
+      - Show “vs 7d: +0.35σ” with arrow and color-coding:
+        - > +0.25 → red/orange
+        - between -0.25 and +0.25 → neutral
+        - < -0.25 → green/blue
+  - Fedspeak line:
+    - “Fedspeak: {fedspeakTone} (score {score.toFixed(2)}) · As of {formattedDate}”
+  - Top sensitive assets:
+    - Small list / chips:
+      - “XLE (+2.1%, High)”, “FXI (-1.3%, High)” etc.
+      - Color-code sensitivity using existing palette from /policy.
+  - Optional highlight:
+    - If highlightClusterSummary present:
+      - Show small “Today’s Theme” text block with that summary (truncated).
+
+  - Include:
+    - A small “View details” link/button → navigates to /policy.
+    - A refresh icon button that calls refetch() from usePolicySnapshot().
+
+C) Dashboard integration
+- Add PolicySnapshotCard to the main Dashboard layout:
+  - Place it near your Sentiment/Market tiles (e.g., below Market Sentiment or to the right).
+  - Use the same layout primitives as other dashboard cards.
+- Use skeleton loader while isLoading, and error state (small text “Policy data unavailable” + retry) on error.
+
+========================================
+FEATURE 2 — POLICY-BASED ALERTS
+========================================
+
+Goal: Allow users to be notified when policy risk jumps or Fedspeak regime changes.
+
+ASSUMPTIONS
+- If an Alert model already exists, extend it.
+- If not, define minimal fields as below.
+
+BACKEND — DATA MODEL
+- In your Prisma schema or equivalent, ensure Alert supports policy-specific types:
+
+  model Alert {
+    id            String   @id @default(cuid())
+    portfolioId   String
+    type          String   // 'price' | 'pct' | 'earnings' | 'sentiment' | 'policy_index' | 'fedspeak_regime'
+    symbol        String?  // null for policy_index and fedspeak_regime
+    threshold     Float?   // e.g. z-score threshold for policy_index
+    direction     String?  // 'above' | 'below' | 'crosses' for policy_index
+    meta          Json?    // can store previousRegime for fedspeak_regime
+    enabled       Boolean  @default(true)
+    lastTriggered DateTime?
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+  }
+
+- If you already have Alert, just add the new types and a meta field if missing.
+
+BACKEND — EVALUATION LOGIC
+- In your existing alert evaluation job (cron or scheduled task), extend logic:
+
+  1) POLICY_INDEX alerts:
+     - Fetch current Trump Index once per evaluation cycle.
+     - For each enabled alert with type 'policy_index':
+       - condition:
+         - if direction == 'above' and zScore >= threshold → trigger
+         - if direction == 'below' and zScore <= threshold → trigger
+         - if direction == 'crosses':
+           - Compare current zScore vs a previous zScore stored in meta or lastTriggered context
+           - Trigger if zScore crosses the threshold from below or above.
+       - When triggered:
+         - Check debounce: if lastTriggered is within, say, 60 minutes, skip.
+         - Else: create a notification entry (use your existing notifications mechanism) with text like:
+           - “Trump Index moved above {threshold}σ (current: {zScore.toFixed(2)}σ)”
+         - Update lastTriggered and meta if needed.
+
+  2) FEDSPEAK_REGIME alerts:
+     - Fetch FedspeakResponse once per cycle.
+     - Compute current regime = tone.current.
+     - For each enabled alert with type 'fedspeak_regime':
+       - meta.previousRegime can hold the last known regime.
+       - Trigger when previousRegime != current regime.
+       - Notification text:
+         - “Fedspeak tone shifted from {previousRegime} to {currentRegime}.”
+       - Update meta.previousRegime = currentRegime and lastTriggered = now.
+
+- Ensure all evaluation uses cached policy data (if you already have 1-hour caching, reuse it).
+
+FRONTEND — SETTINGS / ALERTS UI
+- In your existing Alerts section (in Settings or a dedicated Alerts page), add creation options:
+
+  - New preset: “Trump Index”
+    - Fields:
+      - Type: 'policy_index'
+      - Condition:
+        - Dropdown: “goes above”, “goes below”, “crosses”
+      - Threshold input (default 1.0 σ)
+    - Short help text: “Alerts when the Trump Policy Index crosses a given z-score threshold.”
+
+  - New preset: “Fedspeak Regime Change”
+    - Type: 'fedspeak_regime'
+    - No numeric threshold; just a toggle like:
+      - “Alert me when Fed tone changes (hawkish/dovish/neutral).”
+
+- In the Alerts list:
+  - Show type as human-readable:
+    - “Policy Index (z > 1.5σ)”
+    - “Fedspeak regime change”
+  - These should support enable/disable and delete like other alerts.
+
+========================================
+FEATURE 3 — POLICY CHIPS ON HEADLINES PAGE
+========================================
+
+Goal: Mark headlines that are policy-related and show basic intensity, so users can spot “policy risk” headlines at a glance.
+
+ASSUMPTIONS
+- Headlines page already uses some API like GET /api/headlines or /api/news/stream.
+- Each headline likely includes (or can be extended to include) topics/tags from the same taxonomy as /policy, or a flag like isPolicy.
+  - If not present, use the same policy-topic classifier already used for Trump Index to annotate each headline on the backend.
+
+BACKEND (SMALL EXTENSION)
+- In the news/headlines backend handler:
+  - When building each headline item, add fields:
+
+    isPolicy?: boolean;
+    policyTopics?: string[];  // e.g. ["Tariffs", "Trade", "Defense"]
+    policyIntensity?: number; // 0..1, optional
+
+  - Use the same logic as policy service:
+    - If headline’s topics intersect with your policy topics set (tariffs, trade, immigration, defense), set isPolicy = true.
+    - policyIntensity can be a simple mapping:
+      - If shares cluster label or has high intensity in policy classifier → >0.6
+      - Else lower values.
+
+FRONTEND — HEADLINES PAGE UI
+- On the Headlines / News page, update the list component:
+  - For each item with isPolicy === true:
+    - Show a small “Policy” chip/badge next to the source or title.
+    - If policyTopics present, show 1–2 topic chips (e.g. “Tariffs”, “Defense”).
+    - If policyIntensity present:
+      - Map to Low/Med/High (color-coded), similar to /policy page intensity badges.
+
+- Optional: Filter toggle:
+  - At the top of the headlines page, add filter chips:
+    - “All” (default)
+    - “Policy”
+  - When “Policy” is active, only show headlines where isPolicy === true.
+
+- For continuity:
+  - Reuse the same Badge/Chip components and color palette as /policy to keep visual language consistent.
+
+========================================
+TESTS
+========================================
+
+Add / update tests using the existing test stack:
+
+1) PolicySnapshotCard / usePolicySnapshot:
+   - Mocks getTrumpIndex and getFedspeak to return fixed data.
+   - Asserts that zScore, regime, Fedspeak tone, and topSensitiveAssets render.
+   - Asserts that delta vs 7d is computed when history is long enough.
+
+2) Alerts:
+   - Unit test the evaluation functions for:
+     - policy_index alert triggers when zScore crosses threshold.
+     - fedspeak_regime alert triggers on tone change.
+
+3) Headlines:
+   - With a mocked headline list, assert that:
+     - Headlines with policyTopics render the Policy chip.
+     - Filter “Policy” hides non-policy headlines.
+
+========================================
+DONE WHEN
+========================================
+- Dashboard shows a Policy Snapshot card with Trump z-score, regime, delta vs 7d, Fedspeak tone, and top policy-sensitive assets; it links to /policy.
+- Users can create alerts for:
+  - Trump Index z-score thresholds.
+  - Fedspeak regime changes.
+- Headlines page shows Policy chips on policy-related headlines, with optional topics/intensity, and an optional Policy filter.
+- All tests pass and existing functionality remains intact.
