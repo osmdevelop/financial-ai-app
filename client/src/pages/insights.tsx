@@ -19,18 +19,28 @@ export default function Insights() {
   const { toast } = useToast();
 
   // Get market sentiment for context
-  const { data: marketSentiment, isLoading: sentimentLoading } = useQuery({
+  const { 
+    data: marketSentiment, 
+    isLoading: sentimentLoading,
+    error: sentimentError 
+  } = useQuery({
     queryKey: ["/api/sentiment"],
     queryFn: () => api.getMarketSentiment(),
   });
 
   // Fetch policy context data
-  const { data: trumpIndex } = useQuery({
+  const { 
+    data: trumpIndex,
+    error: trumpError 
+  } = useQuery({
     queryKey: ["/api/policy/trump-index"],
     queryFn: () => api.getTrumpIndex(),
   });
 
-  const { data: fedspeak } = useQuery({
+  const { 
+    data: fedspeak,
+    error: fedspeakError 
+  } = useQuery({
     queryKey: ["/api/policy/fedspeak"],
     queryFn: () => api.getFedspeak(),
   });

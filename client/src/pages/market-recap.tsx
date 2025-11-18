@@ -27,7 +27,12 @@ export default function MarketRecap() {
   const [aiSummary, setAiSummary] = useState<MarketRecapSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
 
-  const { data: recap, isLoading, refetch } = useQuery({
+  const { 
+    data: recap, 
+    isLoading, 
+    error,
+    refetch 
+  } = useQuery({
     queryKey: ["/api/recap/daily"],
     queryFn: () => api.getMarketRecap(),
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
@@ -81,7 +86,23 @@ export default function MarketRecap() {
           </Button>
         </div>
 
-        {isLoading ? (
+        {error ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Unable to load market recap
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                There was an error loading today's market recap data.
+              </p>
+              <Button onClick={() => refetch()} variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : isLoading ? (
           <div className="grid gap-6">
             {Array.from({ length: 4 }).map((_, i) => (
               <Card key={i} className="animate-pulse">
