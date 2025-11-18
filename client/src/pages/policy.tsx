@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, TrendingUp, TrendingDown, Minus, ExternalLink } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, Minus, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import type { TrumpIndexResponse, FedspeakResponse } from "@shared/schema";
+import { getSensitivityColor, getSensitivityTooltip } from "@/utils/policySensitivity";
+import type { TrumpIndexResponse, FedspeakResponse, PolicySensitivity } from "@shared/schema";
 
 export default function Policy() {
   const { 
@@ -135,73 +137,110 @@ export default function Policy() {
                         <tr className="border-b dark:border-gray-700">
                           <th className="text-left p-2 font-semibold">Asset</th>
                           <th className="text-left p-2 font-semibold">Correlation</th>
-                          <th className="text-left p-2 font-semibold hidden md:table-cell">Current Price</th>
+                          <th className="text-left p-2 font-semibold hidden lg:table-cell">Current Price</th>
                           <th className="text-right p-2 font-semibold">Today's Change</th>
+                          <th className="text-center p-2 font-semibold">Policy Sensitivity</th>
                           <th className="text-center p-2 font-semibold hidden md:table-cell">Significance</th>
                         </tr>
                       </thead>
                       <tbody>
                         {trumpIndex.sensitiveAssets
                           .sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation))
-                          .map((asset) => (
-                            <tr key={asset.symbol} className="border-b dark:border-gray-800 hover:bg-muted/50">
-                              <td className="p-2">
-                                <div>
-                                  <div className="font-medium dark:text-white">{asset.symbol}</div>
-                                  <div className="text-xs text-muted-foreground">{asset.name}</div>
-                                </div>
-                              </td>
-                              <td className="p-2">
-                                <span className="font-mono text-sm">{asset.correlation.toFixed(2)}</span>
-                              </td>
-                              <td className="p-2 hidden md:table-cell">
-                                <span className="font-mono text-sm">${asset.currentPrice.toFixed(2)}</span>
-                              </td>
-                              <td className="p-2 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  {asset.changePct > 0 ? (
-                                    <TrendingUp className="h-4 w-4 text-green-500" />
-                                  ) : asset.changePct < 0 ? (
-                                    <TrendingDown className="h-4 w-4 text-red-500" />
-                                  ) : (
-                                    <Minus className="h-4 w-4 text-gray-400" />
-                                  )}
-                                  <span className={asset.changePct > 0 ? "text-green-600 dark:text-green-400" : asset.changePct < 0 ? "text-red-600 dark:text-red-400" : ""}>
-                                    {asset.changePct > 0 ? '+' : ''}{asset.changePct.toFixed(2)}%
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="p-2 text-center hidden md:table-cell">
-                                <Badge 
-                                  variant="outline" 
-                                  className={
-                                    asset.significance === "high" 
-                                      ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300"
-                                      : asset.significance === "medium"
-                                      ? "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300"
-                                      : "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
-                                  }
-                                >
-                                  {asset.significance}
-                                </Badge>
-                              </td>
-                            </tr>
-                          ))}
+                          .map((asset) => {
+                            const sensitivity = asset.sensitivity || "None";
+                            return (
+                              <tr key={asset.symbol} className="border-b dark:border-gray-800 hover:bg-muted/50">
+                                <td className="p-2">
+                                  <div>
+                                    <div className="font-medium dark:text-white">{asset.symbol}</div>
+                                    <div className="text-xs text-muted-foreground">{asset.name}</div>
+                                  </div>
+                                </td>
+                                <td className="p-2">
+                                  <span className="font-mono text-sm">{asset.correlation.toFixed(2)}</span>
+                                </td>
+                                <td className="p-2 hidden lg:table-cell">
+                                  <span className="font-mono text-sm">${asset.currentPrice.toFixed(2)}</span>
+                                </td>
+                                <td className="p-2 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    {asset.changePct > 0 ? (
+                                      <TrendingUp className="h-4 w-4 text-green-500" />
+                                    ) : asset.changePct < 0 ? (
+                                      <TrendingDown className="h-4 w-4 text-red-500" />
+                                    ) : (
+                                      <Minus className="h-4 w-4 text-gray-400" />
+                                    )}
+                                    <span className={asset.changePct > 0 ? "text-green-600 dark:text-green-400" : asset.changePct < 0 ? "text-red-600 dark:text-red-400" : ""}>
+                                      {asset.changePct > 0 ? '+' : ''}{asset.changePct.toFixed(2)}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="p-2 text-center" data-testid={`sensitivity-${asset.symbol}`}>
+                                  <Badge 
+                                    className={getSensitivityColor(sensitivity as PolicySensitivity)}
+                                    title={getSensitivityTooltip(sensitivity as PolicySensitivity)}
+                                  >
+                                    {sensitivity}
+                                  </Badge>
+                                </td>
+                                <td className="p-2 text-center hidden md:table-cell">
+                                  <Badge 
+                                    variant="outline" 
+                                    className={
+                                      asset.significance === "high" 
+                                        ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300"
+                                        : asset.significance === "medium"
+                                        ? "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300"
+                                        : "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                                    }
+                                  >
+                                    {asset.significance}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* D) Trump Policy News Feed */}
+              {/* C.5) Policy Themes / Clustered News */}
+              {trumpIndex.clusters && trumpIndex.clusters.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Policy Themes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4" data-testid="policy-clusters">
+                      {trumpIndex.clusters.map((cluster) => (
+                        <PolicyCluster
+                          key={cluster.id}
+                          cluster={cluster}
+                          allNews={trumpIndex.recentNews}
+                          getIntensityBadge={getIntensityBadge}
+                        />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* D) Trump Policy News Feed (Flat List) */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Recent Policy News</CardTitle>
+                  <CardTitle>
+                    {trumpIndex.clusters && trumpIndex.clusters.length > 0 
+                      ? "All Policy News" 
+                      : "Recent Policy News"}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4" data-testid="policy-news-feed">
-                    {trumpIndex.recentNews.map((news) => (
-                      <div key={news.title} className="border-b dark:border-gray-800 pb-4 last:border-0">
+                    {trumpIndex.recentNews.map((news, idx) => (
+                      <div key={news.id || news.title + idx} className="border-b dark:border-gray-800 pb-4 last:border-0">
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <a 
                             href={news.url} 
@@ -379,6 +418,102 @@ export default function Policy() {
           ) : null}
         </section>
       </main>
+    </div>
+  );
+}
+
+// Helper component for rendering a policy cluster
+function PolicyCluster({ 
+  cluster, 
+  allNews, 
+  getIntensityBadge 
+}: { 
+  cluster: any; 
+  allNews: any[]; 
+  getIntensityBadge: (intensity: number) => { label: string; color: string }; 
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const clusterNews = allNews.filter(news => cluster.newsIds.includes(news.id));
+
+  return (
+    <div 
+      className="border dark:border-gray-700 rounded-lg p-4 bg-card hover:bg-muted/30 transition-colors"
+      data-testid={`cluster-${cluster.id}`}
+    >
+      <div className="flex items-start justify-between gap-4 mb-2">
+        <div className="flex-1">
+          <h3 className="font-semibold dark:text-white text-lg">{cluster.label}</h3>
+        </div>
+        <Badge className={getIntensityBadge(cluster.intensity).color}>
+          {getIntensityBadge(cluster.intensity).label}
+        </Badge>
+      </div>
+      
+      <p className="text-sm text-muted-foreground mb-3" data-testid={`cluster-summary-${cluster.id}`}>
+        {cluster.summary}
+      </p>
+      
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Stories: {clusterNews.length}</span>
+          {cluster.topics.length > 0 && (
+            <>
+              <span>•</span>
+              <div className="flex flex-wrap gap-1">
+                {cluster.topics.slice(0, 3).map((topic: string) => (
+                  <Badge key={topic} variant="outline" className="text-xs">
+                    {topic}
+                  </Badge>
+                ))}
+                {cluster.topics.length > 3 && (
+                  <span className="text-xs">+{cluster.topics.length - 3} more</span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setExpanded(!expanded)}
+          className="text-xs"
+          data-testid={`toggle-cluster-${cluster.id}`}
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="h-3 w-3 mr-1" />
+              Hide
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3 mr-1" />
+              Show stories
+            </>
+          )}
+        </Button>
+      </div>
+      
+      {expanded && clusterNews.length > 0 && (
+        <div className="mt-4 space-y-3 border-t dark:border-gray-700 pt-3">
+          {clusterNews.map((news, idx) => (
+            <div key={news.id || idx} className="pl-3 border-l-2 border-primary/30">
+              <a
+                href={news.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium hover:underline dark:text-white block"
+              >
+                {news.title}
+                <ExternalLink className="inline h-3 w-3 ml-1" />
+              </a>
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatDistanceToNow(new Date(news.published), { addSuffix: true })}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
