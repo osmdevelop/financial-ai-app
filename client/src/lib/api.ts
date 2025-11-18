@@ -1,9 +1,5 @@
 import { apiRequest } from "./queryClient";
 import type {
-  Portfolio,
-  InsertPortfolio,
-  PositionWithPrice,
-  PortfolioSummary,
   AIInsightResponse,
   PriceData,
   MarketSentiment,
@@ -17,14 +13,9 @@ import type {
   EconomicImpact,
   AssetSearchResult,
   AssetSheetData,
-  Transaction,
-  InsertTransaction,
-  ComputedPosition,
   WatchlistItem,
   InsertWatchlistItem,
   // Phase 3 types
-  FocusAssetWithDetails,
-  InsertFocusAsset,
   EnhancedMarketSentiment,
   SentimentNarrative,
   AssetOverview,
@@ -56,74 +47,6 @@ import type {
 } from "@shared/schema";
 
 export const api = {
-  // Portfolio operations
-  async getPortfolios(): Promise<Portfolio[]> {
-    const res = await apiRequest("GET", "/api/portfolios");
-    return res.json();
-  },
-
-  async createPortfolio(data: InsertPortfolio): Promise<Portfolio> {
-    const res = await apiRequest("POST", "/api/portfolios", data);
-    return res.json();
-  },
-
-  async archivePortfolio(
-    id: string,
-  ): Promise<{ success: boolean; message: string }> {
-    const res = await apiRequest("PUT", `/api/portfolios/${id}/archive`);
-    return res.json();
-  },
-
-  async deletePortfolio(
-    id: string,
-  ): Promise<{ success: boolean; message: string }> {
-    const res = await apiRequest("DELETE", `/api/portfolios/${id}`);
-    return res.json();
-  },
-
-  async getPortfolioDetails(id: string): Promise<{
-    portfolio: Portfolio;
-    positions: PositionWithPrice[];
-    summary: PortfolioSummary;
-  }> {
-    const res = await apiRequest("GET", `/api/portfolios/${id}`);
-    return res.json();
-  },
-
-  // Position operations
-  async uploadPositions(
-    portfolioId: string,
-    positions: any[],
-  ): Promise<{ success: boolean; positions: any[] }> {
-    const res = await apiRequest(
-      "POST",
-      `/api/portfolios/${portfolioId}/positions/upload`,
-      { positions },
-    );
-    return res.json();
-  },
-
-  // Price operations
-  async refreshPrices(
-    portfolioId: string,
-  ): Promise<{ success: boolean; pricesUpdated: number }> {
-    const res = await apiRequest("POST", "/api/refresh-prices", {
-      portfolioId,
-    });
-    return res.json();
-  },
-
-  async getPortfolioPriceHistory(
-    portfolioId: string,
-    days: number = 30,
-  ): Promise<any[]> {
-    const res = await apiRequest(
-      "GET",
-      `/api/portfolios/${portfolioId}/price-history?days=${days}`,
-    );
-    return res.json();
-  },
-
   // AI Insights
   async getInsights(text: string): Promise<AIInsightResponse> {
     const res = await apiRequest("POST", "/api/insights/explain", { text });
@@ -240,47 +163,6 @@ export const api = {
     return res.json();
   },
 
-  // Transactions
-  async createTransaction(
-    data: InsertTransaction,
-  ): Promise<{ transaction: Transaction; position: ComputedPosition | null }> {
-    const res = await apiRequest("POST", "/api/transactions", data);
-    return res.json();
-  },
-
-  async getTransactions(
-    portfolioId: string,
-    symbol?: string,
-  ): Promise<Transaction[]> {
-    const params = new URLSearchParams();
-    params.set("portfolioId", portfolioId);
-    if (symbol) params.set("symbol", symbol);
-    const res = await apiRequest("GET", `/api/transactions?${params}`);
-    return res.json();
-  },
-
-  async updateTransaction(
-    id: string,
-    data: Partial<InsertTransaction>,
-  ): Promise<Transaction> {
-    const res = await apiRequest("PATCH", `/api/transactions/${id}`, data);
-    return res.json();
-  },
-
-  async deleteTransaction(id: string): Promise<{ success: boolean }> {
-    const res = await apiRequest("DELETE", `/api/transactions/${id}`);
-    return res.json();
-  },
-
-  // Computed Positions
-  async getComputedPositions(portfolioId: string): Promise<ComputedPosition[]> {
-    const res = await apiRequest(
-      "GET",
-      `/api/positions?portfolioId=${portfolioId}`,
-    );
-    return res.json();
-  },
-
   // Watchlist
   async getWatchlist(): Promise<WatchlistItem[]> {
     const res = await apiRequest("GET", "/api/watchlist");
@@ -294,15 +176,6 @@ export const api = {
 
   async removeFromWatchlist(id: string): Promise<{ success: boolean }> {
     const res = await apiRequest("DELETE", `/api/watchlist/${id}`);
-    return res.json();
-  },
-
-  // Migration
-  async migratePositionsToTransactions(): Promise<{
-    success: boolean;
-    message: string;
-  }> {
-    const res = await apiRequest("POST", "/api/migrate");
     return res.json();
   },
 
@@ -326,38 +199,6 @@ export const api = {
     });
     return res.json();
   },
-
-  // Focus Assets
-  async getFocusAssets(portfolioId: string): Promise<FocusAssetWithDetails[]> {
-    const res = await apiRequest(
-      "GET",
-      `/api/focus-assets?portfolioId=${portfolioId}`,
-    );
-    return res.json();
-  },
-
-  async createFocusAsset(
-    data: InsertFocusAsset,
-  ): Promise<FocusAssetWithDetails> {
-    const res = await apiRequest("POST", "/api/focus-assets", data);
-    return res.json();
-  },
-
-  async deleteFocusAsset(id: string): Promise<{ success: boolean }> {
-    const res = await apiRequest("DELETE", `/api/focus-assets/${id}`);
-    return res.json();
-  },
-
-  async reorderFocusAssets(
-    items: { id: string; order: number }[],
-  ): Promise<{ success: boolean }> {
-    const res = await apiRequest("PATCH", "/api/focus-assets/reorder", {
-      items,
-    });
-    return res.json();
-  },
-
-  // Legacy asset overview methods removed - replaced by Module D comprehensive endpoints
 
   // Market Recap
   async getMarketRecap(): Promise<MarketRecap> {

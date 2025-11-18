@@ -1,31 +1,13 @@
 import { 
-  Portfolio, 
-  Position, 
   Price, 
-  Transaction,
   WatchlistItem,
-  HiddenAsset,
-  FocusAsset,
-  UserPrefs,
-  Alert,
-  InsertPortfolio, 
-  InsertPosition, 
   InsertPrice,
-  InsertTransaction,
   InsertWatchlistItem,
-  InsertHiddenAsset,
-  InsertFocusAsset,
-  InsertUserPrefs,
-  InsertAlert,
-  PositionWithPrice,
-  PortfolioSummary,
-  ComputedPosition,
   AssetSearchResult,
   AssetSheetData,
   Headline,
   UpcomingEarning,
   EconomicEvent,
-  FocusAssetWithDetails,
   EnhancedMarketSentiment,
   SentimentNarrative,
   AssetOverview,
@@ -33,44 +15,19 @@ import {
   MarketRecap,
   MarketRecapSummary,
   HeadlineImpactAnalysis,
-  Notification,
   EnhancedSentimentIndex,
-  portfolios,
-  positions,
   prices,
-  transactions,
-  watchlist,
-  hiddenAssets,
-  focusAssets,
-  userPrefs,
-  alerts
+  watchlist
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
-  // Portfolio methods
-  createPortfolio(portfolio: InsertPortfolio): Promise<Portfolio>;
-  getPortfolio(id: string): Promise<Portfolio | undefined>;
-  getPortfolios(): Promise<Portfolio[]>;
-  archivePortfolio(id: string): Promise<void>;
-  deletePortfolio(id: string): Promise<void>;
-  
-  // Position methods
-  createPosition(position: InsertPosition): Promise<Position>;
-  getPositionsByPortfolio(portfolioId: string): Promise<Position[]>;
-  upsertPosition(position: InsertPosition): Promise<Position>;
-  deletePosition(id: string): Promise<void>;
-  
   // Price methods
   upsertPrice(price: InsertPrice): Promise<Price>;
   getLatestPrice(symbol: string, assetType: string): Promise<Price | undefined>;
   getPriceHistory(symbol: string, assetType: string, days: number): Promise<Price[]>;
-  
-  // Portfolio analytics
-  getPortfolioPositionsWithPrices(portfolioId: string): Promise<PositionWithPrice[]>;
-  getPortfolioSummary(portfolioId: string): Promise<PortfolioSummary>;
   
   // Headlines
   getHeadlines(limit?: number): Promise<Headline[]>;
@@ -83,16 +40,6 @@ export interface IStorage {
   // Economic Events
   getEconomicEvents(days?: number): Promise<EconomicEvent[]>;
   
-  // Transaction methods
-  createTransaction(transaction: InsertTransaction): Promise<Transaction>;
-  getTransactionsByPortfolio(portfolioId: string, symbol?: string): Promise<Transaction[]>;
-  updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | null>;
-  deleteTransaction(id: string): Promise<void>;
-  
-  // Computed positions (derived from transactions)
-  getComputedPositions(portfolioId: string): Promise<ComputedPosition[]>;
-  getComputedPosition(portfolioId: string, symbol: string): Promise<ComputedPosition | null>;
-  
   // Watchlist methods
   addToWatchlist(item: InsertWatchlistItem): Promise<WatchlistItem>;
   getWatchlist(): Promise<WatchlistItem[]>;
@@ -101,12 +48,6 @@ export interface IStorage {
   // Search methods
   searchAssets(query: string, types?: string[], limit?: number): Promise<AssetSearchResult[]>;
   getAssetSheetData(symbol: string, assetType: string): Promise<AssetSheetData | null>;
-  
-  // Focus Assets methods
-  getFocusAssets(portfolioId: string): Promise<FocusAssetWithDetails[]>;
-  createFocusAsset(focusAsset: InsertFocusAsset): Promise<FocusAsset>;
-  deleteFocusAsset(id: string): Promise<void>;
-  reorderFocusAssets(items: { id: string; order: number }[]): Promise<void>;
   
   // Phase 3 - Enhanced Sentiment
   getEnhancedSentiment(): Promise<EnhancedMarketSentiment>;
@@ -124,22 +65,6 @@ export interface IStorage {
   getHeadlinesTimeline(symbols?: string[], limit?: number): Promise<Headline[]>;
   analyzeHeadlineImpact(title: string, summary?: string, symbols?: string[]): Promise<HeadlineImpactAnalysis>;
   
-  // Phase 4 - User Preferences
-  getUserPrefs(portfolioId: string): Promise<UserPrefs | null>;
-  upsertUserPrefs(prefs: InsertUserPrefs): Promise<UserPrefs>;
-  
-  // Phase 4 - Alerts
-  createAlert(alert: InsertAlert): Promise<Alert>;
-  getAlerts(portfolioId: string): Promise<Alert[]>;
-  updateAlert(id: string, updates: Partial<InsertAlert>): Promise<Alert | null>;
-  deleteAlert(id: string): Promise<void>;
-  getActiveAlerts(): Promise<Alert[]>;
-  updateAlertLastTriggered(id: string): Promise<void>;
-  
-  // Phase 4 - Notifications  
-  getNotifications(portfolioId: string, limit?: number): Promise<Notification[]>;
-  addNotification(notification: Omit<Notification, 'id'>): Promise<Notification>;
-  
   // Phase 4 - Enhanced Sentiment Index
   getEnhancedSentimentIndex(): Promise<EnhancedSentimentIndex>;
   
@@ -149,75 +74,6 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   
-  async createPortfolio(portfolio: InsertPortfolio): Promise<Portfolio> {
-    const [result] = await db
-      .insert(portfolios)
-      .values(portfolio)
-      .returning();
-    return result;
-  }
-
-  async getPortfolio(id: string): Promise<Portfolio | undefined> {
-    const [result] = await db
-      .select()
-      .from(portfolios)
-      .where(eq(portfolios.id, id));
-    return result;
-  }
-
-  async getPortfolios(): Promise<Portfolio[]> {
-    return db
-      .select()
-      .from(portfolios)
-      .where(eq(portfolios.archived, "false"))
-      .orderBy(desc(portfolios.createdAt));
-  }
-
-  async createPosition(position: InsertPosition): Promise<Position> {
-    const [result] = await db
-      .insert(positions)
-      .values(position)
-      .returning();
-    return result;
-  }
-
-  async getPositionsByPortfolio(portfolioId: string): Promise<Position[]> {
-    return db
-      .select()
-      .from(positions)
-      .where(eq(positions.portfolioId, portfolioId));
-  }
-
-  async upsertPosition(position: InsertPosition): Promise<Position> {
-    const existing = await db
-      .select()
-      .from(positions)
-      .where(
-        and(
-          eq(positions.portfolioId, position.portfolioId),
-          eq(positions.symbol, position.symbol)
-        )
-      );
-
-    if (existing.length > 0) {
-      const [result] = await db
-        .update(positions)
-        .set({
-          quantity: position.quantity,
-          avgCost: position.avgCost,
-        })
-        .where(eq(positions.id, existing[0].id))
-        .returning();
-      return result;
-    } else {
-      return this.createPosition(position);
-    }
-  }
-
-  async deletePosition(id: string): Promise<void> {
-    await db.delete(positions).where(eq(positions.id, id));
-  }
-
   async upsertPrice(price: InsertPrice): Promise<Price> {
     const existing = await db
       .select()
@@ -279,207 +135,6 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(prices.date));
-  }
-
-  async getPortfolioPositionsWithPrices(portfolioId: string): Promise<PositionWithPrice[]> {
-    const computedPositions = await this.getComputedPositions(portfolioId);
-    
-    return computedPositions.map(pos => ({
-      id: `${portfolioId}-${pos.symbol}`,
-      portfolioId,
-      symbol: pos.symbol,
-      assetType: pos.assetType,
-      quantity: pos.quantity.toString(),
-      avgCost: pos.avgCost.toString(),
-      lastPrice: pos.lastPrice,
-      pnlAmount: pos.unrealizedPnl,
-      pnlPercent: pos.unrealizedPnlPercent,
-    }));
-  }
-
-  async getPortfolioSummary(portfolioId: string): Promise<PortfolioSummary> {
-    const computedPositions = await this.getComputedPositions(portfolioId);
-    
-    let totalValue = 0;
-    let topMover: PortfolioSummary['topMover'] = null;
-    let maxChangePercent = 0;
-
-    for (const position of computedPositions) {
-      if (position.value) {
-        totalValue += position.value;
-      }
-      
-      if (position.unrealizedPnlPercent && Math.abs(position.unrealizedPnlPercent) > maxChangePercent) {
-        maxChangePercent = Math.abs(position.unrealizedPnlPercent);
-        topMover = {
-          symbol: position.symbol,
-          change: position.unrealizedPnl || 0,
-          changePercent: position.unrealizedPnlPercent,
-        };
-      }
-    }
-
-    return {
-      totalValue,
-      dailyPnL: 0, // Would need daily price data
-      dailyPnLPercent: 0,
-      topMover,
-    };
-  }
-
-  async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
-    const [result] = await db
-      .insert(transactions)
-      .values(transaction)
-      .returning();
-    return result;
-  }
-
-  async getTransactionsByPortfolio(portfolioId: string, symbol?: string): Promise<Transaction[]> {
-    const conditions = [eq(transactions.portfolioId, portfolioId)];
-    if (symbol) {
-      conditions.push(eq(transactions.symbol, symbol));
-    }
-
-    return db
-      .select()
-      .from(transactions)
-      .where(and(...conditions))
-      .orderBy(desc(transactions.occurredAt));
-  }
-
-  async updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | null> {
-    const [result] = await db
-      .update(transactions)
-      .set(updates)
-      .where(eq(transactions.id, id))
-      .returning();
-    return result || null;
-  }
-
-  async deleteTransaction(id: string): Promise<void> {
-    await db.delete(transactions).where(eq(transactions.id, id));
-  }
-
-  async getComputedPositions(portfolioId: string): Promise<ComputedPosition[]> {
-    const txns = await this.getTransactionsByPortfolio(portfolioId);
-    
-    // Group transactions by symbol
-    const positionMap = new Map<string, {
-      symbol: string;
-      assetType: string;
-      buyTxns: Transaction[];
-      sellTxns: Transaction[];
-      allTxns: Transaction[];
-    }>();
-
-    for (const txn of txns) {
-      if (!positionMap.has(txn.symbol)) {
-        positionMap.set(txn.symbol, {
-          symbol: txn.symbol,
-          assetType: txn.assetType,
-          buyTxns: [],
-          sellTxns: [],
-          allTxns: []
-        });
-      }
-      
-      const position = positionMap.get(txn.symbol)!;
-      position.allTxns.push(txn);
-      
-      if (txn.side === 'buy' || txn.side === 'transfer_in' || txn.side === 'airdrop') {
-        position.buyTxns.push(txn);
-      } else if (txn.side === 'sell' || txn.side === 'transfer_out') {
-        position.sellTxns.push(txn);
-      }
-    }
-
-    const computedPositions: ComputedPosition[] = [];
-
-    for (const [symbol, data] of Array.from(positionMap.entries())) {
-      const { buyTxns, sellTxns, allTxns } = data;
-      
-      // Calculate WAC (Weighted Average Cost) and current quantity
-      let totalQuantity = 0;
-      let totalCost = 0;
-      let realizedPnl = 0;
-
-      // Sort transactions by date
-      const sortedTxns = [...allTxns].sort((a, b) => 
-        new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
-      );
-
-      let fifoQueue: Array<{ quantity: number; price: number }> = [];
-
-      for (const txn of sortedTxns) {
-        const quantity = parseFloat(txn.quantity);
-        const price = txn.price ? parseFloat(txn.price) : 0;
-
-        if (txn.side === 'buy' || txn.side === 'transfer_in' || txn.side === 'airdrop') {
-          // Add to inventory
-          totalQuantity += quantity;
-          totalCost += quantity * price;
-          fifoQueue.push({ quantity, price });
-        } else if (txn.side === 'sell' || txn.side === 'transfer_out') {
-          // Remove from inventory using FIFO for realized P&L calculation
-          totalQuantity -= quantity;
-          let remainingToSell = quantity;
-          
-          while (remainingToSell > 0 && fifoQueue.length > 0) {
-            const batch = fifoQueue[0];
-            const sellFromBatch = Math.min(remainingToSell, batch.quantity);
-            
-            // Calculate realized P&L for this portion
-            realizedPnl += sellFromBatch * (price - batch.price);
-            
-            batch.quantity -= sellFromBatch;
-            remainingToSell -= sellFromBatch;
-            
-            if (batch.quantity === 0) {
-              fifoQueue.shift();
-            }
-          }
-          
-          // Update total cost
-          totalCost = fifoQueue.reduce((sum, batch) => sum + batch.quantity * batch.price, 0);
-        }
-      }
-
-      // Skip if no current position
-      if (totalQuantity <= 0) continue;
-
-      const avgCost = totalCost / totalQuantity;
-      
-      // Get latest price
-      const latestPrice = await this.getLatestPrice(symbol, data.assetType);
-      const lastPrice = latestPrice ? parseFloat(latestPrice.close.toString()) : undefined;
-      
-      const value = lastPrice ? totalQuantity * lastPrice : undefined;
-      const unrealizedPnl = lastPrice ? totalQuantity * (lastPrice - avgCost) : undefined;
-      const unrealizedPnlPercent = unrealizedPnl && avgCost > 0 ? (unrealizedPnl / (totalQuantity * avgCost)) * 100 : undefined;
-
-      computedPositions.push({
-        symbol,
-        assetType: data.assetType,
-        quantity: totalQuantity,
-        avgCost,
-        lastPrice,
-        value,
-        unrealizedPnl,
-        unrealizedPnlPercent,
-        realizedPnl,
-        totalTransactions: allTxns.length,
-        firstPurchaseDate: buyTxns.length > 0 ? buyTxns[buyTxns.length - 1].occurredAt.toISOString() : undefined,
-        lastTransactionDate: allTxns.length > 0 ? allTxns[0].occurredAt.toISOString() : undefined,
-      });
-    }
-
-    return computedPositions;
-  }
-
-  async getComputedPosition(portfolioId: string, symbol: string): Promise<ComputedPosition | null> {
-    const positions = await this.getComputedPositions(portfolioId);
-    return positions.find(p => p.symbol === symbol) || null;
   }
 
   async addToWatchlist(item: InsertWatchlistItem): Promise<WatchlistItem> {
@@ -705,79 +360,6 @@ export class DatabaseStorage implements IStorage {
     return [];
   }
 
-  async archivePortfolio(id: string): Promise<void> {
-    await db.update(portfolios).set({ archived: "true" }).where(eq(portfolios.id, id));
-  }
-
-  async deletePortfolio(id: string): Promise<void> {
-    // This will cascade delete all related data (transactions, positions, etc.)
-    await db.delete(portfolios).where(eq(portfolios.id, id));
-  }
-
-  // Focus Assets methods
-  async getFocusAssets(portfolioId: string): Promise<FocusAssetWithDetails[]> {
-    const assets = await db
-      .select()
-      .from(focusAssets)
-      .where(eq(focusAssets.portfolioId, portfolioId))
-      .orderBy(focusAssets.order);
-
-    // Helper function to generate consistent prices based on symbol
-    const getConsistentPrice = (symbol: string) => {
-      const hash = symbol.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-      const basePrice = (hash % 1000) + 50; // Price between $50-$1050
-      const change = ((hash % 200) - 100) / 10; // Change between -10% to +10%
-      const changePercent = change;
-      
-      return {
-        lastPrice: parseFloat(basePrice.toFixed(2)),
-        change24h: parseFloat((basePrice * change / 100).toFixed(2)),
-        changePercent24h: parseFloat(changePercent.toFixed(2)),
-      };
-    };
-
-    // Enhance with additional details and consistent prices
-    return assets.map((asset: FocusAsset) => {
-      const priceData = getConsistentPrice(asset.symbol);
-      return {
-        ...asset,
-        name: `${asset.symbol} Name`, // Would fetch from external API
-        ...priceData,
-      };
-    });
-  }
-
-  async createFocusAsset(focusAsset: InsertFocusAsset): Promise<FocusAsset> {
-    // Check if we already have 5 focus assets for this portfolio
-    const existing = await db
-      .select()
-      .from(focusAssets)
-      .where(eq(focusAssets.portfolioId, focusAsset.portfolioId));
-
-    if (existing.length >= 5) {
-      throw new Error("Maximum 5 focus assets allowed per portfolio");
-    }
-
-    const [result] = await db
-      .insert(focusAssets)
-      .values(focusAsset)
-      .returning();
-    return result;
-  }
-
-  async deleteFocusAsset(id: string): Promise<void> {
-    await db.delete(focusAssets).where(eq(focusAssets.id, id));
-  }
-
-  async reorderFocusAssets(items: { id: string; order: number }[]): Promise<void> {
-    for (const item of items) {
-      await db
-        .update(focusAssets)
-        .set({ order: item.order })
-        .where(eq(focusAssets.id, item.id));
-    }
-  }
-
   // Phase 3 - Enhanced Sentiment (placeholder implementations)
   async getEnhancedSentiment(): Promise<EnhancedMarketSentiment> {
     // This would integrate with the existing sentiment logic but enhanced
@@ -953,120 +535,6 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // Phase 4 - User Preferences
-  async getUserPrefs(portfolioId: string): Promise<UserPrefs | null> {
-    const [result] = await db
-      .select()
-      .from(userPrefs)
-      .where(eq(userPrefs.portfolioId, portfolioId));
-    return result || null;
-  }
-
-  async upsertUserPrefs(prefs: InsertUserPrefs): Promise<UserPrefs> {
-    const existing = await this.getUserPrefs(prefs.portfolioId);
-    
-    if (existing) {
-      const [result] = await db
-        .update(userPrefs)
-        .set({
-          riskStyle: prefs.riskStyle,
-          mockLivePref: prefs.mockLivePref,
-          updatedAt: new Date(),
-        })
-        .where(eq(userPrefs.portfolioId, prefs.portfolioId))
-        .returning();
-      return result;
-    } else {
-      const [result] = await db
-        .insert(userPrefs)
-        .values(prefs)
-        .returning();
-      return result;
-    }
-  }
-
-  // Phase 4 - Alerts
-  async createAlert(alert: InsertAlert): Promise<Alert> {
-    const [result] = await db
-      .insert(alerts)
-      .values(alert)
-      .returning();
-    return result;
-  }
-
-  async getAlerts(portfolioId: string): Promise<Alert[]> {
-    return db
-      .select()
-      .from(alerts)
-      .where(eq(alerts.portfolioId, portfolioId))
-      .orderBy(desc(alerts.createdAt));
-  }
-
-  async updateAlert(id: string, updates: Partial<InsertAlert>): Promise<Alert | null> {
-    const [result] = await db
-      .update(alerts)
-      .set({
-        ...updates,
-        updatedAt: new Date(),
-      })
-      .where(eq(alerts.id, id))
-      .returning();
-    return result || null;
-  }
-
-  async deleteAlert(id: string): Promise<void> {
-    await db.delete(alerts).where(eq(alerts.id, id));
-  }
-
-  async getActiveAlerts(): Promise<Alert[]> {
-    return db
-      .select()
-      .from(alerts)
-      .where(eq(alerts.enabled, "true"));
-  }
-
-  async updateAlertLastTriggered(id: string): Promise<void> {
-    await db
-      .update(alerts)
-      .set({
-        lastTriggered: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(alerts.id, id));
-  }
-
-  // Phase 4 - Notifications (in-memory for now, could be stored in database)
-  private notifications: Map<string, Notification[]> = new Map();
-
-  async getNotifications(portfolioId: string, limit = 20): Promise<Notification[]> {
-    const portfolioNotifications = this.notifications.get(portfolioId) || [];
-    return portfolioNotifications
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, limit);
-  }
-
-  async addNotification(notification: Omit<Notification, 'id'>): Promise<Notification> {
-    const newNotification: Notification = {
-      ...notification,
-      id: randomUUID(),
-    };
-    
-    // For demo purposes, extract portfolioId from notification context
-    // In a real app, this would be passed as a parameter
-    const portfolioId = "default"; // Would need to be passed in
-    
-    const existing = this.notifications.get(portfolioId) || [];
-    existing.unshift(newNotification);
-    
-    // Keep only last 100 notifications per portfolio
-    if (existing.length > 100) {
-      existing.splice(100);
-    }
-    
-    this.notifications.set(portfolioId, existing);
-    return newNotification;
-  }
-
   // Phase 4 - Enhanced Sentiment Index
   async getEnhancedSentimentIndex(): Promise<EnhancedSentimentIndex> {
     // Mock implementation with subscores and deltas
@@ -1090,58 +558,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async initializeSampleData(): Promise<void> {
-    // Check if demo portfolio already exists
-    const existing = await this.getPortfolios();
-    if (existing.length > 0) {
-      return; // Sample data already exists
-    }
-
-    // Create demo portfolio
-    const portfolio = await this.createPortfolio({
-      name: "Demo Portfolio",
-      baseCurrency: "USD"
-    });
-
-    // Create sample transactions
-    const sampleTransactions = [
-      {
-        portfolioId: portfolio.id,
-        symbol: "AAPL",
-        assetType: "equity" as const,
-        side: "buy" as const,
-        quantity: "10",
-        price: "150.00",
-        occurredAt: new Date("2024-01-15")
-      },
-      {
-        portfolioId: portfolio.id,
-        symbol: "GOOGL",
-        assetType: "equity" as const,
-        side: "buy" as const,
-        quantity: "5",
-        price: "140.00",
-        occurredAt: new Date("2024-02-01")
-      },
-      {
-        portfolioId: portfolio.id,
-        symbol: "SPY",
-        assetType: "etf" as const,
-        side: "buy" as const,
-        quantity: "20",
-        price: "420.00",
-        occurredAt: new Date("2024-02-15")
-      }
-    ];
-
-    for (const txn of sampleTransactions) {
-      await this.createTransaction(txn);
-    }
-
-    // Create sample prices
+    // Initialize sample prices for market research platform
     const samplePrices = [
       { symbol: "AAPL", assetType: "equity", date: new Date(), close: "175.50", source: "yahoo" },
       { symbol: "GOOGL", assetType: "equity", date: new Date(), close: "155.25", source: "yahoo" },
       { symbol: "SPY", assetType: "etf", date: new Date(), close: "445.75", source: "yahoo" },
+      { symbol: "BTC", assetType: "crypto", date: new Date(), close: "42000.00", source: "coingecko" },
+      { symbol: "ETH", assetType: "crypto", date: new Date(), close: "2800.00", source: "coingecko" },
     ];
 
     for (const price of samplePrices) {

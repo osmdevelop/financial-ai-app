@@ -2,14 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
-  insertPortfolioSchema,
-  insertPositionSchema,
   insertPriceSchema,
-  insertTransactionSchema,
   insertWatchlistSchema,
-  insertFocusAssetSchema,
-  insertUserPrefsSchema,
-  insertAlertSchema,
   // Events Intelligence schemas
   eventPrebriefRequestSchema,
   eventPostmortemRequestSchema,
@@ -29,22 +23,6 @@ import path from "path";
 const allowMockByDefault =
   process.env.NODE_ENV !== "production" && process.env.USE_MOCK_NEWS === "1";
 
-// Schema for CSV upload
-const csvUploadSchema = z.object({
-  positions: z.array(
-    z.object({
-      symbol: z.string(),
-      quantity: z.string(),
-      avgCost: z.string(),
-      assetType: z.enum(["equity", "etf", "crypto"]),
-    }),
-  ),
-});
-
-// Schema for price refresh
-const refreshPricesSchema = z.object({
-  portfolioId: z.string(),
-});
 
 // Schema for AI insights
 const insightsSchema = z.object({
@@ -193,11 +171,6 @@ const recapSummarizeSchema = z.object({
   recapPayload: z.any(),
 });
 
-// Schema for transaction queries
-const transactionQuerySchema = z.object({
-  portfolioId: z.string(),
-  symbol: z.string().optional(),
-});
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -205,274 +178,34 @@ const openai = new OpenAI({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Portfolio routes
-  app.get("/api/portfolios", async (req, res) => {
+
+  // Watchlist APIs
+  app.post("/api/watchlist", async (req, res) => {
     try {
-      const portfolios = await storage.getPortfolios();
-      res.json(portfolios);
+      const validatedData = insertWatchlistSchema.parse(req.body);
+      const item = await storage.addToWatchlist(validatedData);
+      res.json(item);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch portfolios" });
+      res.status(400).json({ error: "Invalid watchlist data" });
     }
   });
 
-  app.post("/api/portfolios", async (req, res) => {
+  app.get("/api/watchlist", async (req, res) => {
     try {
-      const validatedData = insertPortfolioSchema.parse(req.body);
-      const portfolio = await storage.createPortfolio(validatedData);
-      res.json(portfolio);
+      const watchlist = await storage.getWatchlist();
+      res.json(watchlist);
     } catch (error) {
-      res.status(400).json({ error: "Invalid portfolio data" });
+      res.status(500).json({ error: "Failed to fetch watchlist" });
     }
   });
 
-  app.get("/api/portfolios/:id", async (req, res) => {
+  app.delete("/api/watchlist/:id", async (req, res) => {
     try {
-      const portfolio = await storage.getPortfolio(req.params.id);
-      if (!portfolio) {
-        return res.status(404).json({ error: "Portfolio not found" });
-      }
-
-      const positions = await storage.getPortfolioPositionsWithPrices(
-        req.params.id,
-      );
-      const summary = await storage.getPortfolioSummary(req.params.id);
-
-      res.json({
-        portfolio,
-        positions,
-        summary,
-      });
+      const { id } = req.params;
+      await storage.removeFromWatchlist(id);
+      res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch portfolio details" });
-    }
-  });
-
-  app.put("/api/portfolios/:id/archive", async (req, res) => {
-    try {
-      await storage.archivePortfolio(req.params.id);
-      res.json({ success: true, message: "Portfolio archived" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to archive portfolio" });
-    }
-  });
-
-  app.delete("/api/portfolios/:id", async (req, res) => {
-    try {
-      await storage.deletePortfolio(req.params.id);
-      res.json({ success: true, message: "Portfolio deleted" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete portfolio" });
-    }
-  });
-
-  // Phase 4 - User Preferences routes
-  app.get("/api/prefs", async (req, res) => {
-    try {
-      const portfolioId = req.query.portfolioId as string;
-      if (!portfolioId) {
-        return res.status(400).json({ error: "portfolioId is required" });
-      }
-
-      const prefs = await storage.getUserPrefs(portfolioId);
-      if (!prefs) {
-        return res.status(404).json({ error: "User preferences not found" });
-      }
-
-      res.json(prefs);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch user preferences" });
-    }
-  });
-
-  app.post("/api/prefs", async (req, res) => {
-    try {
-      const validatedData = insertUserPrefsSchema.parse(req.body);
-      const prefs = await storage.upsertUserPrefs(validatedData);
-      res.json(prefs);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res
-          .status(400)
-          .json({ error: "Invalid preferences data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to save user preferences" });
-    }
-  });
-
-  // Phase 4 - Alerts routes
-  app.post("/api/alerts", async (req, res) => {
-    try {
-      const validatedData = insertAlertSchema.parse(req.body);
-      const alert = await storage.createAlert(validatedData);
-      res.json(alert);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res
-          .status(400)
-          .json({ error: "Invalid alert data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to create alert" });
-    }
-  });
-
-  app.get("/api/alerts", async (req, res) => {
-    try {
-      const portfolioId = req.query.portfolioId as string;
-      if (!portfolioId) {
-        return res.status(400).json({ error: "portfolioId is required" });
-      }
-
-      const alerts = await storage.getAlerts(portfolioId);
-      res.json(alerts);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch alerts" });
-    }
-  });
-
-  app.patch("/api/alerts/:id", async (req, res) => {
-    try {
-      const updates = insertAlertSchema.partial().parse(req.body);
-      const alert = await storage.updateAlert(req.params.id, updates);
-
-      if (!alert) {
-        return res.status(404).json({ error: "Alert not found" });
-      }
-
-      res.json(alert);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res
-          .status(400)
-          .json({ error: "Invalid alert data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to update alert" });
-    }
-  });
-
-  app.delete("/api/alerts/:id", async (req, res) => {
-    try {
-      await storage.deleteAlert(req.params.id);
-      res.json({ success: true, message: "Alert deleted" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete alert" });
-    }
-  });
-
-  // Phase 4 - Notifications route
-  app.get("/api/notifications", async (req, res) => {
-    try {
-      const portfolioId = req.query.portfolioId as string;
-      const limit = parseInt(req.query.limit as string) || 20;
-
-      if (!portfolioId) {
-        return res.status(400).json({ error: "portfolioId is required" });
-      }
-
-      const notifications = await storage.getNotifications(portfolioId, limit);
-      res.json(notifications);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch notifications" });
-    }
-  });
-
-  // Position routes
-  app.post("/api/portfolios/:id/positions/upload", async (req, res) => {
-    try {
-      const { positions } = csvUploadSchema.parse(req.body);
-      const portfolioId = req.params.id;
-
-      const createdPositions = [];
-      for (const positionData of positions) {
-        const position = await storage.upsertPosition({
-          portfolioId,
-          symbol: positionData.symbol.toUpperCase(),
-          assetType: positionData.assetType,
-          quantity: positionData.quantity,
-          avgCost: positionData.avgCost,
-        });
-        createdPositions.push(position);
-      }
-
-      res.json({ success: true, positions: createdPositions });
-    } catch (error) {
-      res.status(400).json({ error: "Invalid position data" });
-    }
-  });
-
-  // Price refresh route
-  app.post("/api/refresh-prices", async (req, res) => {
-    try {
-      const { portfolioId } = refreshPricesSchema.parse(req.body);
-
-      const positions = await storage.getPositionsByPortfolio(portfolioId);
-      if (positions.length === 0) {
-        return res.json({ success: true, message: "No positions to refresh" });
-      }
-
-      // Separate equity/etf from crypto
-      const equities = positions.filter(
-        (p) => p.assetType === "equity" || p.assetType === "etf",
-      );
-      const cryptos = positions.filter((p) => p.assetType === "crypto");
-
-      // Prepare data for Python script
-      const requestData = {
-        equities: equities.map((p) => p.symbol),
-        cryptos: cryptos.map((p) => {
-          // Map crypto symbols to CoinGecko IDs
-          const symbolMap: { [key: string]: string } = {
-            "BTC-USD": "bitcoin",
-            "ETH-USD": "ethereum",
-            "ADA-USD": "cardano",
-            "SOL-USD": "solana",
-          };
-          return (
-            symbolMap[p.symbol] || p.symbol.toLowerCase().replace("-usd", "")
-          );
-        }),
-      };
-
-      // Call Python service
-      const pythonProcess = spawn("python", ["python/main.py"], {
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-
-      pythonProcess.stdin.write(JSON.stringify(requestData));
-      pythonProcess.stdin.end();
-
-      let pythonOutput = "";
-      pythonProcess.stdout.on("data", (data) => {
-        pythonOutput += data.toString();
-      });
-
-      pythonProcess.on("close", async (code) => {
-        if (code === 0) {
-          try {
-            const priceData = JSON.parse(pythonOutput);
-
-            // Store prices in database
-            for (const price of priceData) {
-              await storage.upsertPrice({
-                symbol: price.symbol,
-                assetType: price.assetType,
-                date: new Date(price.date),
-                close: price.close.toString(),
-                source: price.source,
-              });
-            }
-
-            res.json({ success: true, pricesUpdated: priceData.length });
-          } catch (error) {
-            res.status(500).json({ error: "Failed to parse price data" });
-          }
-        } else {
-          res
-            .status(500)
-            .json({ error: "Failed to fetch prices from external sources" });
-        }
-      });
-    } catch (error) {
-      res.status(400).json({ error: "Invalid request data" });
+      res.status(500).json({ error: "Failed to remove from watchlist" });
     }
   });
 
@@ -688,25 +421,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get fresh context for AI insights
       let contextInfo = "";
       try {
-        // Get portfolio data
-        const portfolios = await storage.getPortfolios();
-        if (portfolios.length > 0) {
-          const portfolioId = portfolios[0].id;
-          const summary = await storage.getPortfolioSummary(portfolioId);
-          const positions =
-            await storage.getPortfolioPositionsWithPrices(portfolioId);
-
-          contextInfo += `Portfolio Context (as of ${new Date().toLocaleDateString()}):\n`;
-          contextInfo += `- Total Value: $${summary.totalValue.toLocaleString()}\n`;
-          contextInfo += `- Daily P&L: ${summary.dailyPnL >= 0 ? "+" : ""}$${summary.dailyPnL.toLocaleString()} (${summary.dailyPnLPercent.toFixed(2)}%)\n`;
-
-          if (summary.topMover) {
-            contextInfo += `- Top Mover: ${summary.topMover.symbol} ${summary.topMover.change >= 0 ? "+" : ""}$${summary.topMover.change.toLocaleString()} (${summary.topMover.changePercent.toFixed(2)}%)\n`;
-          }
-
-          contextInfo += `- Holdings: ${positions.map((p) => `${p.symbol} (${p.assetType})`).join(", ")}\n\n`;
-        }
-
         // Get market sentiment
         const sentimentResponse = await fetch(
           "http://localhost:5000/api/sentiment",
@@ -910,34 +624,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .json({ error: "Invalid request", details: error.errors });
       }
       res.status(500).json({ error: "Failed to generate template insights" });
-    }
-  });
-
-  // Price history route for charts
-  app.get("/api/portfolios/:id/price-history", async (req, res) => {
-    try {
-      const portfolioId = req.params.id;
-      const days = parseInt(req.query.days as string) || 30;
-
-      const positions = await storage.getPositionsByPortfolio(portfolioId);
-      const priceHistory = [];
-
-      for (const position of positions) {
-        const history = await storage.getPriceHistory(
-          position.symbol,
-          position.assetType,
-          days,
-        );
-        priceHistory.push({
-          symbol: position.symbol,
-          assetType: position.assetType,
-          prices: history,
-        });
-      }
-
-      res.json(priceHistory);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch price history" });
     }
   });
 
@@ -1392,121 +1078,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Transaction CRUD APIs
-  app.post("/api/transactions", async (req, res) => {
-    try {
-      console.log(
-        "Received transaction data:",
-        JSON.stringify(req.body, null, 2),
-      );
-      const validatedData = insertTransactionSchema.parse(req.body);
-      const transaction = await storage.createTransaction(validatedData);
-
-      // Return updated position for the symbol
-      const updatedPosition = await storage.getComputedPosition(
-        validatedData.portfolioId,
-        validatedData.symbol,
-      );
-
-      res.json({ transaction, position: updatedPosition });
-    } catch (error) {
-      console.error("Transaction validation error:", error);
-      if (error instanceof z.ZodError) {
-        res
-          .status(400)
-          .json({ error: "Invalid transaction data", details: error.errors });
-      } else {
-        res.status(400).json({ error: "Invalid transaction data" });
-      }
-    }
-  });
-
-  app.get("/api/transactions", async (req, res) => {
-    try {
-      const { portfolioId, symbol } = transactionQuerySchema.parse(req.query);
-      const transactions = await storage.getTransactionsByPortfolio(
-        portfolioId,
-        symbol,
-      );
-      res.json(transactions);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid query parameters" });
-    }
-  });
-
-  app.patch("/api/transactions/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const updates = insertTransactionSchema.partial().parse(req.body);
-      const transaction = await storage.updateTransaction(id, updates);
-
-      if (!transaction) {
-        return res.status(404).json({ error: "Transaction not found" });
-      }
-
-      res.json(transaction);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid transaction data" });
-    }
-  });
-
-  app.delete("/api/transactions/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      await storage.deleteTransaction(id);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete transaction" });
-    }
-  });
-
-  // Computed Positions API
-  app.get("/api/positions", async (req, res) => {
-    try {
-      const { portfolioId } = req.query;
-      if (!portfolioId || typeof portfolioId !== "string") {
-        return res.status(400).json({ error: "Portfolio ID required" });
-      }
-
-      const positions = await storage.getComputedPositions(portfolioId);
-      res.json(positions);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch positions" });
-    }
-  });
-
-  // Watchlist APIs
-  app.post("/api/watchlist", async (req, res) => {
-    try {
-      const validatedData = insertWatchlistSchema.parse(req.body);
-      const item = await storage.addToWatchlist(validatedData);
-      res.json(item);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid watchlist data" });
-    }
-  });
-
-  app.get("/api/watchlist", async (req, res) => {
-    try {
-      const watchlist = await storage.getWatchlist();
-      res.json(watchlist);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch watchlist" });
-    }
-  });
-
-  app.delete("/api/watchlist/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      await storage.removeFromWatchlist(id);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to remove from watchlist" });
-    }
-  });
-
-  // Migration endpoint removed - using transaction-based system from start
-
   // ===== PHASE 3 API ROUTES =====
 
   // Enhanced Sentiment Index
@@ -1547,58 +1118,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Sentiment narrative error:", error);
       res.status(500).json({ error: "Failed to generate sentiment narrative" });
-    }
-  });
-
-  // Focus Assets CRUD
-  app.get("/api/focus-assets", async (req, res) => {
-    try {
-      const { portfolioId } = focusAssetQuerySchema.parse(req.query);
-      const focusAssets = await storage.getFocusAssets(portfolioId);
-      res.json(focusAssets);
-    } catch (error) {
-      console.error("Get focus assets error:", error);
-      res.status(500).json({ error: "Failed to get focus assets" });
-    }
-  });
-
-  app.post("/api/focus-assets", async (req, res) => {
-    try {
-      const focusAssetData = insertFocusAssetSchema.parse(req.body);
-      const focusAsset = await storage.createFocusAsset(focusAssetData);
-      res.json(focusAsset);
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.includes("Maximum 5 focus assets")
-      ) {
-        return res
-          .status(400)
-          .json({ error: "Limit reached — remove one to add another" });
-      }
-      console.error("Create focus asset error:", error);
-      res.status(500).json({ error: "Failed to create focus asset" });
-    }
-  });
-
-  app.delete("/api/focus-assets/:id", async (req, res) => {
-    try {
-      await storage.deleteFocusAsset(req.params.id);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Delete focus asset error:", error);
-      res.status(500).json({ error: "Failed to delete focus asset" });
-    }
-  });
-
-  app.patch("/api/focus-assets/reorder", async (req, res) => {
-    try {
-      const { items } = focusAssetReorderSchema.parse(req.body);
-      await storage.reorderFocusAssets(items);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Reorder focus assets error:", error);
-      res.status(500).json({ error: "Failed to reorder focus assets" });
     }
   });
 

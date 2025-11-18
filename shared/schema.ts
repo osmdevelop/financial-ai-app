@@ -3,23 +3,6 @@ import { pgTable, text, varchar, decimal, timestamp, integer, index } from "driz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const portfolios = pgTable("portfolios", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  baseCurrency: text("base_currency").notNull().default("USD"),
-  archived: text("archived").notNull().default("false"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const positions = pgTable("positions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
-  symbol: text("symbol").notNull(),
-  assetType: text("asset_type").notNull(), // "equity" | "etf" | "crypto"
-  quantity: decimal("quantity").notNull(),
-  avgCost: decimal("avg_cost").notNull(),
-});
-
 export const prices = pgTable("prices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   symbol: text("symbol").notNull(),
@@ -29,30 +12,6 @@ export const prices = pgTable("prices", {
   source: text("source").notNull(),
 });
 
-export const transactions = pgTable("transactions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
-  symbol: text("symbol").notNull(),
-  assetType: text("asset_type").notNull(), // equity | etf | crypto | fx | commodity
-  side: text("side").notNull(), // buy | sell | transfer_in | transfer_out | airdrop | fee | dividend
-  quantity: decimal("quantity").notNull(), // positive numbers only
-  price: decimal("price"), // unit price in quote currency (USD default)
-  fee: decimal("fee"), // optional
-  occurredAt: timestamp("occurred_at").notNull(),
-  note: text("note"),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => ({
-  portfolioSymbolOccurredIdx: index("portfolio_symbol_occurred_idx").on(table.portfolioId, table.symbol, table.occurredAt),
-}));
-
-export const hiddenAssets = pgTable("hidden_assets", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
-  symbol: text("symbol").notNull(),
-}, (table) => ({
-  portfolioSymbolIdx: index("portfolio_symbol_idx").on(table.portfolioId, table.symbol),
-}));
-
 export const watchlist = pgTable("watchlist", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   symbol: text("symbol").notNull(),
@@ -60,44 +19,6 @@ export const watchlist = pgTable("watchlist", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   symbolAssetTypeIdx: index("symbol_asset_type_idx").on(table.symbol, table.assetType),
-}));
-
-export const focusAssets = pgTable("focus_assets", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
-  symbol: text("symbol").notNull(),
-  assetType: text("asset_type").notNull(), // equity | etf | crypto | fx | commodity
-  order: integer("order").notNull().default(0),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => ({
-  portfolioSymbolIdx: index("portfolio_symbol_focus_idx").on(table.portfolioId, table.symbol),
-}));
-
-export const userPrefs = pgTable("user_prefs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
-  riskStyle: text("risk_style").notNull(), // "Conservative" | "Balanced" | "Aggressive"
-  mockLivePref: text("mock_live_pref").notNull().default("mock"), // "mock" | "live"
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  portfolioIdx: index("user_prefs_portfolio_idx").on(table.portfolioId),
-}));
-
-export const alerts = pgTable("alerts", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  portfolioId: varchar("portfolio_id").notNull().references(() => portfolios.id, { onDelete: "cascade" }),
-  type: text("type").notNull(), // "price" | "pct" | "earnings" | "sentiment"
-  symbol: text("symbol"), // null for sentiment alerts
-  threshold: decimal("threshold"), // price or pct or sentiment score
-  direction: text("direction"), // "above" | "below"
-  windowMin: integer("window_min").default(60), // debounce window for repeated fires
-  enabled: text("enabled").notNull().default("true"), // "true" | "false"
-  lastTriggered: timestamp("last_triggered"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  portfolioTypeSymbolIdx: index("alerts_portfolio_type_symbol_idx").on(table.portfolioId, table.type, table.symbol),
 }));
 
 // Events Intelligence tables
@@ -182,19 +103,6 @@ export const headlineCache = pgTable("headline_cache", {
 }));
 
 // Insert schemas
-export const insertPortfolioSchema = createInsertSchema(portfolios).pick({
-  name: true,
-  baseCurrency: true,
-});
-
-export const insertPositionSchema = createInsertSchema(positions).pick({
-  portfolioId: true,
-  symbol: true,
-  assetType: true,
-  quantity: true,
-  avgCost: true,
-});
-
 export const insertPriceSchema = createInsertSchema(prices).pick({
   symbol: true,
   assetType: true,
@@ -203,73 +111,9 @@ export const insertPriceSchema = createInsertSchema(prices).pick({
   source: true,
 });
 
-export const insertTransactionSchema = createInsertSchema(transactions).pick({
-  portfolioId: true,
-  symbol: true,
-  assetType: true,
-  side: true,
-  quantity: true,
-  price: true,
-  fee: true,
-  occurredAt: true,
-  note: true,
-}).extend({
-  side: z.enum(["buy", "sell", "transfer_in", "transfer_out", "airdrop", "fee", "dividend"]),
-  assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity"]),
-  quantity: z.string().transform(val => {
-    const num = parseFloat(val);
-    if (num <= 0) throw new Error("Quantity must be positive");
-    return val;
-  }),
-  occurredAt: z.union([z.date(), z.string().transform(val => new Date(val))]),
-  price: z.union([z.string(), z.null()]).optional(),
-  fee: z.union([z.string(), z.null()]).optional(),
-  note: z.union([z.string(), z.null()]).optional(),
-});
-
 export const insertWatchlistSchema = createInsertSchema(watchlist).pick({
   symbol: true,
   assetType: true,
-});
-
-export const insertHiddenAssetSchema = createInsertSchema(hiddenAssets).pick({
-  portfolioId: true,
-  symbol: true,
-});
-
-export const insertFocusAssetSchema = createInsertSchema(focusAssets).pick({
-  portfolioId: true,
-  symbol: true,
-  assetType: true,
-  order: true,
-}).extend({
-  assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity"]),
-});
-
-export const insertUserPrefsSchema = createInsertSchema(userPrefs).pick({
-  portfolioId: true,
-  riskStyle: true,
-  mockLivePref: true,
-}).extend({
-  riskStyle: z.enum(["Conservative", "Balanced", "Aggressive"]),
-  mockLivePref: z.enum(["mock", "live"]),
-});
-
-export const insertAlertSchema = createInsertSchema(alerts).pick({
-  portfolioId: true,
-  type: true,
-  symbol: true,
-  threshold: true,
-  direction: true,
-  windowMin: true,
-  enabled: true,
-}).extend({
-  type: z.enum(["price", "pct", "earnings", "sentiment"]),
-  direction: z.enum(["above", "below"]).optional(),
-  enabled: z.enum(["true", "false"]).optional(),
-  threshold: z.string().optional(),
-  symbol: z.string().optional(),
-  windowMin: z.number().optional(),
 });
 
 export const insertEventSchema = createInsertSchema(events).pick({
@@ -354,26 +198,12 @@ export const newsAnalyzeSchema = z.object({
 });
 
 // Types
-export type Portfolio = typeof portfolios.$inferSelect;
-export type Position = typeof positions.$inferSelect;
 export type Price = typeof prices.$inferSelect;
-export type Transaction = typeof transactions.$inferSelect;
 export type WatchlistItem = typeof watchlist.$inferSelect;
-export type HiddenAsset = typeof hiddenAssets.$inferSelect;
-export type FocusAsset = typeof focusAssets.$inferSelect;
-export type InsertPortfolio = z.infer<typeof insertPortfolioSchema>;
-export type InsertPosition = z.infer<typeof insertPositionSchema>;
 export type InsertPrice = z.infer<typeof insertPriceSchema>;
-export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type InsertWatchlistItem = z.infer<typeof insertWatchlistSchema>;
-export type InsertHiddenAsset = z.infer<typeof insertHiddenAssetSchema>;
-export type InsertFocusAsset = z.infer<typeof insertFocusAssetSchema>;
-export type UserPrefs = typeof userPrefs.$inferSelect;
-export type Alert = typeof alerts.$inferSelect;
 export type Event = typeof events.$inferSelect;
 export type EventAlert = typeof eventAlerts.$inferSelect;
-export type InsertUserPrefs = z.infer<typeof insertUserPrefsSchema>;
-export type InsertAlert = z.infer<typeof insertAlertSchema>;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type InsertEventAlert = z.infer<typeof insertEventAlertSchema>;
 
@@ -413,39 +243,6 @@ export type NewsStreamResponse = {
   };
 };
 
-// Extended types for API responses
-export type PositionWithPrice = Position & {
-  lastPrice?: number;
-  pnlAmount?: number;
-  pnlPercent?: number;
-};
-
-// Computed position from transactions using WAC method
-export type ComputedPosition = {
-  symbol: string;
-  assetType: string;
-  quantity: number;
-  avgCost: number;
-  lastPrice?: number;
-  value?: number;
-  unrealizedPnl?: number;
-  unrealizedPnlPercent?: number;
-  realizedPnl?: number;
-  totalTransactions: number;
-  firstPurchaseDate?: string;
-  lastTransactionDate?: string;
-};
-
-export type PortfolioSummary = {
-  totalValue: number;
-  dailyPnL: number;
-  dailyPnLPercent: number;
-  topMover: {
-    symbol: string;
-    change: number;
-    changePercent: number;
-  } | null;
-};
 
 export type PriceData = {
   symbol: string;
@@ -585,7 +382,6 @@ export type AssetSheetData = {
   asOf: string;
 };
 
-export type TransactionSide = "buy" | "sell" | "transfer_in" | "transfer_out" | "airdrop" | "fee" | "dividend";
 export type AssetType = "equity" | "etf" | "crypto" | "fx" | "commodity";
 
 // Phase 3 - Enhanced Sentiment Types
@@ -611,13 +407,6 @@ export type SentimentNarrative = {
   as_of: string;
 };
 
-// Phase 3 - Focus Assets
-export type FocusAssetWithDetails = FocusAsset & {
-  name?: string;
-  lastPrice?: number;
-  change24h?: number;
-  changePercent24h?: number;
-};
 
 // Phase 3 - Multi-timeframe Analysis
 export type TimeframeStance = "Bullish" | "Bearish" | "Neutral";
@@ -692,14 +481,6 @@ export type HeadlineImpactAnalysis = {
   as_of: string;
 };
 
-// Phase 4 - Alerts and Notifications
-export type Notification = {
-  id: string;
-  title: string;
-  body: string;
-  timestamp: string;
-  alertId?: string;
-};
 
 // Phase 4 - Enhanced Sentiment with Sub-scores
 export type SentimentSubScores = {

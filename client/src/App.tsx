@@ -9,7 +9,6 @@ import { DisclaimerBanner } from "@/components/layout/disclaimer-banner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { CommandPalette, CommandPaletteProvider, useCommandPalette } from "@/components/ui/command-palette";
 import { AssetSheetModal } from "@/components/ui/asset-sheet-modal";
-import { TransactionModal } from "@/components/ui/transaction-modal";
 import type { AssetSearchResult } from "@shared/schema";
 import Dashboard from "@/pages/dashboard";
 import Today from "@/pages/today";
@@ -63,18 +62,11 @@ function Router() {
 function AppContent() {
   const [selectedAsset, setSelectedAsset] = useState<AssetSearchResult | null>(null);
   const [showAssetSheet, setShowAssetSheet] = useState(false);
-  const [showTransactionModal, setShowTransactionModal] = useState(false);
-  const { open: commandPaletteOpen, setOpen: setCommandPaletteOpen, currentPortfolioId, setCurrentPortfolioId } = useCommandPalette();
+  const { open: commandPaletteOpen, setOpen: setCommandPaletteOpen } = useCommandPalette();
 
   const handleAssetSelect = (asset: AssetSearchResult) => {
     setSelectedAsset(asset);
     setShowAssetSheet(true);
-  };
-
-  const handleAddTransaction = (asset: AssetSearchResult, portfolioId?: string) => {
-    setSelectedAsset(asset);
-    if (portfolioId) setCurrentPortfolioId(portfolioId);
-    setShowTransactionModal(true);
   };
 
   return (
@@ -105,17 +97,6 @@ function AppContent() {
         open={showAssetSheet}
         onOpenChange={setShowAssetSheet}
         asset={selectedAsset}
-        onAddTransaction={handleAddTransaction}
-        portfolioId={currentPortfolioId}
-      />
-      
-      {/* Transaction Modal */}
-      <TransactionModal
-        open={showTransactionModal}
-        onOpenChange={setShowTransactionModal}
-        asset={selectedAsset}
-        portfolioId={currentPortfolioId}
-        onPortfolioIdChange={setCurrentPortfolioId}
       />
     </div>
   );

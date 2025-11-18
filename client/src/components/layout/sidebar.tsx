@@ -103,7 +103,7 @@ export function Sidebar() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gradient">OSM Fin</h1>
-              <p className="text-sm text-muted-foreground font-medium">Portfolio Intelligence</p>
+              <p className="text-sm text-muted-foreground font-medium">Market Research</p>
             </div>
           </div>
         </div>

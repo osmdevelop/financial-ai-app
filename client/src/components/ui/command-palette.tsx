@@ -165,21 +165,18 @@ export function CommandPalette({ open, onOpenChange, onSelectAsset }: CommandPal
   );
 }
 
-// Context for command palette state and current portfolio
+// Context for command palette state
 interface CommandPaletteContextType {
   open: boolean;
   setOpen: (open: boolean) => void;
   toggle: () => void;
   close: () => void;
-  currentPortfolioId: string;
-  setCurrentPortfolioId: (portfolioId: string) => void;
 }
 
 const CommandPaletteContext = createContext<CommandPaletteContextType | null>(null);
 
 export function CommandPaletteProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [currentPortfolioId, setCurrentPortfolioId] = useState("");
 
   const toggle = useCallback(() => {
     setOpen(prev => !prev);
@@ -194,8 +191,6 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
     setOpen,
     toggle,
     close,
-    currentPortfolioId,
-    setCurrentPortfolioId,
   };
 
   return (

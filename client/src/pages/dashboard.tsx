@@ -6,8 +6,6 @@ import {
   ChartSkeleton,
 } from "@/components/ui/loading-skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-// ✂️ Removed: import { SentimentGauge } from "@/components/ui/sentiment-gauge";
-import { FocusAssetsPicker } from "@/components/ui/focus-assets-picker";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, Rocket, Activity } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/constants";
@@ -106,119 +104,55 @@ function CircularRate({
 }
 
 export default function Dashboard() {
-  const { data: portfolios } = useQuery({
-    queryKey: ["/api/portfolios"],
-    queryFn: () => api.getPortfolios(),
-  });
-
-  const demoPortfolioId = portfolios?.[0]?.id;
-
-  const { data: portfolioData, isLoading } = useQuery({
-    queryKey: ["/api/portfolios", demoPortfolioId],
-    queryFn: () => api.getPortfolioDetails(demoPortfolioId!),
-    enabled: !!demoPortfolioId,
-  });
-
-  const { data: priceHistory } = useQuery({
-    queryKey: ["/api/portfolios", demoPortfolioId, "price-history"],
-    queryFn: () => api.getPortfolioPriceHistory(demoPortfolioId!, 30),
-    enabled: !!demoPortfolioId,
-  });
-
   const { data: marketSentiment, isLoading: sentimentLoading } = useQuery({
     queryKey: ["/api/sentiment/index"],
     queryFn: () => api.getEnhancedSentiment(),
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header
-          title="Dashboard"
-          subtitle="Overview of your portfolio performance"
-        />
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
-            <KPICardSkeleton />
-            <KPICardSkeleton />
-            <KPICardSkeleton />
-          </div>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
-            <ChartSkeleton />
-            <ChartSkeleton />
-          </div>
-        </main>
-      </div>
-    );
-  }
+  const { data: watchlist } = useQuery({
+    queryKey: ["/api/watchlist"],
+    queryFn: () => api.getWatchlist(),
+  });
 
-  const summary = portfolioData?.summary;
-  const positions = portfolioData?.positions || [];
-
-  // Calculate portfolio composition for pie chart
-  const composition = positions.reduce(
-    (acc, position) => {
-      const type = position.assetType;
-      const value = (position.lastPrice || 0) * parseFloat(position.quantity);
-      acc[type] = (acc[type] || 0) + value;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  const totalValue = Object.values(composition).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
-  const pieData = Object.entries(composition).map(([type, value]) => ({
-    name: type.charAt(0).toUpperCase() + type.slice(1),
-    value: (value / totalValue) * 100,
-    color:
-      type === "equity" ? "#1E40AF" : type === "etf" ? "#10B981" : "#8B5CF6",
-  }));
-
-  // Generate sample chart data for 30-day performance
+  // Generate sample chart data for market indices
   const chartData = Array.from({ length: 30 }, (_, i) => ({
     date: new Date(
       Date.now() - (29 - i) * 24 * 60 * 60 * 1000,
     ).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    value: (summary?.totalValue || 120000) + (Math.random() - 0.5) * 10000,
+    value: 4500 + (Math.random() - 0.5) * 200, // Sample S&P 500 data
   }));
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header
         title="Dashboard"
-        subtitle="Overview of your portfolio performance"
-        portfolioId={demoPortfolioId}
+        subtitle="Market research and intelligence overview"
       />
 
       <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
-          {/* Portfolio Value Card */}
+          {/* Market Index Card */}
           <Card>
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">
-                    Total Portfolio Value
+                    S&P 500
                   </p>
                   <p className="text-2xl sm:text-3xl font-bold text-foreground">
-                    {formatCurrency(summary?.totalValue || 0)}
+                    4,850
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <DollarSign className="text-primary text-xl" />
+                  <TrendingUp className="text-primary text-xl" />
                 </div>
               </div>
               <div className="mt-4 flex items-center justify-between">
                 <div className="flex items-center">
-                  <span
-                    className={`text-sm font-medium ${(summary?.dailyPnLPercent || 0) >= 0 ? "text-success" : "text-danger"}`}
-                  >
-                    {formatPercent(summary?.dailyPnLPercent || 0)}
+                  <span className="text-sm font-medium text-success">
+                    +1.2%
                   </span>
                   <span className="text-muted-foreground text-sm ml-2">
                     vs yesterday
@@ -231,77 +165,48 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Daily P&L Card */}
+          {/* VIX Volatility Index Card */}
           <Card>
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">
-                    Daily P&L
+                    VIX (Volatility)
                   </p>
-                  <p
-                    className={`text-3xl font-bold ${(summary?.dailyPnL || 0) >= 0 ? "text-success" : "text-danger"}`}
-                  >
-                    {(summary?.dailyPnL || 0) >= 0 ? "+" : ""}
-                    {formatCurrency(summary?.dailyPnL || 0)}
+                  <p className="text-3xl font-bold text-warning">
+                    18.5
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="text-success text-xl" />
+                <div className="w-12 h-12 bg-warning/10 rounded-lg flex items-center justify-center">
+                  <Activity className="text-warning text-xl" />
                 </div>
               </div>
               <div className="mt-4 flex items-center">
-                <span
-                  className={`text-sm font-medium ${(summary?.dailyPnLPercent || 0) >= 0 ? "text-success" : "text-danger"}`}
-                >
-                  {formatPercent(summary?.dailyPnLPercent || 0)}
-                </span>
-                <span className="text-muted-foreground text-sm ml-2">
-                  {(summary?.dailyPnL || 0) >= 0 ? "gain" : "loss"} today
+                <span className="text-sm font-medium text-muted-foreground">
+                  Low volatility
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Top Mover Card */}
+          {/* Watchlist Count Card */}
           <Card>
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">
-                    Top Mover
+                    Watchlist Assets
                   </p>
                   <p className="text-2xl font-bold text-foreground">
-                    {summary?.topMover?.symbol || "N/A"}
+                    {watchlist?.length || 0}
                   </p>
-                  <p
-                    className={`text-lg font-semibold ${(summary?.topMover?.change || 0) >= 0 ? "text-success" : "text-danger"}`}
-                  >
-                    {summary?.topMover?.change
-                      ? `${summary.topMover.change >= 0 ? "+" : ""}${formatCurrency(summary.topMover.change)}`
-                      : "No data"}
+                  <p className="text-sm text-muted-foreground mt-1">
+                    tracked assets
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center">
-                  <Rocket className="text-success text-xl" />
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <Activity className="text-primary text-xl" />
                 </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between">
-                <div className="flex items-center">
-                  <span
-                    className={`text-sm font-medium ${(summary?.topMover?.changePercent || 0) >= 0 ? "text-success" : "text-danger"}`}
-                  >
-                    {summary?.topMover?.changePercent
-                      ? formatPercent(summary.topMover.changePercent)
-                      : "0%"}
-                  </span>
-                  <span className="text-muted-foreground text-sm ml-2">
-                    change
-                  </span>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  Last Updated: {new Date().toLocaleTimeString()}
-                </span>
               </div>
             </CardContent>
           </Card>
@@ -380,28 +285,14 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Focus Assets Section */}
-        <div className="mb-6">
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-semibold text-foreground">
-                Focus Assets
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FocusAssetsPicker portfolioId="default" />
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Charts Section */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
-          {/* Portfolio Performance Chart */}
+          {/* Market Index Performance Chart */}
           <Card>
             <CardHeader className="pb-6">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg font-semibold text-foreground">
-                  Portfolio Performance (30d)
+                  S&P 500 Performance (30d)
                 </CardTitle>
                 <div className="flex space-x-2">
                   <button className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md">
@@ -442,52 +333,36 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Asset Allocation */}
+          {/* Watchlist Preview */}
           <Card>
             <CardHeader className="pb-6">
               <CardTitle className="text-lg font-semibold text-foreground">
-                Asset Allocation
+                Watchlist Overview
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      dataKey="value"
+              <div className="space-y-3">
+                {watchlist && watchlist.length > 0 ? (
+                  watchlist.slice(0, 5).map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between py-2 border-b border-border last:border-0"
                     >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-4 space-y-3">
-                {pieData.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: item.color }}
-                      ></div>
-                      <span className="text-sm font-medium text-foreground">
-                        {item.name}
-                      </span>
+                      <div className="flex items-center space-x-3">
+                        <Badge variant="outline">
+                          {item.assetType}
+                        </Badge>
+                        <span className="text-sm font-medium text-foreground">
+                          {item.symbol}
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-sm text-foreground font-medium">
-                      {item.value.toFixed(1)}%
-                    </span>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No assets in watchlist yet
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -528,7 +403,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="font-medium text-foreground">
-                        Portfolio positions updated
+                        Market data refreshed
                       </p>
                       <p className="text-sm text-muted-foreground">
                         1 hour ago

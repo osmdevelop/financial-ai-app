@@ -1,6 +1,6 @@
 # Overview
 
-This is a full-stack market intelligence and portfolio tracker application built as a monorepo. The application provides portfolio management capabilities with real-time price tracking, AI-powered market insights, policy analysis, and comprehensive analytics. It's designed as an informational tool for investment tracking without offering brokerage services or investment advice.
+This is a full-stack market intelligence and research platform built as a monorepo. The application provides real-time market data, AI-powered insights, policy analysis, and comprehensive analytics. It's designed as an informational tool for market research without offering brokerage services or investment advice.
 
 ## Recent Changes (November 18, 2025)
 
@@ -49,15 +49,16 @@ The backend uses Express.js with TypeScript in ESM format, following a REST API 
 ## Data Architecture
 
 **Database**: Configured for PostgreSQL with Drizzle ORM but currently using in-memory storage for demo purposes. The schema includes:
-- **Portfolios**: User portfolio containers with base currency settings
-- **Positions**: Individual holdings with quantity, average cost, and asset type
 - **Prices**: Historical and current price data with source attribution
+- **Watchlist**: User-tracked assets for monitoring
+- **News & Headlines**: Market news and headline data
+- **Economic Events**: Calendar of economic indicators and events
 
 **Data Models**:
-- Portfolio entities with one-to-many relationships to positions
-- Position tracking with asset type categorization (equity, ETF, crypto)
-- Price history with timestamp and source tracking
-- Computed portfolio summaries with P&L calculations
+- Asset price tracking with timestamp and source attribution
+- Watchlist items with asset type categorization (equity, ETF, crypto)
+- News articles with sentiment and AI analysis
+- Economic calendar events with impact levels
 
 ## External Data Sources
 
@@ -67,8 +68,8 @@ The backend uses Express.js with TypeScript in ESM format, following a REST API 
 - **Python Integration**: Separate Python process for data fetching with error handling
 
 **Data Flow**:
-1. Frontend requests price refresh via REST API
-2. Backend spawns Python process with portfolio symbols
+1. Frontend requests price data via REST API
+2. Backend spawns Python process with requested symbols
 3. Python scripts fetch latest prices from external sources
 4. Results are parsed and stored in the data layer
 5. Frontend receives updated data through React Query cache invalidation
@@ -77,7 +78,7 @@ The backend uses Express.js with TypeScript in ESM format, following a REST API 
 
 **OpenAI Integration**:
 - Uses GPT-5 model for advanced text analysis and classification
-- Provides market insights, portfolio analysis, and policy sentiment analysis
+- Provides market insights and policy sentiment analysis
 - Powers Fedspeak tone classification (hawkish/dovish/neutral)
 - Analyzes policy news topics and intensity scoring
 - Graceful fallback to mock responses when API key is unavailable

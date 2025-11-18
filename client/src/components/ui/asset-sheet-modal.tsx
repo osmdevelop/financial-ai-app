@@ -14,16 +14,12 @@ interface AssetSheetModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   asset: AssetSearchResult | null;
-  onAddTransaction: (asset: AssetSearchResult, portfolioId?: string) => void;
-  portfolioId?: string;
 }
 
 export function AssetSheetModal({ 
   open, 
   onOpenChange, 
-  asset, 
-  onAddTransaction,
-  portfolioId 
+  asset
 }: AssetSheetModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -72,12 +68,6 @@ export function AssetSheetModal({
       symbol: asset.symbol,
       assetType: asset.assetType,
     });
-  };
-
-  const handleAddTransaction = () => {
-    if (!asset) return;
-    onAddTransaction(asset, portfolioId);
-    onOpenChange(false);
   };
 
   const getAssetTypeColor = (assetType: string) => {
@@ -233,20 +223,11 @@ export function AssetSheetModal({
             )}
 
             {/* Action Buttons */}
-            <div className="flex space-x-3 pt-4 border-t">
-              <Button 
-                onClick={handleAddTransaction}
-                className="flex-1"
-                size="lg"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Transaction
-              </Button>
-              
+            <div className="flex pt-4 border-t">
               <Button
-                variant="outline"
                 onClick={handleAddToWatchlist}
                 disabled={isInWatchlist || addToWatchlistMutation.isPending}
+                className="flex-1"
                 size="lg"
               >
                 <Star className={`mr-2 h-4 w-4 ${isInWatchlist ? "fill-current" : ""}`} />
