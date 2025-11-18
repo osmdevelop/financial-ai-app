@@ -21,6 +21,16 @@ This is a full-stack market intelligence and research platform built as a monore
 2. **Asset Overview Policy Impact Panel**: Added to `/asset-overview` page detecting policy-sensitive assets and displaying correlation scores, relevant policy topics, AI-generated mini-summary, and recent policy headlines. Shows "No significant policy sensitivity" message for non-sensitive assets.
 3. **AI Insights Policy Templates**: Added 3 preset policy-aware template buttons to `/insights` page: "How did policy affect my portfolio today?", "Explain my policy-sensitive holdings", and "Is Fed tone influencing markets today?". Templates pre-fill the insights textarea with detailed prompts that incorporate current Trump Index, Fedspeak tone, and sensitive asset data.
 
+**Error Handling & Bug Fixes (November 18, 2025)**:
+1. **Insights Page Critical Fix**: Removed non-existent portfolio API calls (getPortfolios, getPortfolioDetails) that caused runtime crashes. Page now works with market sentiment and policy data only.
+2. **Asset Overview Null Safety**: Added null checks for stats, supportResistance, and catalysts objects to prevent "Cannot read properties of undefined" crashes.
+3. **Comprehensive Error Handling Pattern**:
+   - **Dashboard**: Market Sentiment card shows "Error" in header and dedicated error UI with retry button when query fails
+   - **Market Recap**: Error state card displayed before loading, retry uses proper useQueryClient() hook for context-aware invalidation
+   - **Insights**: Inline warning banner shows which context data failed (market sentiment, policy data, Fed analysis) while allowing AI analysis to continue
+   - **Today**: Already had robust error handling with full-page error state and retry
+4. **Data-testid Attributes**: Added test identifiers to error states and retry buttons (text-sentiment-score, error-sentiment, button-retry-sentiment, button-retry-recap, card-context-error) for e2e testing.
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
