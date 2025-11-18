@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import type { MarketRecap, MarketRecapSummary } from "@shared/schema";
 export default function MarketRecap() {
   const [aiSummary, setAiSummary] = useState<MarketRecapSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const queryClient = useQueryClient();
 
   const { 
     data: recap, 
@@ -72,20 +73,6 @@ export default function MarketRecap() {
       />
       
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
-        {/* Controls */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">
-              {recap ? format(new Date(recap.as_of), "EEEE, MMMM do, yyyy") : "Loading..."}
-            </span>
-          </div>
-          <Button onClick={() => refetch()} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
-
         {error ? (
           <Card>
             <CardContent className="p-8 text-center">
@@ -96,7 +83,11 @@ export default function MarketRecap() {
               <p className="text-muted-foreground mb-4">
                 There was an error loading today's market recap data.
               </p>
-              <Button onClick={() => refetch()} variant="outline">
+              <Button 
+                onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/recap/daily"] })} 
+                variant="outline"
+                data-testid="button-retry-recap"
+              >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try again
               </Button>
@@ -119,9 +110,29 @@ export default function MarketRecap() {
             ))}
           </div>
         ) : recap ? (
-          <div className="space-y-6">
-            {/* Market Indices */}
-            <Card>
+          <>
+            {/* Controls */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  {format(new Date(recap.as_of), "EEEE, MMMM do, yyyy")}
+                </span>
+              </div>
+              <Button 
+                onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/recap/daily"] })} 
+                variant="outline" 
+                size="sm"
+                data-testid="button-refresh-recap"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Market Indices */}
+              <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" />
@@ -333,6 +344,7 @@ export default function MarketRecap() {
               </CardContent>
             </Card>
           </div>
+          </>
         ) : (
           <Card>
             <CardContent className="p-12 text-center">

@@ -88,6 +88,30 @@ export default function Insights() {
             </p>
           </div>
 
+          {/* Context Error Banner */}
+          {(sentimentError || trumpError || fedspeakError) && (
+            <Card className="mb-6 bg-warning/10 border-warning" data-testid="card-context-error">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2">
+                  <Info className="w-4 h-4 text-warning mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-warning">Context data unavailable</p>
+                    <p className="text-muted-foreground">
+                      Unable to load{" "}
+                      {[
+                        sentimentError && "market sentiment",
+                        trumpError && "policy data",
+                        fedspeakError && "Fed analysis",
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}. Analysis will continue without this context.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Context Panel */}
           {marketSentiment && !sentimentLoading && (
             <Card className="mb-6 bg-muted/30" data-testid="card-market-context">

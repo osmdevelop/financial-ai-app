@@ -232,14 +232,16 @@ export default function Dashboard() {
                     Market Sentiment
                   </p>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-2xl font-bold text-foreground">
+                    <p className="text-2xl font-bold text-foreground" data-testid="text-sentiment-score">
                       {sentimentLoading
                         ? "Loading..."
-                        : marketSentiment
-                          ? `${marketSentiment.score}/100`
-                          : "N/A"}
+                        : sentimentError
+                          ? "Error"
+                          : marketSentiment
+                            ? `${marketSentiment.score}/100`
+                            : "N/A"}
                     </p>
-                    {!sentimentLoading && marketSentiment && (
+                    {!sentimentLoading && !sentimentError && marketSentiment && (
                       <Badge variant="secondary" className="text-xs">
                         {marketSentiment.regime}
                       </Badge>
@@ -255,9 +257,15 @@ export default function Dashboard() {
 
               {/* Body: details on the left, ring on the right */}
               {sentimentError ? (
-                <div className="mt-2 text-center text-sm text-danger">
+                <div className="mt-2 text-center text-sm text-danger" data-testid="error-sentiment">
                   <p>Failed to load sentiment data</p>
-                  <Button variant="ghost" size="sm" onClick={() => refetchSentiment()} className="mt-2 text-xs">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => refetchSentiment()} 
+                    className="mt-2 text-xs"
+                    data-testid="button-retry-sentiment"
+                  >
                     Try Again
                   </Button>
                 </div>
