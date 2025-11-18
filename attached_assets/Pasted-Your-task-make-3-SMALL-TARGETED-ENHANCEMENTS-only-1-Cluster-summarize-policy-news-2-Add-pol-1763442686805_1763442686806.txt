@@ -1,0 +1,177 @@
+Your task: make 3 SMALL, TARGETED ENHANCEMENTS only:
+1) Cluster + summarize policy news
+2) Add policy-sensitivity labels to assets
+3) Inject policy context into AI Insights prompts
+
+Do NOT add new top-level routes. Reuse existing API clients and UI patterns.
+
+========================================
+1) CLUSTER + SUMMARIZE POLICY NEWS
+========================================
+
+Goal: On the /policy page, group policy news into topic clusters with a short AI summary per cluster, instead of a flat list.
+
+BACKEND CHANGES (SMALL – EXTEND EXISTING ENDPOINT)
+- File: backend handler for /api/policy/trump-index (where TrumpIndexResponse is created).
+- Extend TrumpIndexResponse type to include an optional field:
+
+  type PolicyNewsCluster = {
+    id: string;
+    label: string;          // e.g. "China tariffs", "Defense spending", "Immigration policy"
+    topics: string[];       // union of topics[] in this cluster
+    intensity: number;      // 0..1 aggregate (e.g. mean or max of underlying stories)
+    newsIds: string[];      // ids of recentNews items included
+    summary: string;        // 1–2 sentence AI summary
+  };
+
+  type TrumpIndexResponse = {
+    ...existingFields;
+    clusters?: PolicyNewsCluster[];
+  };
+
+- Implement clustering server-side:
+  - Input: recentNews[] which already has topics: string[] and intensity: number.
+  - Simple heuristic clustering (no new endpoint):
+    - Group by dominant topic = topics[0] (or most frequent topic per item).
+    - For each topic, create a cluster with:
+      - label = that topic (e.g. "China", "Tariffs", "Defense spending")
+      - topics = all unique topics from items in the group
+      - intensity = average of intensity for items
+      - newsIds = item ids
+  - Optional refinement: If you already have title embeddings in this service, you can merge small topic groups with high cosine similarity, otherwise skip.
+
+- Summarize each cluster with OpenAI:
+  - For each cluster, collect up to 3 headlines + their summaries (if present).
+  - Call the **existing OpenAI client in the policy service** (do NOT create a new endpoint) with a system instruction like:
+    “You are summarizing policy headlines into 1–2 sentences for traders. Use only the provided headlines and keep it objective.”
+  - Store the result in `cluster.summary`.
+
+- Caching:
+  - Reuse the existing 1-hour cache for /api/policy/trump-index. Include `clusters` in the cached payload so we don’t re-summarize every time.
+
+FRONTEND CHANGES (/policy)
+- In the Policy page, instead of (or in addition to) a flat “Trump Policy News” list:
+  - Add a “Policy Themes” section that renders `response.clusters` as cards.
+  - Each cluster card shows:
+    - label (cluster.label)
+    - intensity chip (Low/Medium/High based on intensity thresholds)
+    - summary (cluster.summary)
+    - small “Stories: N” line
+    - expandable list of underlying headlines (from recentNews filtered by newsIds).
+- Keep the original flat news feed BELOW the clusters or collapse it by default so clustering is the primary UX.
+- If `clusters` is undefined (e.g. legacy data or fallback), fall back gracefully to the existing flat news list.
+
+========================================
+2) POLICY-SENSITIVITY LABELS ON ASSETS
+========================================
+
+Goal: Reuse the TrumpIndex sensitiveAssets data to tag assets across the app as “Policy Sensitive”, “Moderate”, or “Low”.
+
+UTILITY
+- Create a small shared helper in a core utils file, e.g. `/client/src/utils/policySensitivity.ts`:
+
+  export type PolicySensitivity = "High" | "Moderate" | "Low" | "None";
+
+  export function classifyPolicySensitivity(correlation: number, rollingImpact: number): PolicySensitivity {
+    const corr = Math.abs(correlation);
+    // Simple rule-of-thumb thresholds:
+    if (corr >= 0.6 || Math.abs(rollingImpact) >= 1.5) return "High";
+    if (corr >= 0.3 || Math.abs(rollingImpact) >= 0.5) return "Moderate";
+    if (corr > 0.1) return "Low";
+    return "None";
+  }
+
+- Extend TrumpIndexResponse.sensitiveAssets type to include an optional `sensitivity?: PolicySensitivity` field set server-side OR compute it on the frontend using the helper above.
+
+FRONTEND – /policy page
+- In the “Sensitive Assets” table:
+  - Add a “Policy Sensitivity” column that shows a colored chip:
+    - High → red/orange chip
+    - Moderate → yellow chip
+    - Low → muted/grey chip
+  - Derived from correlation + rollingImpact using the helper.
+- If an asset is classified as “High”, add a small icon or tooltip:
+  - “Historically reacts strongly to policy headlines.”
+
+FRONTEND – Asset / Portfolio integration
+- In the Asset Overview page/component:
+  - If the symbol appears in `sensitiveAssets` with sensitivity != "None", show a small badge near the symbol header:
+    - “Policy-sensitive asset” with a tooltip: “Linked to Trump Policy Index; correlation ~X.XX.”
+- In the Portfolio holdings table (if symbol mapping to sensitiveAssets is easy to do with existing data):
+  - For now, just add a subtle icon or dot in the Asset column for High sensitivity assets (optional).
+
+NOTE: Do NOT add new API calls; reuse the existing `getTrumpIndex()` response data in any component where you add these badges (you can either fetch once in a top-level provider or lazy-load on demand and cache in client state).
+
+========================================
+3) INJECT POLICY CONTEXT INTO AI INSIGHTS PROMPTS
+========================================
+
+Goal: When user asks questions in the AI Insights page, include current Trump Index + Fedspeak context in the prompt.
+
+ASSUMPTIONS
+- There is an AI Insights page (e.g. /insights) that already:
+  - Calls some backend endpoint like POST /api/insights with { prompt, context? }
+  - Or uses a hook like useAiInsights() that wraps the OpenAI call.
+- It already includes portfolio P&L, sentiment, top mover, etc. as context.
+
+CHANGES
+
+A) Fetch policy context in the Insights layer
+- Inside the Insights page (or its parent container), add hooks:
+
+  const { data: trumpIndex } = useTrumpIndex();   // new hook reusing getTrumpIndex() from API client
+  const { data: fedspeak } = useFedspeak();       // new hook reusing getFedspeak()
+
+- Provide light loading/error handling, but *do not* block Insights if these fail; treat them as optional context.
+
+B) Extend the prompt builder
+- Wherever the prompt/context for AI Insights is assembled, add a policy block when data is available.
+- Example context string:
+
+  const policyContext = trumpIndex && fedspeak ? `
+  Policy Context:
+  - Trump Policy Index z-score: ${trumpIndex.index.zScore.toFixed(2)} (${trumpIndex.index.regime}), as of ${trumpIndex.index.asOf}.
+  - Top policy-sensitive assets: ${top 3 from sensitiveAssets with sensitivity labels and lastChangePct}.
+  - Fedspeak tone: ${fedspeak.tone.current} (score ${fedspeak.tone.score.toFixed(2)}), as of ${fedspeak.asOf}.
+  - Recent Fed quote: "${firstQuote.excerpt}" — ${firstQuote.speaker}.
+  ` : '';
+
+- Prepend or append this to the existing context object/string that gets sent to OpenAI.
+- System or user instruction addition:
+  - Add a line to the system message used by the Insights endpoint:
+    “You are a cross-asset analyst. Incorporate the provided policy context (Trump Index and Fedspeak tone) when relevant, but DO NOT invent policy data that is not in the context. If policy context is missing, don’t speculate.”
+
+C) Optional: Add templates
+- On the AI Insights UI, add 1–2 template buttons if not too large a change:
+  - “How did policy risk affect my portfolio today?”
+  - “Explain my policy-sensitive assets.”
+- Clicking these just pre-fills the user prompt but still sends the same enriched context (with policy block) to the AI.
+
+D) Guardrails
+- If DATA_MODE is “mock” or trumpIndex/fedspeak indicate sample data, include a short note in the context:
+  - “NOTE: Policy data may be sample/mock for demonstration purposes.”
+- This will cause the model to hedge its language slightly, which is desirable.
+
+========================================
+NON-GOALS
+========================================
+- Do NOT add new top-level API routes.
+- Do NOT add new pages.
+- Do NOT implement new complex charts; reuse existing chart components and styles.
+- Keep changes localized to:
+  - trump-index backend handler (for clustering + cluster summaries)
+  - /policy page UI
+  - shared utils for sensitivity labels
+  - Insights page/context builder
+
+========================================
+DONE WHEN
+========================================
+- /policy shows a “Policy Themes” section with clustered news cards, each with an AI summary and underlying headlines.
+- Sensitive assets table shows a “Policy Sensitivity” chip per row.
+- Asset Overview (and optionally Portfolio) display a small “Policy-sensitive” badge for assets with high sensitivity.
+- AI Insights calls now include a policy context block when trumpIndex/fedspeak are available, and template prompts can explicitly ask about policy risk.
+- Existing tests pass; add small unit tests for:
+  - classifyPolicySensitivity()
+  - Policy page rendering a cluster summary when `clusters` is present.
+  - Insights prompt builder including/excluding policy context based on data availability.
