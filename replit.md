@@ -11,6 +11,11 @@ This is a full-stack market intelligence and research platform built as a monore
 - Policy news feed with AI-powered topic tagging and intensity scoring
 - New `/policy` page with interactive charts, asset tables, and Fed quote displays
 
+**Policy Enhancement Update (November 18, 2025)**:
+1. **Policy News Clustering**: Policy news is now clustered by topic themes (tariffs, trade, immigration, defense) with AI-generated summaries. The `/policy` page displays "Policy Themes" cards showing topic intensity, article counts, and concise summaries above the detailed news feed.
+2. **Policy Sensitivity Labels**: Assets in the policy-sensitive table now display color-coded sensitivity badges (Low/Moderate/High) based on correlation thresholds (>0.7 = High, 0.5-0.7 = Moderate, <0.5 = Low) and rolling impact calculations.
+3. **Policy Context in AI Insights**: The `/insights` page now fetches Trump Index and Fedspeak data to enrich AI analysis prompts. Template buttons for policy-related questions ("Policy risk impact", "Policy-sensitive assets") provide quick access to contextual analysis. AI responses incorporate current policy risk levels, sensitive asset exposure, and Fed tone when answering user queries.
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
