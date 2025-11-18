@@ -15,6 +15,7 @@ import {
   Search,
   Globe,
   Target,
+  Scale,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -29,6 +30,7 @@ const navigation = [
   { name: "Earnings", href: "/earnings", icon: TrendingUp },
   { name: "Economic Calendar", href: "/economic-calendar", icon: Calendar },
   { name: "Events Intelligence", href: "/events", icon: Activity },
+  { name: "Policy & Politics", href: "/policy", icon: Scale },
 ];
 
 const secondaryNavigation = [
