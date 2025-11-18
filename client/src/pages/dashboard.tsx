@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/loading-skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DollarSign, TrendingUp, Rocket, Activity } from "lucide-react";
 import { PolicySnapshotCard } from "@/components/dashboard/PolicySnapshotCard";
 import { formatCurrency, formatPercent } from "@/lib/constants";
@@ -105,13 +106,22 @@ function CircularRate({
 }
 
 export default function Dashboard() {
-  const { data: marketSentiment, isLoading: sentimentLoading } = useQuery({
+  const { 
+    data: marketSentiment, 
+    isLoading: sentimentLoading,
+    error: sentimentError,
+    refetch: refetchSentiment
+  } = useQuery({
     queryKey: ["/api/sentiment/index"],
     queryFn: () => api.getEnhancedSentiment(),
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   });
 
-  const { data: watchlist } = useQuery({
+  const { 
+    data: watchlist,
+    error: watchlistError,
+    refetch: refetchWatchlist
+  } = useQuery({
     queryKey: ["/api/watchlist"],
     queryFn: () => api.getWatchlist(),
   });
@@ -244,7 +254,14 @@ export default function Dashboard() {
               </div>
 
               {/* Body: details on the left, ring on the right */}
-              {!sentimentLoading && marketSentiment ? (
+              {sentimentError ? (
+                <div className="mt-2 text-center text-sm text-danger">
+                  <p>Failed to load sentiment data</p>
+                  <Button variant="ghost" size="sm" onClick={() => refetchSentiment()} className="mt-2 text-xs">
+                    Try Again
+                  </Button>
+                </div>
+              ) : !sentimentLoading && marketSentiment ? (
                 <div className="mt-2 flex-1 flex items-center justify-between gap-4">
                   {/* Left: drivers (clamped on small) + updated time */}
                   <div className="text-xs text-muted-foreground w-full">
