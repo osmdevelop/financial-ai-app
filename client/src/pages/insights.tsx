@@ -7,9 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Sparkles, Info, TrendingUp, Shield, Activity, DollarSign } from "lucide-react";
+import { Brain, Sparkles, Info, TrendingUp, Shield, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, formatPercent } from "@/lib/constants";
 import type { AIInsightResponse } from "@shared/schema";
 
 export default function Insights() {
@@ -19,21 +18,8 @@ export default function Insights() {
   const [insights, setInsights] = useState<AIInsightResponse | null>(null);
   const { toast } = useToast();
 
-  // Get portfolio data for context
-  const { data: portfolios } = useQuery({
-    queryKey: ["/api/portfolios"],
-    queryFn: () => api.getPortfolios(),
-  });
-
-  const demoPortfolioId = portfolios?.[0]?.id;
-
-  const { data: portfolioData } = useQuery({
-    queryKey: ["/api/portfolios", demoPortfolioId],
-    queryFn: () => api.getPortfolioDetails(demoPortfolioId!),
-    enabled: !!demoPortfolioId,
-  });
-
-  const { data: marketSentiment } = useQuery({
+  // Get market sentiment for context
+  const { data: marketSentiment, isLoading: sentimentLoading } = useQuery({
     queryKey: ["/api/sentiment"],
     queryFn: () => api.getMarketSentiment(),
   });
@@ -93,32 +79,16 @@ export default function Insights() {
           </div>
 
           {/* Context Panel */}
-          {portfolioData && marketSentiment && (
-            <Card className="mb-6 bg-muted/30">
+          {marketSentiment && !sentimentLoading && (
+            <Card className="mb-6 bg-muted/30" data-testid="card-market-context">
               <CardHeader>
                 <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                   <Info className="w-5 h-5" />
-                  Current Context
+                  Market Context
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Portfolio P&L */}
-                  <div className="bg-card rounded-lg p-4 border border-border">
-                    <div className="flex items-center gap-2 mb-2">
-                      <DollarSign className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium text-foreground">Portfolio P&L Today</span>
-                    </div>
-                    <div className="space-y-1">
-                      <p className={`text-lg font-bold ${(portfolioData.summary.dailyPnL || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {(portfolioData.summary.dailyPnL || 0) >= 0 ? '+' : ''}{formatCurrency(portfolioData.summary.dailyPnL || 0)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatPercent(portfolioData.summary.dailyPnLPercent || 0)} vs yesterday
-                      </p>
-                    </div>
-                  </div>
-
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Market Sentiment */}
                   <div className="bg-card rounded-lg p-4 border border-border">
                     <div className="flex items-center gap-2 mb-2">
@@ -139,44 +109,42 @@ export default function Insights() {
                     </div>
                   </div>
 
-                  {/* Top Mover */}
-                  <div className="bg-card rounded-lg p-4 border border-border">
-                    <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium text-foreground">Top Mover</span>
+                  {/* Policy Context */}
+                  {trumpIndex && fedspeak && (
+                    <div className="bg-card rounded-lg p-4 border border-border">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Shield className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-medium text-foreground">Policy Risk</span>
+                      </div>
+                      <div className="space-y-1">
+                        <p className={`text-lg font-bold ${
+                          trumpIndex.zScore > 0 ? 'text-warning' : 'text-success'
+                        }`}>
+                          {trumpIndex.zScore > 0 ? 'Elevated' : 'Normal'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Trump Index: {trumpIndex.zScore.toFixed(2)} • {fedspeak.currentTone}
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-lg font-bold text-foreground">
-                        {portfolioData.summary.topMover?.symbol || "N/A"}
-                      </p>
-                      <p className={`text-xs font-medium ${(portfolioData.summary.topMover?.change || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {portfolioData.summary.topMover?.change ? (
-                          `${portfolioData.summary.topMover.change >= 0 ? '+' : ''}${formatCurrency(portfolioData.summary.topMover.change)}`
-                        ) : "No data"}
-                      </p>
-                    </div>
-                  </div>
+                  )}
                 </div>
                 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="text-xs text-muted-foreground">Key Drivers:</span>
-                  {marketSentiment.drivers.slice(0, 3).map((driver, index) => (
+                  {marketSentiment.drivers?.slice(0, 4).map((driver, index) => (
                     <Badge 
                       key={index} 
                       variant="outline" 
-                      className={`text-xs ${
-                        driver.weight > 0 ? 'border-success text-success' : 
-                        driver.weight < 0 ? 'border-danger text-danger' : 
-                        'border-muted text-muted-foreground'
-                      }`}
+                      className="text-xs"
                     >
-                      {driver.label}
+                      {driver.label}: {driver.value}
                     </Badge>
                   ))}
                 </div>
                 
                 <p className="text-xs text-muted-foreground mt-2">
-                  Context updated: {new Date().toLocaleTimeString()}
+                  Updated: {new Date(marketSentiment.as_of || Date.now()).toLocaleTimeString()}
                 </p>
               </CardContent>
             </Card>
