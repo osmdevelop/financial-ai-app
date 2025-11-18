@@ -1,0 +1,122 @@
+You are my senior engineer. Policy infrastructure is now fully implemented
+(policy pages, alerts, snapshot card, policy chips, AI Insights context, etc.).
+
+Your next task is to integrate policy intelligence deeper into Portfolio,
+Asset Overview, and AI Insights templates.
+
+Implement ONLY these 3 features (no new routes or endpoints):
+
+============================================================
+1) PORTFOLIO — POLICY EXPOSURE CARD
+============================================================
+
+Goal:
+Show portfolio-level exposure to policy-sensitive assets.
+
+Data:
+Use existing getTrumpIndex() to retrieve sensitiveAssets and their sensitivity/betas.
+
+Frontend:
+On /portfolio page, create a new component:
+- PolicyExposureCard
+  - Calculate:
+    * total holdings count
+    * number and % that appear in sensitiveAssets
+  - Show:
+    * Ring chart or small bar:
+      “Policy Exposure: X% High, Y% Moderate, Z% Low”
+    * Top 3 policy-sensitive holdings with sensitivity chips
+    * If 0 exposure: message “Your portfolio currently has low policy sensitivity.”
+
+Attach this card below the main portfolio metrics, using same styling as other cards.
+
+For holdings table:
+- Add a small policy icon next to asset symbol if it appears in sensitiveAssets.
+- Tooltip: “Policy-sensitive asset”.
+
+============================================================
+2) ASSET OVERVIEW — POLICY IMPACT PANEL
+============================================================
+
+Goal:
+When viewing an asset in Asset Overview, show its policy relevance.
+
+In the Asset Overview page:
+- Detect if current symbol exists in TrumpIndex.sensitiveAssets.
+- Create PolicyImpactPanel:
+
+  If asset is sensitive:
+    - Show sensitivity badge (High/Moderate/Low)
+    - List relevant topics (combine:
+        * clusters[].topics where newsIds include that asset’s ticker
+        * or topics from backend if attached to headline metadata)
+    - Show last 2–3 policy-related headlines for this asset
+    - AI mini-summary:
+        Call small on-device prompt using the existing AI Insights endpoint:
+        Provide:
+          * asset name
+          * sensitivity level
+          * relevant topics
+          * lastChangePct
+        1–2 sentences:
+        “This asset historically reacts strongly to tariff/defense headlines.
+         Today’s policy tone may increase volatility.”
+
+  If not sensitive:
+    - Simple text: “No significant policy sensitivity detected.”
+
+Reuse existing Card, Chip, Badge components.
+
+============================================================
+3) AI INSIGHTS — NEW POLICY TEMPLATES
+============================================================
+
+Goal:
+Expose policy-aware actions as preset prompts.
+
+In /insights page:
+Add 3 template buttons in the same style as existing templates:
+
+  A) “How did policy affect my portfolio today?”
+     Pre-fill:
+     “Explain how today’s Trump Index movement, Fedspeak tone,
+      and policy-sensitive assets may have contributed to my portfolio’s performance.”
+
+  B) “Explain my policy-sensitive holdings”
+     Pre-fill:
+     “Review my policy-sensitive assets and explain which policy themes
+      (tariffs, trade, defense, immigration) are most relevant.”
+
+  C) “Is Fed tone influencing markets today?”
+     Pre-fill:
+     “Analyze the current Fedspeak tone and whether it aligns with
+      today’s market moves in equities, crypto, and rates.”
+
+Ensure:
+- Each template still uses the globally injected policy context.
+- Null-safe: if policy context missing, Insights should still work.
+
+============================================================
+UX, TESTING & INTEGRATION
+============================================================
+
+- Portfolio page: Test that PolicyExposureCard renders with mock data.
+- Asset Overview: Test detection of sensitive assets and rendering of PolicyImpactPanel.
+- Insights: Test that clicking template buttons inserts the correct full prompt value.
+
+Style:
+Match existing cards and chip styles.
+Respect dark/light theme.
+
+No new backend endpoints required.
+Use only existing getTrumpIndex(), getFedspeak(),
+and the AI Insights endpoint.
+
+============================================================
+DONE WHEN
+============================================================
+- Portfolio shows a Policy Exposure card with correct percentages and sensitivity breakdown.
+- Portfolio holdings display a small policy icon for sensitive tickers.
+- Asset Overview shows a clear Policy Impact panel for sensitive assets.
+- Insights page displays three new template buttons pre-filled with policy questions.
+- All features work with real and mock policy data.

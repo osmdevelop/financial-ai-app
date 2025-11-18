@@ -51,6 +51,7 @@ import type {
   AssetBriefResponse,
   AssetSearchResult,
 } from "@shared/schema";
+import { PolicyImpactPanel } from "@/components/asset/PolicyImpactPanel";
 
 export default function AssetOverview() {
   const { toast } = useToast();
@@ -346,6 +347,12 @@ export default function AssetOverview() {
               </CardContent>
             </Card>
 
+            {/* Policy Impact Panel */}
+            <PolicyImpactPanel 
+              symbol={overview.symbol}
+              assetName={selectedAsset?.name || overview.symbol}
+            />
+
             {/* Multi-Timeframe Charts */}
             <Card>
               <CardHeader>
@@ -473,7 +480,7 @@ export default function AssetOverview() {
                   </Toggle>
                 </div>
               </CardHeader>
-              {showStats && (
+              {showStats && overview.stats && (
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* VaR & ES */}
@@ -577,6 +584,7 @@ export default function AssetOverview() {
             </Card>
 
             {/* Support & Resistance Levels */}
+            {overview.supportResistance && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -590,7 +598,7 @@ export default function AssetOverview() {
                   <div>
                     <h4 className="text-sm font-medium mb-3 text-green-600">Support Levels</h4>
                     <div className="space-y-2">
-                      {overview.supportResistance.support.map((level, index) => (
+                      {overview.supportResistance.support?.map((level, index) => (
                         <div key={index} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded" data-testid={`support-level-${index}`}>
                           <span className="font-medium" data-testid={`support-price-${index}`}>{formatCurrency(level.level)}</span>
                           <div className="flex items-center gap-2">
@@ -599,7 +607,7 @@ export default function AssetOverview() {
                           </div>
                         </div>
                       ))}
-                      {overview.supportResistance.support.length === 0 && (
+                      {overview.supportResistance.support?.length === 0 && (
                         <div className="text-sm text-muted-foreground text-center py-4">
                           No significant support levels detected
                         </div>
@@ -611,7 +619,7 @@ export default function AssetOverview() {
                   <div>
                     <h4 className="text-sm font-medium mb-3 text-red-600">Resistance Levels</h4>
                     <div className="space-y-2">
-                      {overview.supportResistance.resistance.map((level, index) => (
+                      {overview.supportResistance.resistance?.map((level, index) => (
                         <div key={index} className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-900/20 rounded" data-testid={`resistance-level-${index}`}>
                           <span className="font-medium" data-testid={`resistance-price-${index}`}>{formatCurrency(level.level)}</span>
                           <div className="flex items-center gap-2">
@@ -620,7 +628,7 @@ export default function AssetOverview() {
                           </div>
                         </div>
                       ))}
-                      {overview.supportResistance.resistance.length === 0 && (
+                      {overview.supportResistance.resistance?.length === 0 && (
                         <div className="text-sm text-muted-foreground text-center py-4">
                           No significant resistance levels detected
                         </div>
@@ -630,6 +638,7 @@ export default function AssetOverview() {
                 </div>
               </CardContent>
             </Card>
+            )}
 
             {/* AI Brief Analysis */}
             <Card>
@@ -758,7 +767,7 @@ export default function AssetOverview() {
             </Card>
 
             {/* Catalysts from Module C */}
-            {overview.catalysts.length > 0 && (
+            {overview.catalysts && overview.catalysts.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

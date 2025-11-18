@@ -205,20 +205,29 @@ export default function Insights() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setInputText("How did policy risk affect my portfolio today?")}
+                    onClick={() => setInputText("Explain how today's Trump Index movement, Fedspeak tone, and policy-sensitive assets may have contributed to my portfolio's performance.")}
                     className="text-xs h-7"
-                    data-testid="template-policy-risk"
+                    data-testid="template-policy-portfolio"
                   >
-                    Policy risk impact
+                    How did policy affect my portfolio today?
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setInputText("Explain my policy-sensitive assets and their current exposure.")}
+                    onClick={() => setInputText("Review my policy-sensitive assets and explain which policy themes (tariffs, trade, defense, immigration) are most relevant.")}
                     className="text-xs h-7"
-                    data-testid="template-sensitive-assets"
+                    data-testid="template-policy-holdings"
                   >
-                    Policy-sensitive assets
+                    Explain my policy-sensitive holdings
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInputText("Analyze the current Fedspeak tone and whether it aligns with today's market moves in equities, crypto, and rates.")}
+                    className="text-xs h-7"
+                    data-testid="template-fed-tone"
+                  >
+                    Is Fed tone influencing markets today?
                   </Button>
                 </div>
                 

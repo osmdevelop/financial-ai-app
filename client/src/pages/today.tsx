@@ -12,6 +12,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { TodaySubscore, TodayDriver, TodayOverview } from "@shared/schema";
+import { PolicyExposureCard } from "@/components/dashboard/PolicyExposureCard";
 
 // Circular gauge component for overall market score
 interface CircularGaugeProps {
@@ -332,6 +333,17 @@ export default function Today() {
             ))}
           </CardContent>
         </Card>
+
+        {/* Policy Exposure Card */}
+        <PolicyExposureCard 
+          holdings={[
+            { symbol: "FXI", quantity: 100, value: 3200 },
+            { symbol: "ITA", quantity: 50, value: 5100 },
+            { symbol: "UUP", quantity: 200, value: 4800 },
+            { symbol: "SPY", quantity: 25, value: 11750 },
+            { symbol: "AAPL", quantity: 30, value: 5400 },
+          ]}
+        />
 
         {/* Key Drivers */}
         {data.drivers.length > 0 && (
