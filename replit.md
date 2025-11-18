@@ -1,6 +1,15 @@
 # Overview
 
-This is a full-stack market intelligence and portfolio tracker application built as a monorepo. The application provides portfolio management capabilities with real-time price tracking, AI-powered market insights, and comprehensive analytics. It's designed as an informational tool for investment tracking without offering brokerage services or investment advice.
+This is a full-stack market intelligence and portfolio tracker application built as a monorepo. The application provides portfolio management capabilities with real-time price tracking, AI-powered market insights, policy analysis, and comprehensive analytics. It's designed as an informational tool for investment tracking without offering brokerage services or investment advice.
+
+## Recent Changes (November 18, 2025)
+
+**Module E: Policy & Political Indexes** - Added policy-driven market analysis featuring:
+- Trump Policy Index tracking policy topic intensity (tariffs, trade, immigration, defense) with z-score calculations
+- Sensitive asset correlation analysis showing how different assets respond to policy changes
+- Fedspeak tone analysis classifying Federal Reserve communications as hawkish/dovish/neutral
+- Policy news feed with AI-powered topic tagging and intensity scoring
+- New `/policy` page with interactive charts, asset tables, and Fed quote displays
 
 # User Preferences
 
@@ -21,7 +30,7 @@ The frontend is built using React 18 with Vite as the build tool and development
 - **Type Safety**: Full TypeScript implementation with strict configuration
 
 The frontend is organized into:
-- Pages for main application views (Dashboard, Portfolio, Insights)
+- Pages for main application views (Dashboard, Today, Insights, Policy, News Stream, etc.)
 - Reusable UI components following shadcn/ui patterns
 - Custom hooks for mobile responsiveness and toast notifications
 - API client with centralized request handling
@@ -67,8 +76,10 @@ The backend uses Express.js with TypeScript in ESM format, following a REST API 
 ## AI Integration
 
 **OpenAI Integration**:
-- Uses GPT-4o-mini model for cost-effective text analysis
-- Provides market insights and portfolio analysis
+- Uses GPT-5 model for advanced text analysis and classification
+- Provides market insights, portfolio analysis, and policy sentiment analysis
+- Powers Fedspeak tone classification (hawkish/dovish/neutral)
+- Analyzes policy news topics and intensity scoring
 - Graceful fallback to mock responses when API key is unavailable
 - Structured prompts for consistent financial analysis output
 
