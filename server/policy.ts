@@ -55,7 +55,10 @@ export class PolicyService {
         const sensitiveAssets = await this.analyzeSensitiveAssets();
         
         // Tag news with topics (limited to avoid timeout)
-        const recentNews = await this.tagPolicyNews(policyNews.slice(0, 5));
+        const recentNews = await this.tagPolicyNews(policyNews.slice(0, 10));
+        
+        // Cluster news by topic and generate AI summaries
+        const clusters = await this.clusterAndSummarizeNews(recentNews);
 
         return {
           zScore: trumpIndex.zScore,
@@ -63,6 +66,7 @@ export class PolicyService {
           lastUpdated: new Date().toISOString(),
           sensitiveAssets,
           recentNews,
+          clusters,
           freshness: createLiveFreshness("OpenAI Policy Analysis + Mock Asset Data"),
         };
       })();
@@ -250,19 +254,39 @@ Return JSON:
     const assets = [];
     
     for (const asset of this.TRUMP_SENSITIVE_ASSETS.slice(0, 6)) {
+      const correlation = Math.random() * 0.8 + 0.1;
+      const rollingImpact = (Math.random() - 0.5) * 3; // -1.5 to +1.5
       const significance = Math.random() > 0.6 ? "high" : Math.random() > 0.3 ? "medium" : "low";
+      
+      // Calculate policy sensitivity based on correlation and rolling impact
+      const sensitivity = this.classifyPolicySensitivity(correlation, rollingImpact);
+      
       assets.push({
         symbol: asset.symbol,
         name: asset.name,
-        correlation: Math.random() * 0.8 + 0.1,
+        correlation,
         currentPrice: 50 + Math.random() * 100,
         change: (Math.random() - 0.5) * 5,
         changePct: (Math.random() - 0.5) * 10,
         significance: significance as "high" | "medium" | "low",
+        rollingImpact,
+        sensitivity,
       });
     }
 
     return assets;
+  }
+
+  /**
+   * Classify policy sensitivity based on correlation and rolling impact
+   */
+  private classifyPolicySensitivity(correlation: number, rollingImpact: number): "High" | "Moderate" | "Low" | "None" {
+    const corr = Math.abs(correlation);
+    
+    if (corr >= 0.6 || Math.abs(rollingImpact) >= 1.5) return "High";
+    if (corr >= 0.3 || Math.abs(rollingImpact) >= 0.5) return "Moderate";
+    if (corr > 0.1) return "Low";
+    return "None";
   }
 
   /**
@@ -271,7 +295,7 @@ Return JSON:
   private async tagPolicyNews(news: any[]) {
     const taggedNews = [];
     
-    for (const article of news.slice(0, 5)) {
+    for (const article of news.slice(0, 10)) {
       try {
         const response = await openai.chat.completions.create({
           model: "gpt-5",
@@ -298,6 +322,7 @@ Extract policy topics and rate intensity 0-1:
         const analysis = JSON.parse(response.choices[0].message.content || "{}");
         
         taggedNews.push({
+          id: `news_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           title: article.title,
           summary: article.summary,
           url: article.url,
@@ -308,6 +333,7 @@ Extract policy topics and rate intensity 0-1:
       } catch (error) {
         // Fallback without AI analysis
         taggedNews.push({
+          id: `news_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           title: article.title,
           summary: article.summary,
           url: article.url,
@@ -319,6 +345,75 @@ Extract policy topics and rate intensity 0-1:
     }
 
     return taggedNews;
+  }
+
+  /**
+   * Cluster news by topic and generate AI summaries
+   */
+  private async clusterAndSummarizeNews(news: any[]) {
+    if (news.length === 0) return [];
+
+    // Group news by dominant topic (topics[0])
+    const topicGroups = new Map<string, any[]>();
+    
+    for (const item of news) {
+      const dominantTopic = item.topics[0] || "General Policy";
+      if (!topicGroups.has(dominantTopic)) {
+        topicGroups.set(dominantTopic, []);
+      }
+      topicGroups.get(dominantTopic)!.push(item);
+    }
+
+    // Create clusters and generate summaries
+    const clusters = [];
+    for (const [topic, items] of topicGroups) {
+      // Skip very small clusters
+      if (items.length === 0) continue;
+
+      // Collect all unique topics from items
+      const allTopics = new Set<string>();
+      items.forEach(item => item.topics.forEach((t: string) => allTopics.add(t)));
+
+      // Calculate average intensity
+      const avgIntensity = items.reduce((sum, item) => sum + item.intensity, 0) / items.length;
+
+      // Generate AI summary for this cluster
+      let summary = `${items.length} ${items.length === 1 ? 'story' : 'stories'} about ${topic}.`;
+      
+      try {
+        const headlines = items.slice(0, 3).map(item => item.title).join('\n');
+        const response = await openai.chat.completions.create({
+          model: "gpt-5",
+          messages: [
+            {
+              role: "system",
+              content: "You are summarizing policy headlines into 1–2 sentences for traders. Use only the provided headlines and keep it objective."
+            },
+            {
+              role: "user",
+              content: `Summarize these policy headlines in 1-2 sentences:\n\n${headlines}`
+            }
+          ],
+        });
+
+        summary = response.choices[0].message.content?.trim() || summary;
+      } catch (error) {
+        console.error("Cluster summary error:", error);
+        // Use fallback summary
+      }
+
+      clusters.push({
+        id: `cluster_${topic.toLowerCase().replace(/\s+/g, '_')}`,
+        label: topic,
+        topics: Array.from(allTopics),
+        intensity: Math.round(avgIntensity * 100) / 100,
+        newsIds: items.map(item => item.id),
+        summary,
+      });
+    }
+
+    // Sort clusters by intensity (high to low)
+    return clusters.sort((a, b) => b.intensity - a.intensity);
   }
 
   /**
@@ -437,6 +532,8 @@ Analyze Fed tone and return JSON:
           change: 0.12,
           changePct: 0.44,
           significance: "high" as const,
+          rollingImpact: 1.8,
+          sensitivity: "High" as const,
         },
         {
           symbol: "ITA", 
@@ -446,16 +543,29 @@ Analyze Fed tone and return JSON:
           change: -0.85,
           changePct: -0.63,
           significance: "medium" as const,
+          rollingImpact: 0.6,
+          sensitivity: "Moderate" as const,
         }
       ],
       recentNews: [
         {
+          id: "fallback_news_1",
           title: "Trade Policy Developments Impact Market Sentiment",
           summary: "Recent discussions on trade policy adjustments continue to influence market dynamics across key sectors.",
           url: "",
           published: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
           topics: ["trade", "policy"],
           intensity: 0.7,
+        }
+      ],
+      clusters: [
+        {
+          id: "cluster_trade",
+          label: "Trade Policy",
+          topics: ["trade", "policy"],
+          intensity: 0.7,
+          newsIds: ["fallback_news_1"],
+          summary: "Trade policy adjustments continue to influence market dynamics across key sectors.",
         }
       ],
       freshness: createFallbackFreshness("Policy analysis service unavailable"),

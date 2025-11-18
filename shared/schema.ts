@@ -792,6 +792,21 @@ export type PriceAlertCreate = z.infer<typeof priceAlertCreateSchema>;
 // MODULE E: Policy & Political Indexes Types and Schemas
 // ====================================================
 
+// Policy News Cluster type
+export const policyNewsClusterSchema = z.object({
+  id: z.string(),
+  label: z.string(), // e.g. "China tariffs", "Defense spending"
+  topics: z.array(z.string()), // union of topics from clustered items
+  intensity: z.number(), // 0-1 aggregate intensity
+  newsIds: z.array(z.string()), // ids of news items in cluster
+  summary: z.string(), // AI-generated 1-2 sentence summary
+});
+
+export type PolicyNewsCluster = z.infer<typeof policyNewsClusterSchema>;
+
+// Policy Sensitivity type
+export type PolicySensitivity = "High" | "Moderate" | "Low" | "None";
+
 // Trump Index Response
 export const trumpIndexResponseSchema = z.object({
   zScore: z.number(), // Current Trump index z-score
@@ -805,8 +820,11 @@ export const trumpIndexResponseSchema = z.object({
     change: z.number(),
     changePct: z.number(),
     significance: z.enum(["high", "medium", "low"]), // statistical significance
+    rollingImpact: z.number().optional(), // rolling impact score for sensitivity calculation
+    sensitivity: z.enum(["High", "Moderate", "Low", "None"]).optional(), // policy sensitivity label
   })),
   recentNews: z.array(z.object({
+    id: z.string().optional(), // unique id for clustering
     title: z.string(),
     summary: z.string(),
     url: z.string(),
@@ -814,6 +832,7 @@ export const trumpIndexResponseSchema = z.object({
     topics: z.array(z.string()), // detected policy topics
     intensity: z.number(), // topic intensity score 0-1
   })),
+  clusters: z.array(policyNewsClusterSchema).optional(), // clustered news themes
   freshness: freshnessMetadataSchema,
 });
 
