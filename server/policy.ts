@@ -366,22 +366,22 @@ Extract policy topics and rate intensity 0-1:
 
     // Create clusters and generate summaries
     const clusters = [];
-    for (const [topic, items] of topicGroups) {
+    for (const [topic, items] of Array.from(topicGroups.entries())) {
       // Skip very small clusters
       if (items.length === 0) continue;
 
       // Collect all unique topics from items
       const allTopics = new Set<string>();
-      items.forEach(item => item.topics.forEach((t: string) => allTopics.add(t)));
+      items.forEach((item: any) => item.topics.forEach((t: string) => allTopics.add(t)));
 
       // Calculate average intensity
-      const avgIntensity = items.reduce((sum, item) => sum + item.intensity, 0) / items.length;
+      const avgIntensity = items.reduce((sum: number, item: any) => sum + item.intensity, 0) / items.length;
 
       // Generate AI summary for this cluster
       let summary = `${items.length} ${items.length === 1 ? 'story' : 'stories'} about ${topic}.`;
       
       try {
-        const headlines = items.slice(0, 3).map(item => item.title).join('\n');
+        const headlines = items.slice(0, 3).map((item: any) => item.title).join('\n');
         const response = await openai.chat.completions.create({
           model: "gpt-5",
           messages: [
@@ -407,7 +407,7 @@ Extract policy topics and rate intensity 0-1:
         label: topic,
         topics: Array.from(allTopics),
         intensity: Math.round(avgIntensity * 100) / 100,
-        newsIds: items.map(item => item.id),
+        newsIds: items.map((item: any) => item.id),
         summary,
       });
     }

@@ -413,7 +413,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI Insights route (updated with context)
+  // AI Insights route (updated with context including policy data)
   app.post("/api/insights/explain", async (req, res) => {
     try {
       const { text } = insightsSchema.parse(req.body);
@@ -439,6 +439,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contextInfo = "Context unavailable at this time.";
       }
 
+      // Get policy context (Trump Index and Fedspeak)
+      let policyContext = "";
+      try {
+        const { policyService } = await import("./policy");
+        
+        // Fetch Trump Index
+        const trumpIndex = await policyService.getTrumpIndex();
+        policyContext += `\nPolicy Context:\n`;
+        policyContext += `- Trump Policy Index z-score: ${trumpIndex.zScore.toFixed(2)} (${trumpIndex.zScore > 0.75 ? "High Policy Risk" : trumpIndex.zScore < -0.75 ? "Muted Policy Risk" : "Normal"}), as of ${new Date(trumpIndex.lastUpdated).toLocaleString()}\n`;
+        policyContext += `- 7-day change: ${trumpIndex.change7d > 0 ? '+' : ''}${trumpIndex.change7d.toFixed(2)}\n`;
+        
+        // Top policy-sensitive assets (with null safety)
+        if (trumpIndex.sensitiveAssets && Array.isArray(trumpIndex.sensitiveAssets)) {
+          const topAssets = trumpIndex.sensitiveAssets
+            .filter(a => a.sensitivity === "High" || a.sensitivity === "Moderate")
+            .slice(0, 3);
+          if (topAssets.length > 0) {
+            policyContext += `- Top policy-sensitive assets:\n`;
+            topAssets.forEach(asset => {
+              policyContext += `  • ${asset.symbol} (${asset.name}): ${asset.sensitivity} sensitivity, correlation ${asset.correlation.toFixed(2)}, ${asset.changePct > 0 ? '+' : ''}${asset.changePct.toFixed(2)}% today\n`;
+            });
+          }
+        }
+
+        // Fetch Fedspeak (with null safety)
+        const fedspeak = await policyService.getFedspeak();
+        policyContext += `- Fedspeak tone: ${fedspeak.currentTone} (score ${fedspeak.toneScore.toFixed(2)}), as of ${new Date(fedspeak.lastUpdated).toLocaleString()}\n`;
+        
+        // Recent Fed quote
+        if (fedspeak.recentQuotes && Array.isArray(fedspeak.recentQuotes) && fedspeak.recentQuotes.length > 0) {
+          const firstQuote = fedspeak.recentQuotes[0];
+          policyContext += `- Recent Fed communication: "${firstQuote.text.substring(0, 150)}..." — ${firstQuote.speaker}\n`;
+        }
+
+        // Add policy context to main context
+        contextInfo += policyContext;
+      } catch (error) {
+        console.error("Failed to fetch policy context:", error);
+        // Continue without policy context - it's optional
+      }
+
       // Check if OpenAI API key is available
       if (!process.env.OPENAI_API_KEY) {
         // Return mock response with context
@@ -460,11 +501,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messages: [
           {
             role: "system",
-            content: `You are a financial analysis expert. Today's date is ${new Date().toLocaleDateString()}. Only use the supplied context data and today's date for your analysis. If data is missing from the context, explicitly state 'not available in current context'. Respond with JSON in this format: { 'summary': string, 'whyThisMatters': string[] }`,
+            content: `You are a cross-asset analyst. Today's date is ${new Date().toLocaleDateString()}. Incorporate the provided policy context (Trump Index and Fedspeak tone) when relevant to the user's query, but DO NOT invent policy data that is not in the context. If policy context is missing, don't speculate. Only use the supplied context data and today's date for your analysis. If data is missing from the context, explicitly state 'not available in current context'. Respond with JSON in this format: { 'summary': string, 'whyThisMatters': string[] }`,
           },
           {
             role: "user",
-            content: `Current Context:\n${contextInfo}\n\nUser Query: ${text}\n\nProvide analysis using ONLY the context data above and today's date. Reference specific numbers and data points from the context.`,
+            content: `Current Context:\n${contextInfo}\n\nUser Query: ${text}\n\nProvide analysis using ONLY the context data above and today's date. Reference specific numbers and data points from the context. When policy data is provided, incorporate it into your analysis where relevant.`,
           },
         ],
         response_format: { type: "json_object" },

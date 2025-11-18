@@ -38,6 +38,17 @@ export default function Insights() {
     queryFn: () => api.getMarketSentiment(),
   });
 
+  // Fetch policy context data
+  const { data: trumpIndex } = useQuery({
+    queryKey: ["/api/policy/trump-index"],
+    queryFn: () => api.getTrumpIndex(),
+  });
+
+  const { data: fedspeak } = useQuery({
+    queryKey: ["/api/policy/fedspeak"],
+    queryFn: () => api.getFedspeak(),
+  });
+
   const insightsMutation = useMutation({
     mutationFn: api.getInsights,
     onSuccess: (data) => {
@@ -185,16 +196,47 @@ export default function Insights() {
                   rows={4}
                   className="resize-none"
                   placeholder="e.g., 'Why did tech stocks decline today?' or 'What's the outlook for my portfolio?'"
+                  data-testid="input-insights"
                 />
+                
+                {/* Template Prompts */}
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs text-muted-foreground">Quick templates:</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInputText("How did policy risk affect my portfolio today?")}
+                    className="text-xs h-7"
+                    data-testid="template-policy-risk"
+                  >
+                    Policy risk impact
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInputText("Explain my policy-sensitive assets and their current exposure.")}
+                    className="text-xs h-7"
+                    data-testid="template-sensitive-assets"
+                  >
+                    Policy-sensitive assets
+                  </Button>
+                </div>
+                
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground flex items-center gap-2">
                     <Info className="w-3 h-3" />
-                    Powered by GPT-4o-mini
+                    Powered by GPT-4o
+                    {trumpIndex && fedspeak && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        • Policy context included
+                      </span>
+                    )}
                   </span>
                   <Button 
                     onClick={handleExplain}
                     disabled={insightsMutation.isPending}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    data-testid="button-explain"
                   >
                     <Sparkles className="mr-2 h-4 w-4" />
                     {insightsMutation.isPending ? "Analyzing..." : "Explain"}
