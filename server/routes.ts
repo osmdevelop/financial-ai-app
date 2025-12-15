@@ -2010,6 +2010,145 @@ Provide response in JSON format: {
     }
   });
 
+  // Daily Brief Summary API
+  let cachedDailySummary: { summary: string[]; generatedAt: string } | null = null;
+  let lastSummaryGeneration = 0;
+
+  app.get("/api/daily-brief/summary", async (req, res) => {
+    try {
+      // Return cached summary if available and fresh (within 15 minutes)
+      const now = Date.now();
+      if (cachedDailySummary && (now - lastSummaryGeneration) < 15 * 60 * 1000) {
+        return res.json(cachedDailySummary);
+      }
+      
+      // Generate new summary if needed
+      if (!cachedDailySummary) {
+        return res.status(404).json({ error: "No summary available. Please generate one." });
+      }
+      
+      res.json(cachedDailySummary);
+    } catch (error) {
+      console.error("Daily brief summary error:", error);
+      res.status(500).json({ error: "Failed to fetch daily summary" });
+    }
+  });
+
+  app.post("/api/daily-brief/generate", async (req, res) => {
+    try {
+      // Fetch current market context
+      const { sentimentAnalyzer } = await import("./sentiment");
+      const { policyService } = await import("./policy");
+      
+      let sentimentData, policyData, fedData;
+      
+      try {
+        sentimentData = await sentimentAnalyzer.calculateSentimentIndex();
+      } catch (e) {
+        console.error("Failed to fetch sentiment:", e);
+      }
+      
+      try {
+        policyData = await policyService.getTrumpIndex();
+      } catch (e) {
+        console.error("Failed to fetch policy:", e);
+      }
+      
+      try {
+        fedData = await policyService.getFedspeak();
+      } catch (e) {
+        console.error("Failed to fetch fedspeak:", e);
+      }
+      
+      // Build context string
+      const contextParts: string[] = [];
+      if (sentimentData) {
+        contextParts.push(`Market Sentiment: Score ${sentimentData.score}/100, Regime: ${sentimentData.regime}`);
+        if (sentimentData.drivers?.length) {
+          contextParts.push(`Key drivers: ${sentimentData.drivers.map(d => d.label).join(", ")}`);
+        }
+      }
+      if (policyData) {
+        const riskLevel = policyData.zScore > 1.5 ? "High" : policyData.zScore > 0.5 ? "Medium" : policyData.zScore > -0.5 ? "Low" : "None";
+        contextParts.push(`Policy Risk: ${riskLevel} (z-score: ${policyData.zScore.toFixed(2)})`);
+      }
+      if (fedData) {
+        contextParts.push(`Fed Tone: ${fedData.currentTone} (score: ${fedData.toneScore.toFixed(2)})`);
+      }
+      
+      const contextString = contextParts.join(". ");
+      
+      // Generate summary using OpenAI if available
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          const response = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+              {
+                role: "system",
+                content: `You are a professional financial analyst writing a daily market brief. Generate exactly 5 sentences that synthesize the current market context.
+
+Hard constraints:
+- No investment advice
+- No price predictions  
+- No hype or sensationalism
+- Clear, professional tone
+- Use factual observations only
+- Each sentence should cover a different aspect: overall market regime, policy environment, Fed stance, key drivers, and outlook considerations
+
+Format: Return a JSON object with a "summary" array containing exactly 5 string sentences.`
+              },
+              {
+                role: "user",
+                content: `Today's date: ${new Date().toLocaleDateString()}
+
+Current Market Context:
+${contextString || "Market data currently unavailable - provide a general observation about monitoring markets."}
+
+Generate the 5-sentence daily market brief.`
+              }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.7,
+          });
+          
+          const result = JSON.parse(response.choices[0].message.content || "{}");
+          cachedDailySummary = {
+            summary: Array.isArray(result.summary) ? result.summary.slice(0, 5) : [],
+            generatedAt: new Date().toISOString()
+          };
+          lastSummaryGeneration = Date.now();
+          
+          return res.json(cachedDailySummary);
+        } catch (aiError) {
+          console.error("OpenAI error:", aiError);
+        }
+      }
+      
+      // Fallback summary when OpenAI unavailable
+      const regime = sentimentData?.regime || "Neutral";
+      const fedTone = fedData?.currentTone || "neutral";
+      const policyRisk = policyData?.zScore ? (policyData.zScore > 1 ? "elevated" : "contained") : "moderate";
+      
+      cachedDailySummary = {
+        summary: [
+          `Markets are currently displaying ${regime.toLowerCase()} characteristics based on cross-asset sentiment analysis.`,
+          `Federal Reserve communications suggest a ${fedTone} monetary policy stance at this time.`,
+          `Policy-related risk appears ${policyRisk}, though conditions can change rapidly.`,
+          `Key drivers include interest rate expectations, corporate earnings, and geopolitical developments.`,
+          `Investors should monitor upcoming economic data and central bank communications for further clarity.`
+        ],
+        generatedAt: new Date().toISOString()
+      };
+      lastSummaryGeneration = Date.now();
+      
+      res.json(cachedDailySummary);
+    } catch (error) {
+      console.error("Daily brief generation error:", error);
+      res.status(500).json({ error: "Failed to generate daily summary" });
+    }
+  });
+
   // Scenario Studio API
   const scenarioSummarizeSchema = z.object({
     inputs: z.object({

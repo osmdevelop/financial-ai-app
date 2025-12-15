@@ -24,6 +24,7 @@ import MarketRecap from "@/pages/market-recap";
 import Policy from "@/pages/policy";
 import Scenario from "@/pages/scenario";
 import Settings from "@/pages/settings";
+import DailyBrief from "@/pages/daily-brief";
 import NotFound from "@/pages/not-found";
 
 // Redirect component for portfolio routes
@@ -41,6 +42,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/daily-brief" component={DailyBrief} />
       <Route path="/today" component={Today} />
       <Route path="/portfolio" component={PortfolioRedirect} />
       <Route path="/portfolio-v1" component={PortfolioRedirect} />

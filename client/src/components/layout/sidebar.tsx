@@ -17,10 +17,12 @@ import {
   Target,
   Scale,
   FlaskConical,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
+  { name: "Daily Brief", href: "/daily-brief", icon: FileText },
   { name: "Dashboard", href: "/", icon: BarChart3 },
   { name: "Market Drivers", href: "/today", icon: Target },
   { name: "AI Insights", href: "/insights", icon: Brain },
