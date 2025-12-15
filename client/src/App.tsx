@@ -22,6 +22,7 @@ import Sentiment from "@/pages/sentiment";
 import AssetOverview from "@/pages/asset-overview";
 import MarketRecap from "@/pages/market-recap";
 import Policy from "@/pages/policy";
+import Scenario from "@/pages/scenario";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/asset-overview" component={AssetOverview} />
       <Route path="/market-recap" component={MarketRecap} />
       <Route path="/policy" component={Policy} />
+      <Route path="/scenario" component={Scenario} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

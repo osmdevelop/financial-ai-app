@@ -2010,6 +2010,126 @@ Provide response in JSON format: {
     }
   });
 
+  // Scenario Studio API
+  const scenarioSummarizeSchema = z.object({
+    inputs: z.object({
+      dxy: z.number(),
+      treasury10y: z.number(),
+      vix: z.number(),
+      oil: z.number(),
+    }),
+    results: z.array(z.object({
+      asset: z.string(),
+      symbol: z.string(),
+      direction: z.enum(["up", "down", "neutral"]),
+      impactStrength: z.enum(["Low", "Medium", "High"]),
+      confidence: z.number(),
+      explanation: z.string(),
+    })),
+  });
+
+  app.post("/api/scenario/summarize", async (req, res) => {
+    try {
+      const { inputs, results } = scenarioSummarizeSchema.parse(req.body);
+      
+      const { withFreshness, createLiveFreshness, createFallbackFreshness } = await import("./freshness");
+      
+      const dataMode = process.env.DATA_MODE || "live";
+      const forceMock = dataMode === "mock";
+      
+      let summaryData;
+      let freshness;
+      
+      if (!process.env.OPENAI_API_KEY || forceMock) {
+        // Mock response when no API key
+        const highImpactAssets = results
+          .filter(r => r.impactStrength === "High")
+          .map(r => r.asset);
+        
+        const downAssets = results
+          .filter(r => r.direction === "down")
+          .map(r => r.asset);
+        
+        summaryData = {
+          regime: inputs.treasury10y > 25 
+            ? "This scenario resembles a hawkish Fed tightening cycle, similar to late 2022."
+            : inputs.vix > 10 
+              ? "This scenario resembles a risk-off environment with elevated volatility, similar to March 2020."
+              : inputs.dxy > 1 
+                ? "This scenario resembles a strong dollar period with global growth concerns."
+                : "This scenario represents a balanced macro environment with modest shifts.",
+          exposedAssets: highImpactAssets.length > 0 
+            ? highImpactAssets 
+            : results.slice(0, 3).map(r => r.asset),
+          keyRisks: [
+            inputs.treasury10y !== 0 
+              ? `Interest rate sensitivity across duration-exposed assets`
+              : `Currency translation effects on international holdings`,
+            inputs.vix !== 0 
+              ? `Volatility regime shift could accelerate positioning changes`
+              : `Correlation breakdown during stress periods`,
+            downAssets.length > 0 
+              ? `${downAssets.slice(0, 2).join(" and ")} face directional headwinds`
+              : `Cross-asset contagion risk if scenario intensifies`,
+          ],
+          narrative: `The configured scenario suggests ${inputs.dxy > 0 ? "dollar strength" : inputs.dxy < 0 ? "dollar weakness" : "stable currency"}, ${inputs.treasury10y > 0 ? "rising yields" : inputs.treasury10y < 0 ? "falling yields" : "stable rates"}, ${inputs.vix > 0 ? "elevated volatility" : inputs.vix < 0 ? "compressed volatility" : "normal volatility"}, and ${inputs.oil > 0 ? "higher energy prices" : inputs.oil < 0 ? "lower energy prices" : "stable energy"}. Based on historical correlations, ${highImpactAssets.length > 0 ? highImpactAssets.join(", ") + " show" : "several assets show"} significant sensitivity to these conditions.`,
+        };
+        freshness = createFallbackFreshness(forceMock ? "Mock mode enabled" : "OpenAI API key not available");
+      } else {
+        // Use real OpenAI API
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        
+        const prompt = `Analyze this hypothetical macro scenario and its impacts on assets:
+
+Scenario Inputs:
+- USD Index (DXY): ${inputs.dxy > 0 ? "+" : ""}${inputs.dxy}%
+- 10Y Treasury Yield: ${inputs.treasury10y > 0 ? "+" : ""}${inputs.treasury10y}bps
+- VIX: ${inputs.vix > 0 ? "+" : ""}${inputs.vix}%
+- Oil (WTI): ${inputs.oil > 0 ? "+" : ""}${inputs.oil}%
+
+Asset Impact Results:
+${results.map(r => `- ${r.asset} (${r.symbol}): ${r.direction} direction, ${r.impactStrength} impact, ${r.confidence}% confidence`).join("\n")}
+
+Provide analysis in JSON format:
+{
+  "regime": "One sentence describing what historical regime or period this scenario most resembles",
+  "exposedAssets": ["List of 3-5 most exposed assets from the results"],
+  "keyRisks": ["Risk 1", "Risk 2", "Risk 3"],
+  "narrative": "2-3 sentence narrative explaining the scenario dynamics and key relationships"
+}
+
+Important: This is informational analysis only. Do not provide investment advice or price predictions.`;
+
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are a macro-financial analyst providing educational scenario analysis. Focus on historical patterns and known relationships. Do not provide investment advice."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          response_format: { type: "json_object" }
+        });
+        
+        summaryData = JSON.parse(response.choices[0].message.content || "{}");
+        freshness = createLiveFreshness("OpenAI GPT-4o");
+      }
+      
+      res.json(withFreshness(summaryData, freshness));
+    } catch (error) {
+      console.error("Scenario summarize error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid scenario data" });
+      } else {
+        res.status(500).json({ error: "Failed to generate scenario summary" });
+      }
+    }
+  });
+
   // Alert routes
   app.post("/api/alerts", async (req, res) => {
     try {

@@ -16,6 +16,7 @@ import {
   Globe,
   Target,
   Scale,
+  FlaskConical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -31,6 +32,7 @@ const navigation = [
   { name: "Economic Calendar", href: "/economic-calendar", icon: Calendar },
   { name: "Events Intelligence", href: "/events", icon: Activity },
   { name: "Policy & Politics", href: "/policy", icon: Scale },
+  { name: "Scenario Studio", href: "/scenario", icon: FlaskConical },
 ];
 
 const secondaryNavigation = [
