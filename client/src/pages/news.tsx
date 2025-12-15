@@ -12,13 +12,15 @@ import {
   Newspaper,
   Users,
   Target,
+  RefreshCcw,
+  AlertTriangle,
 } from "lucide-react";
-import { RefreshCcw } from "lucide-react";
 import type { ClusteredHeadline, NewsStreamResponse } from "@shared/schema";
 import {
   getImpactColor,
   getImpactIcon,
   TimeAgo,
+  safeFormat,
 } from "@/lib/news-utils";
 
 const POLL_NEWS_MS = 30_000;
@@ -153,34 +155,18 @@ function NewsClusterCard({ cluster }: { cluster: NewsStreamResponse['clusters'][
 }
 
 export default function NewsStream() {
-  const [scope, setScope] = useState<"all" | "focus" | "portfolio">("all");
+  const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Focus assets & portfolio (disabled due to database issues)
-  const { data: focusAssets = [] } = useQuery({
-    queryKey: ["/api/focus-assets"],
-    queryFn: () => api.getFocusAssets("default"),
-    enabled: false, // Disabled due to Neon endpoint issues
+  // Watchlist for filtering
+  const { data: watchlist = [] } = useQuery({
+    queryKey: ["/api/watchlist"],
+    queryFn: () => api.getWatchlist(),
   });
 
-  const { data: portfolios = [] } = useQuery({
-    queryKey: ["/api/portfolios"],
-    queryFn: () => api.getPortfolios(),
-    enabled: false, // Disabled due to Neon endpoint issues
-  });
-
-  const focusSymbols = useMemo(
-    () => focusAssets.map((fa: any) => fa.symbol),
-    [focusAssets],
-  );
-  const portfolioSymbols = useMemo(
-    () => {
-      // Extract symbols from portfolios or provide fallback for testing
-      const symbols = portfolios?.flatMap((p: any) => p.positions?.map((pos: any) => pos.symbol) || []) ?? [];
-      // Fallback symbols for testing when database is disabled
-      return symbols.length > 0 ? symbols : ['AAPL', 'GOOGL', 'MSFT', 'TSLA'];
-    },
-    [portfolios],
+  const watchlistSymbols = useMemo(
+    () => watchlist.map((item: { symbol: string }) => item.symbol),
+    [watchlist],
   );
 
   // Enhanced News Stream with clustering
@@ -201,8 +187,8 @@ export default function NewsStream() {
     staleTime: 0,
   });
 
-  const clusters = newsResponse?.clusters || [];
-  const headlines = newsResponse?.headlines || [];
+  const clusters = newsResponse?.data?.clusters || [];
+  const headlines = newsResponse?.data?.headlines || [];
 
   // Filter clusters and headlines by search term
   const filteredClusters = useMemo(
@@ -273,7 +259,7 @@ export default function NewsStream() {
               </Button>
               {!!dataUpdatedAt && (
                 <span className="text-xs text-muted-foreground">
-                  Updated {format(new Date(dataUpdatedAt), "h:mm:ss a")}
+                  Updated {safeFormat(new Date(dataUpdatedAt), "h:mm:ss a")}
                 </span>
               )}
             </div>
@@ -292,46 +278,34 @@ export default function NewsStream() {
                 All Markets
               </Button>
               <Button
-                data-testid="scope-focus"
-                variant={scope === "focus" ? "default" : "outline"}
+                data-testid="scope-watchlist"
+                variant={scope === "watchlist" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setScope("focus")}
+                onClick={() => setScope("watchlist")}
                 className="h-8"
-                disabled={!focusSymbols.length}
+                disabled={!watchlistSymbols.length}
               >
-                Focus Assets ({focusSymbols.length})
-              </Button>
-              <Button
-                data-testid="scope-portfolio"
-                variant={scope === "portfolio" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setScope("portfolio")}
-                className="h-8"
-                disabled={!portfolioSymbols.length}
-              >
-                Portfolio ({portfolioSymbols.length})
+                Watchlist ({watchlistSymbols.length})
               </Button>
             </div>
           </div>
 
           {/* Active scope chips */}
-          {scope !== "all" && (
+          {scope === "watchlist" && watchlistSymbols.length > 0 && (
             <div className="flex flex-wrap gap-2">
               <span className="text-sm text-muted-foreground mr-2">
-                {scope === "focus" ? "Focus Assets:" : "Portfolio:"}
+                Watchlist:
               </span>
-              {(scope === "focus" ? focusSymbols : portfolioSymbols).map(
-                (symbol) => (
-                  <Badge
-                    key={symbol}
-                    variant="secondary"
-                    className="text-xs"
-                    data-testid={`badge-${symbol}`}
-                  >
-                    {symbol}
-                  </Badge>
-                ),
-              )}
+              {watchlistSymbols.map((symbol: string) => (
+                <Badge
+                  key={symbol}
+                  variant="secondary"
+                  className="text-xs"
+                  data-testid={`badge-${symbol}`}
+                >
+                  {symbol}
+                </Badge>
+              ))}
             </div>
           )}
         </div>
