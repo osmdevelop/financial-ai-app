@@ -68,9 +68,14 @@ export default function Dashboard() {
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">
-                    S&P 500
-                  </p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-medium text-muted-foreground">
+                      S&P 500
+                    </p>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30">
+                      Demo
+                    </Badge>
+                  </div>
                   <p className="text-2xl sm:text-3xl font-bold text-foreground">
                     4,850
                   </p>
@@ -88,9 +93,6 @@ export default function Dashboard() {
                     vs yesterday
                   </span>
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  Last Updated: {new Date().toLocaleTimeString()}
-                </span>
               </div>
             </CardContent>
           </Card>
@@ -100,9 +102,14 @@ export default function Dashboard() {
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">
-                    VIX (Volatility)
-                  </p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-medium text-muted-foreground">
+                      VIX (Volatility)
+                    </p>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30">
+                      Demo
+                    </Badge>
+                  </div>
                   <p className="text-3xl font-bold text-warning">
                     18.5
                   </p>
@@ -242,9 +249,14 @@ export default function Dashboard() {
           <Card>
             <CardHeader className="pb-6">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold text-foreground">
-                  S&P 500 Performance (30d)
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg font-semibold text-foreground">
+                    S&P 500 Performance (30d)
+                  </CardTitle>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30">
+                    Demo
+                  </Badge>
+                </div>
                 <div className="flex space-x-2">
                   <button className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md">
                     30d
@@ -323,9 +335,14 @@ export default function Dashboard() {
         <div className="mt-8">
           <Card>
             <CardHeader className="pb-6">
-              <CardTitle className="text-lg font-semibold text-foreground">
-                Recent Activity
-              </CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg font-semibold text-foreground">
+                  Recent Activity
+                </CardTitle>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30">
+                  Demo
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
