@@ -1,0 +1,85 @@
+Your task is to build a new page called "Scenario Studio".
+This is an MVP — keep scope tight.
+
+Goal:
+Allow users to explore "what-if" macro scenarios and see how assets historically respond.
+
+------------------------------------------------
+1) New Page & Route
+------------------------------------------------
+- Create /scenario page
+- Add to sidebar navigation as "Scenario Studio"
+- Follow existing page layout conventions
+
+------------------------------------------------
+2) Scenario Inputs (Manual)
+------------------------------------------------
+Add slider controls for:
+- USD Index (DXY): -2% to +2%
+- 10Y Treasury Yield: -50bps to +50bps
+- VIX: -20% to +20%
+- Oil (WTI): -10% to +10%
+
+Notes:
+- Sliders are hypothetical inputs only
+- No live market dependency
+- Show reset button
+
+------------------------------------------------
+3) Scenario Engine (Lightweight)
+------------------------------------------------
+Implement a simple scenario impact engine using:
+- Existing asset sensitivity data
+- Policy sensitivity correlations
+- Known macro relationships (directional only)
+
+For each asset return:
+- Direction (Up / Down / Neutral)
+- Impact strength (Low / Medium / High)
+- Confidence score (0–100)
+
+No pricing, no forecasts.
+
+------------------------------------------------
+4) Results UI
+------------------------------------------------
+Display results in a table with:
+- Asset
+- Expected Direction
+- Impact Strength
+- Confidence
+- Short explanation (1–2 sentences)
+
+Use color coding consistent with the rest of the app.
+
+------------------------------------------------
+5) AI Explanation
+------------------------------------------------
+Add a "Summarize Scenario" button that:
+- Sends the scenario inputs + results to OpenAI
+- Returns a short narrative explaining:
+  - What regime this scenario resembles
+  - Which assets are most exposed
+  - Key risks
+
+This is informational only — no advice language.
+
+------------------------------------------------
+6) Guardrails & UX
+------------------------------------------------
+- Clearly label scenario results as hypothetical
+- Add disclaimer banner
+- Handle missing data gracefully
+- Add loading and error states
+
+------------------------------------------------
+Constraints:
+- No new APIs
+- No real-time pricing
+- No portfolio integration
+- No prediction language
+- Use existing design system
+- Add data-testid to key controls
+
+Deliverable:
+A working Scenario Studio MVP that allows users to explore macro-driven outcomes.
