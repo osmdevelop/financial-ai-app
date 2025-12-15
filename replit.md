@@ -2,7 +2,18 @@
 
 This is a full-stack market intelligence and research platform built as a monorepo. The application provides real-time market data, AI-powered insights, policy analysis, and comprehensive analytics. It's designed as an informational tool for market research without offering brokerage services or investment advice.
 
-## Recent Changes (November 18, 2025)
+## Recent Changes (December 15, 2025)
+
+**Quality & Consistency Pass** - Code consolidation and reliability improvements:
+1. **GaugeMeter Component**: Created unified circular gauge component (`client/src/components/ui/gauge-meter.tsx`) replacing 3 duplicate implementations (CircularRate in dashboard/sentiment, CircularGauge in today). Features: configurable colorScale (sentiment/policy/neutral), size variants (sm/md/lg or custom), loading/error states, division-by-zero guard.
+2. **News Utilities**: Consolidated shared date helpers and impact styling into `client/src/lib/news-utils.tsx` (toDate, safeFormat, formatTimelineDate, getImpactColor, getImpactIcon, TimeAgo component). Used by headlines.tsx and news.tsx.
+3. **Mock Data Labels**: Added "Demo" badges to Dashboard cards with hardcoded data (S&P 500, VIX, S&P Performance chart, Recent Activity).
+4. **Error Handling**: Added error states with retry buttons to Earnings and Economic Calendar pages following the established pattern.
+5. **Test Coverage**: Added data-testid attributes to critical elements across Dashboard (card-sp500, card-vix, card-watchlist, card-sentiment, text-* values), Earnings (error-earnings, button-retry-earnings, button-refresh-earnings), and Economic Calendar (error-economic, button-retry-economic, button-refresh-economic).
+
+---
+
+## Previous Changes (November 18, 2025)
 
 **Module E: Policy & Political Indexes** - Added policy-driven market analysis featuring:
 - Trump Policy Index tracking policy topic intensity (tariffs, trade, immigration, defense) with z-score calculations
