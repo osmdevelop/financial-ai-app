@@ -7,82 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { GaugeMeter } from "@/components/ui/gauge-meter";
 import { RefreshCw, TrendingUp, TrendingDown, Minus, Activity, FileText } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { TodaySubscore, TodayDriver, TodayOverview } from "@shared/schema";
 import { PolicyExposureCard } from "@/components/dashboard/PolicyExposureCard";
-
-// Circular gauge component for overall market score
-interface CircularGaugeProps {
-  value: number; // 0-100
-  size?: number;
-  strokeWidth?: number;
-  className?: string;
-}
-
-function CircularGauge({
-  value,
-  size = 120,
-  strokeWidth = 12,
-  className = "",
-}: CircularGaugeProps) {
-  const normalizedValue = Math.max(0, Math.min(100, value));
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const strokeDashoffset = circumference - (normalizedValue / 100) * circumference;
-  
-  // Color based on value
-  const getColor = (val: number) => {
-    if (val >= 70) return "text-green-500";
-    if (val >= 30) return "text-yellow-500";
-    return "text-red-500";
-  };
-
-  return (
-    <div className={cn("relative flex items-center justify-center", className)} style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="transform -rotate-90">
-        {/* Background circle */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="currentColor"
-          strokeWidth={strokeWidth}
-          fill="transparent"
-          className="text-muted/20"
-        />
-        {/* Progress circle */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="currentColor"
-          strokeWidth={strokeWidth}
-          fill="transparent"
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          className={getColor(normalizedValue)}
-          style={{
-            transition: "stroke-dashoffset 0.5s ease-in-out",
-          }}
-        />
-      </svg>
-      
-      {/* Center content */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-3xl font-bold text-foreground tabular-nums">
-          {Math.round(normalizedValue)}
-        </div>
-        <div className="text-sm text-muted-foreground">
-          /100
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // Freshness badge component
 interface FreshnessBadgeProps {
@@ -291,10 +222,12 @@ export default function Today() {
 
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
-                <CircularGauge 
+                <GaugeMeter 
                   value={data.overallIndex} 
-                  size={150} 
-                  data-testid="gauge-market-index"
+                  size={150}
+                  strokeWidth={12}
+                  colorScale="sentiment"
+                  showValue={true}
                 />
                 <div className="mt-4">
                   <h3 className="text-lg font-semibold text-foreground">

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
-// ✂️ removed: import { SentimentGauge } from "@/components/ui/sentiment-gauge";
+import { GaugeMeter } from "@/components/ui/gauge-meter";
 import { useToast } from "@/hooks/use-toast";
 import {
   TrendingUp,
@@ -24,86 +24,6 @@ import type {
   EnhancedMarketSentiment,
   SentimentNarrative,
 } from "@shared/schema";
-
-/* ------------------------------------------------------------------ */
-/* CircularRate (same as on Dashboard): SVG ring 0..100 with center #  */
-/* ------------------------------------------------------------------ */
-type CircularRateProps = {
-  value: number;
-  size?: number;
-  stroke?: number;
-  showNumber?: boolean;
-  label?: string;
-  className?: string;
-};
-function clamp100(n: number) {
-  if (Number.isNaN(n)) return 0;
-  return Math.max(0, Math.min(100, n));
-}
-function ringColorClass(v: number) {
-  if (v >= 67) return "text-green-500";
-  if (v >= 34) return "text-yellow-500";
-  return "text-red-500";
-}
-function CircularRate({
-  value,
-  size = 88,
-  stroke = 10,
-  showNumber = true,
-  label,
-  className = "",
-}: CircularRateProps) {
-  const v = clamp100(value);
-  const c = size / 2;
-  const r = c - stroke / 2;
-  const C = 2 * Math.PI * r;
-  const offset = C * (1 - v / 100);
-  return (
-    <div
-      className={`relative inline-flex items-center justify-center ${className}`}
-      style={{ width: size, height: size }}
-      aria-label={`Score ${v} out of 100`}
-    >
-      <svg viewBox={`0 0 ${size} ${size}`} className={ringColorClass(v)}>
-        <circle
-          cx={c}
-          cy={c}
-          r={r}
-          fill="none"
-          stroke="hsl(var(--muted-foreground) / 0.2)"
-          strokeWidth={stroke}
-        />
-        <circle
-          cx={c}
-          cy={c}
-          r={r}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={C}
-          strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 500ms ease" }}
-          transform={`rotate(-90 ${c} ${c})`}
-          shapeRendering="geometricPrecision"
-        />
-      </svg>
-      {showNumber && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="text-base font-semibold tabular-nums text-foreground leading-none">
-            {Math.round(v)}
-          </div>
-          {label ? (
-            <div className="mt-0.5 text-[10px] text-muted-foreground leading-none">
-              {label}
-            </div>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
-/* ------------------------------------------------------------------ */
 
 export default function SentimentPage() {
   const [contextNote, setContextNote] = useState("");
@@ -272,11 +192,12 @@ export default function SentimentPage() {
               <CardContent className="pt-0">
                 {/* Compact row: ring + quick facts (keeps card height tight) */}
                 <div className="flex items-center justify-between gap-6 mb-6">
-                  <CircularRate
+                  <GaugeMeter
                     value={sentiment.score}
                     label={sentiment.regime}
                     size={104}
-                    stroke={10}
+                    strokeWidth={10}
+                    colorScale="sentiment"
                     className="shrink-0"
                   />
                   <div className="flex-1">
