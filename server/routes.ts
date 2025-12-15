@@ -2120,10 +2120,49 @@ Important: This is informational analysis only. Do not provide investment advice
       }
       
       res.json(withFreshness(summaryData, freshness));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Scenario summarize error:", error);
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: "Invalid scenario data" });
+      } else if (error?.status === 429 || error?.code === 'insufficient_quota' || error?.code === 'rate_limit_exceeded') {
+        // Rate limit hit - fall back to mock response
+        const { inputs, results } = req.body;
+        const { withFreshness, createFallbackFreshness } = await import("./freshness");
+        
+        const highImpactAssets = results
+          .filter((r: any) => r.impactStrength === "High")
+          .map((r: any) => r.asset);
+        
+        const downAssets = results
+          .filter((r: any) => r.direction === "down")
+          .map((r: any) => r.asset);
+        
+        const fallbackData = {
+          regime: inputs.treasury10y > 25 
+            ? "This scenario resembles a hawkish Fed tightening cycle, similar to late 2022."
+            : inputs.vix > 10 
+              ? "This scenario resembles a risk-off environment with elevated volatility, similar to March 2020."
+              : inputs.dxy > 1 
+                ? "This scenario resembles a strong dollar period with global growth concerns."
+                : "This scenario represents a balanced macro environment with modest shifts.",
+          exposedAssets: highImpactAssets.length > 0 
+            ? highImpactAssets 
+            : results.slice(0, 3).map((r: any) => r.asset),
+          keyRisks: [
+            inputs.treasury10y !== 0 
+              ? `Interest rate sensitivity across duration-exposed assets`
+              : `Currency translation effects on international holdings`,
+            inputs.vix !== 0 
+              ? `Volatility regime shift could accelerate positioning changes`
+              : `Correlation breakdown during stress periods`,
+            downAssets.length > 0 
+              ? `${downAssets.slice(0, 2).join(" and ")} face directional headwinds`
+              : `Cross-asset contagion risk if scenario intensifies`,
+          ],
+          narrative: `The configured scenario suggests ${inputs.dxy > 0 ? "dollar strength" : inputs.dxy < 0 ? "dollar weakness" : "stable currency"}, ${inputs.treasury10y > 0 ? "rising yields" : inputs.treasury10y < 0 ? "falling yields" : "stable rates"}, ${inputs.vix > 0 ? "elevated volatility" : inputs.vix < 0 ? "compressed volatility" : "normal volatility"}, and ${inputs.oil > 0 ? "higher energy prices" : inputs.oil < 0 ? "lower energy prices" : "stable energy"}. Based on historical correlations, ${highImpactAssets.length > 0 ? highImpactAssets.join(", ") + " show" : "several assets show"} significant sensitivity to these conditions.`,
+        };
+        
+        res.json(withFreshness(fallbackData, createFallbackFreshness("AI service temporarily unavailable - using fallback analysis")));
       } else {
         res.status(500).json({ error: "Failed to generate scenario summary" });
       }
