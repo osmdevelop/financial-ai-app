@@ -4,6 +4,20 @@ This is a full-stack market intelligence and research platform built as a monore
 
 ## Recent Changes (December 15, 2025)
 
+**Scenario Studio** - New "what-if" macro scenario analysis page:
+1. **Scenario Inputs**: Four slider controls for hypothetical macro changes:
+   - USD Index (DXY): -2% to +2%
+   - 10Y Treasury Yield: -50bps to +50bps
+   - VIX (Volatility): -20% to +20%
+   - Oil (WTI): -10% to +10%
+2. **Scenario Engine**: Lightweight impact calculator using asset sensitivity data and known macro relationships. Returns direction (up/down/neutral), impact strength (Low/Medium/High), confidence score (0-100%), and contextual explanations for 10 major assets.
+3. **Results Table**: Clean UI showing asset impacts with color-coded badges, trend icons, and confidence indicators.
+4. **AI Summary**: "Summarize Scenario" button sends scenario to OpenAI GPT-4o for narrative analysis including historical regime resemblance, exposed assets, and key risks.
+5. **Guardrails**: Prominent disclaimer banner, hypothetical labeling, and proper error/loading states.
+6. **Route**: `/scenario` page accessible via "Scenario Studio" in sidebar navigation (FlaskConical icon).
+
+---
+
 **Quality & Consistency Pass** - Code consolidation and reliability improvements:
 1. **GaugeMeter Component**: Created unified circular gauge component (`client/src/components/ui/gauge-meter.tsx`) replacing 3 duplicate implementations (CircularRate in dashboard/sentiment, CircularGauge in today). Features: configurable colorScale (sentiment/policy/neutral), size variants (sm/md/lg or custom), loading/error states, division-by-zero guard.
 2. **News Utilities**: Consolidated shared date helpers and impact styling into `client/src/lib/news-utils.tsx` (toDate, safeFormat, formatTimelineDate, getImpactColor, getImpactIcon, TimeAgo component). Used by headlines.tsx and news.tsx.
