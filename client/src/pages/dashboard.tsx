@@ -64,7 +64,7 @@ export default function Dashboard() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
           {/* Market Index Card */}
-          <Card>
+          <Card data-testid="card-sp500">
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -76,7 +76,7 @@ export default function Dashboard() {
                       Demo
                     </Badge>
                   </div>
-                  <p className="text-2xl sm:text-3xl font-bold text-foreground">
+                  <p className="text-2xl sm:text-3xl font-bold text-foreground" data-testid="text-sp500-value">
                     4,850
                   </p>
                 </div>
@@ -86,7 +86,7 @@ export default function Dashboard() {
               </div>
               <div className="mt-4 flex items-center justify-between">
                 <div className="flex items-center">
-                  <span className="text-sm font-medium text-success">
+                  <span className="text-sm font-medium text-success" data-testid="text-sp500-change">
                     +1.2%
                   </span>
                   <span className="text-muted-foreground text-sm ml-2">
@@ -98,7 +98,7 @@ export default function Dashboard() {
           </Card>
 
           {/* VIX Volatility Index Card */}
-          <Card>
+          <Card data-testid="card-vix">
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -110,7 +110,7 @@ export default function Dashboard() {
                       Demo
                     </Badge>
                   </div>
-                  <p className="text-3xl font-bold text-warning">
+                  <p className="text-3xl font-bold text-warning" data-testid="text-vix-value">
                     18.5
                   </p>
                 </div>
@@ -127,14 +127,14 @@ export default function Dashboard() {
           </Card>
 
           {/* Watchlist Count Card */}
-          <Card>
+          <Card data-testid="card-watchlist">
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">
                     Watchlist Assets
                   </p>
-                  <p className="text-2xl font-bold text-foreground">
+                  <p className="text-2xl font-bold text-foreground" data-testid="text-watchlist-count">
                     {watchlist?.length || 0}
                   </p>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -149,7 +149,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Market Sentiment Card */}
-          <Card className="h-full">
+          <Card className="h-full" data-testid="card-sentiment">
             <CardContent className="p-4 sm:p-6 h-full flex flex-col">
               {/* Header */}
               <div className="flex items-start justify-between">

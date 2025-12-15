@@ -62,7 +62,7 @@ export default function Earnings() {
             </SelectContent>
           </Select>
           
-          <Button onClick={() => refetch()} variant="outline">
+          <Button onClick={() => refetch()} variant="outline" data-testid="button-refresh-earnings">
             <Calendar className="h-4 w-4 mr-2" />
             Refresh
           </Button>

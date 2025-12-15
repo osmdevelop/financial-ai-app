@@ -91,7 +91,8 @@ export function GaugeMeter({
   const sizeValue = getSizeValue(size);
   const stroke = strokeWidth ?? getStrokeWidth(size);
   const clampedValue = clamp(value, min, max);
-  const normalizedValue = ((clampedValue - min) / (max - min)) * 100;
+  const range = max - min;
+  const normalizedValue = range > 0 ? ((clampedValue - min) / range) * 100 : 50;
   
   const center = sizeValue / 2;
   const radius = center - stroke / 2;
