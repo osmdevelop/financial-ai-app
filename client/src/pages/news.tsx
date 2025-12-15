@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Header } from "@/components/layout/header";
@@ -10,77 +10,18 @@ import {
   Clock,
   ExternalLink,
   Newspaper,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
   Users,
   Target,
 } from "lucide-react";
 import { RefreshCcw } from "lucide-react";
-import { format, formatDistance, parseISO, isValid } from "date-fns";
 import type { ClusteredHeadline, NewsStreamResponse } from "@shared/schema";
+import {
+  getImpactColor,
+  getImpactIcon,
+  TimeAgo,
+} from "@/lib/news-utils";
 
-// --- configuration for "real-time" behavior ---
-const POLL_NEWS_MS = 30_000; // refresh feed every 30s
-
-// ---------- safe date helpers ----------
-const toDate = (v: unknown): Date | null => {
-  if (!v) return null;
-  if (v instanceof Date) return v;
-  if (typeof v === "number") return new Date(v < 1e12 ? v * 1000 : v); // epoch secs or ms
-  if (typeof v === "string") {
-    const num = Number(v);
-    if (!Number.isNaN(num)) return new Date(num < 1e12 ? num * 1000 : num);
-    const d = parseISO(v);
-    return isValid(d) ? d : null;
-  }
-  return null;
-};
-
-const safeFormat = (v: unknown, fmt: string, fallback = "—") => {
-  const d = toDate(v);
-  return d && isValid(d) ? format(d, fmt) : fallback;
-};
-
-// Impact styles/icons for news analysis
-const getImpactColor = (impact: string) => {
-  switch (impact?.toLowerCase()) {
-    case "high":
-      return "text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20";
-    case "medium":
-      return "text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/20";
-    case "low":
-      return "text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20";
-    default:
-      return "text-muted-foreground bg-muted";
-  }
-};
-
-const getImpactIcon = (impact: string) => {
-  switch (impact?.toLowerCase()) {
-    case "high":
-      return <TrendingDown className="h-3 w-3" />;
-    case "medium":
-      return <AlertTriangle className="h-3 w-3" />;
-    case "low":
-      return <TrendingUp className="h-3 w-3" />;
-    default:
-      return <TrendingUp className="h-3 w-3" />;
-  }
-};
-
-/** Isolated minute-ticker so only the time text re-renders, not the whole page */
-function TimeAgo({ date }: { date: unknown }) {
-  const [, force] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => force((n) => n + 1), 60_000);
-    return () => clearInterval(id);
-  }, []);
-  const d = toDate(date);
-  if (!d || !isValid(d))
-    return <span className="text-xs text-muted-foreground">—</span>;
-  return <>{formatDistance(d, new Date(), { addSuffix: true })}</>;
-}
+const POLL_NEWS_MS = 30_000;
 
 // News cluster component
 function NewsClusterCard({ cluster }: { cluster: NewsStreamResponse['clusters'][0] }) {

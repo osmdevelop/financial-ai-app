@@ -12,7 +12,7 @@ import { format, addDays } from "date-fns";
 export default function EconomicCalendar() {
   const [timeframe, setTimeframe] = useState<string>("7");
 
-  const { data: events, isLoading, refetch } = useQuery({
+  const { data: events, isLoading, error, refetch } = useQuery({
     queryKey: ["/api/econ/upcoming", timeframe],
     queryFn: () => api.getEconomicEvents(parseInt(timeframe)),
   });
@@ -76,7 +76,19 @@ export default function EconomicCalendar() {
         </div>
 
         {/* Events List */}
-        {isLoading ? (
+        {error ? (
+          <Card className="text-center py-12" data-testid="error-economic">
+            <CardContent>
+              <Calendar className="h-12 w-12 text-danger mx-auto mb-4" />
+              <p className="text-danger font-medium mb-2">Failed to load economic events</p>
+              <p className="text-muted-foreground text-sm mb-4">Unable to retrieve calendar data. Please try again.</p>
+              <Button onClick={() => refetch()} variant="outline" data-testid="button-retry-economic">
+                <Calendar className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <Card key={i} className="animate-pulse">

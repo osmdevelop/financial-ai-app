@@ -13,7 +13,7 @@ import { format, addDays, subDays } from "date-fns";
 export default function Earnings() {
   const [timeframe, setTimeframe] = useState<string>("this_week");
 
-  const { data: earnings, isLoading, refetch } = useQuery({
+  const { data: earnings, isLoading, error, refetch } = useQuery({
     queryKey: ["/api/earnings/upcoming"],
     queryFn: () => api.getUpcomingEarnings(),
   });
@@ -69,7 +69,19 @@ export default function Earnings() {
         </div>
 
         {/* Earnings Grid */}
-        {isLoading ? (
+        {error ? (
+          <Card className="text-center py-12" data-testid="error-earnings">
+            <CardContent>
+              <Calendar className="h-12 w-12 text-danger mx-auto mb-4" />
+              <p className="text-danger font-medium mb-2">Failed to load earnings data</p>
+              <p className="text-muted-foreground text-sm mb-4">Unable to retrieve earnings calendar. Please try again.</p>
+              <Button onClick={() => refetch()} variant="outline" data-testid="button-retry-earnings">
+                <Calendar className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <Card key={i} className="animate-pulse">

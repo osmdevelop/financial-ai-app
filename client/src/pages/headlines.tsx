@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Header } from "@/components/layout/header";
@@ -10,40 +10,23 @@ import {
   Clock,
   ExternalLink,
   Newspaper,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
   Users,
   Target,
 } from "lucide-react";
 import { RefreshCcw } from "lucide-react";
-import { format, formatDistance, parseISO, isValid } from "date-fns";
+import { format, isValid } from "date-fns";
 import type { Headline, NewsCluster, NewsStreamResponse } from "@shared/schema";
+import {
+  toDate,
+  safeFormat,
+  formatTimelineDate,
+  getImpactColor,
+  getImpactIcon,
+  TimeAgo,
+} from "@/lib/news-utils";
 
-// --- configuration for "real-time" behavior ---
-const POLL_HEADLINES_MS = 30_000; // refresh feed every 30s
+const POLL_HEADLINES_MS = 30_000;
 
-// ---------- safe date helpers ----------
-const toDate = (v: unknown): Date | null => {
-  if (!v) return null;
-  if (v instanceof Date) return v;
-  if (typeof v === "number") return new Date(v < 1e12 ? v * 1000 : v); // epoch secs or ms
-  if (typeof v === "string") {
-    const num = Number(v);
-    if (!Number.isNaN(num)) return new Date(num < 1e12 ? num * 1000 : num);
-    const d = parseISO(v);
-    return isValid(d) ? d : null;
-  }
-  return null;
-};
-
-const safeFormat = (v: unknown, fmt: string, fallback = "—") => {
-  const d = toDate(v);
-  return d && isValid(d) ? format(d, fmt) : fallback;
-};
-// ---------------------------------------
-
-// Group headlines by day, handling bad dates and sorting newest -> oldest
 const groupHeadlinesByDate = (headlines: Headline[]) => {
   const grouped = headlines.reduce(
     (acc, headline) => {
@@ -61,60 +44,6 @@ const groupHeadlinesByDate = (headlines: Headline[]) => {
     return b.localeCompare(a);
   });
 };
-
-// Helper to show "Today / Yesterday / Month d, yyyy"
-const formatTimelineDate = (dateLike: unknown) => {
-  const d = toDate(dateLike);
-  if (!d) return "Unknown Date";
-  const todayStr = format(new Date(), "yyyy-MM-dd");
-  const yest = new Date();
-  yest.setDate(yest.getDate() - 1);
-  const yestStr = format(yest, "yyyy-MM-dd");
-  const dStr = format(d, "yyyy-MM-dd");
-  if (dStr === todayStr) return "Today";
-  if (dStr === yestStr) return "Yesterday";
-  return format(d, "MMMM d, yyyy");
-};
-
-// Optional impact styles/icons (kept for future use)
-const getImpactColor = (impact: string) => {
-  switch (impact?.toLowerCase()) {
-    case "high":
-      return "text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20";
-    case "medium":
-      return "text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/20";
-    case "low":
-      return "text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20";
-    default:
-      return "text-muted-foreground bg-muted";
-  }
-};
-
-const getImpactIcon = (impact: string) => {
-  switch (impact?.toLowerCase()) {
-    case "high":
-      return <TrendingDown className="h-3 w-3" />;
-    case "medium":
-      return <AlertTriangle className="h-3 w-3" />;
-    case "low":
-      return <TrendingUp className="h-3 w-3" />;
-    default:
-      return <TrendingUp className="h-3 w-3" />;
-  }
-};
-
-/** Isolated minute-ticker so only the time text re-renders, not the whole page */
-function TimeAgo({ date }: { date: unknown }) {
-  const [, force] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => force((n) => n + 1), 60_000);
-    return () => clearInterval(id);
-  }, []);
-  const d = toDate(date);
-  if (!d || !isValid(d))
-    return <span className="text-xs text-muted-foreground">—</span>;
-  return <>{formatDistance(d, new Date(), { addSuffix: true })}</>;
-}
 
 export default function NewsStream() {
   const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
