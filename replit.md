@@ -4,6 +4,18 @@ This is a full-stack market intelligence and research platform built as a monore
 
 ## Recent Changes (December 15, 2025)
 
+**Daily Market Brief** - New AI-generated daily overview page:
+1. **Route & Navigation**: `/daily-brief` page accessible as first item in sidebar navigation (FileText icon).
+2. **Today at a Glance**: Compact cards showing Market Regime, Policy Risk Level, Fed Tone, and Volatility State with live timestamps.
+3. **What Moved Markets Today**: 3-5 bullet points derived from headlines showing driver, direction (bullish/bearish/neutral), and confidence level (high/medium/low).
+4. **Asset Impact Snapshot**: Table showing directional bias, primary driver, and risk level for SPY, QQQ, IWM, BTC, Gold (GLD), Oil (USO), USD (UUP), and 10Y Treasury (TNX).
+5. **AI Daily Summary**: OpenAI GPT-4o generates strict 5-sentence summary with hard constraints (no advice, no predictions, professional tone). Includes generate/refresh functionality with caching.
+6. **What to Watch Next**: Three cards showing upcoming economic events, earnings, and policy risks.
+7. **Guardrails**: Prominent "informational only" disclaimer banner, comprehensive error handling with fallback text, data-testid attributes on all major sections.
+8. **API Endpoints**: `GET /api/daily-brief/summary` (cached retrieval) and `POST /api/daily-brief/generate` (AI generation with fallback).
+
+---
+
 **Scenario Studio** - New "what-if" macro scenario analysis page:
 1. **Scenario Inputs**: Four slider controls for hypothetical macro changes:
    - USD Index (DXY): -2% to +2%
