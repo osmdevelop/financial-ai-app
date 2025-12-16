@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
 import {
   AlertTriangle,
   TrendingUp,
@@ -24,6 +25,7 @@ import {
   Info,
   CheckCircle,
   XCircle,
+  AlertCircle,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -39,6 +41,16 @@ interface MarketDriver {
 }
 
 export default function DailyBrief() {
+  const {
+    snapshot: regimeSnapshot,
+    isLoading: regimeLoading,
+    error: regimeError,
+    refetch: refetchRegime,
+    isMock: regimeIsMock,
+    summary: regimeSummary,
+    isRefetching: regimeRefetching,
+  } = useMarketRegimeSnapshot();
+
   // Fetch sentiment data for Market Regime and Volatility
   const {
     data: sentiment,
@@ -230,6 +242,75 @@ export default function DailyBrief() {
             recommendations, or predictions. Always conduct your own research.
           </AlertDescription>
         </Alert>
+
+        {/* Regime Context Strip */}
+        <Card className="bg-muted/30" data-testid="regime-context-strip">
+          <CardContent className="p-4">
+            {regimeLoading && !regimeSnapshot ? (
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-4 w-64" />
+              </div>
+            ) : regimeError && !regimeSnapshot ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">Failed to load regime context</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetchRegime()}
+                  data-testid="button-retry-regime-brief"
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : regimeSnapshot ? (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">Regime Context:</span>
+                  <Badge
+                    variant={
+                      regimeSnapshot.regime === "Risk-On"
+                        ? "default"
+                        : regimeSnapshot.regime === "Risk-Off"
+                          ? "destructive"
+                          : regimeSnapshot.regime === "Policy Shock"
+                            ? "secondary"
+                            : "outline"
+                    }
+                    className="font-semibold"
+                  >
+                    {regimeSnapshot.regime}
+                  </Badge>
+                  {regimeIsMock && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30"
+                    >
+                      Mock
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground flex-1">{regimeSummary}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetchRegime()}
+                  disabled={regimeRefetching}
+                  className="h-7 w-7 p-0 shrink-0"
+                  data-testid="button-refresh-regime-brief"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${regimeRefetching ? "animate-spin" : ""}`}
+                  />
+                </Button>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
 
         {/* Section 1: Today at a Glance */}
         <section data-testid="section-at-a-glance">

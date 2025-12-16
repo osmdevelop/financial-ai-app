@@ -8,9 +8,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { GaugeMeter } from "@/components/ui/gauge-meter";
-import { DollarSign, TrendingUp, Rocket, Activity } from "lucide-react";
+import { DollarSign, TrendingUp, Rocket, Activity, RefreshCw, AlertCircle } from "lucide-react";
 import { PolicySnapshotCard } from "@/components/dashboard/PolicySnapshotCard";
+import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
 import { formatCurrency, formatPercent } from "@/lib/constants";
 import {
   LineChart,
@@ -25,6 +27,15 @@ import {
 } from "recharts";
 
 export default function Dashboard() {
+  const {
+    snapshot: regimeSnapshot,
+    isLoading: regimeLoading,
+    error: regimeError,
+    refetch: refetchRegime,
+    isMock: regimeIsMock,
+    isRefetching: regimeRefetching,
+  } = useMarketRegimeSnapshot();
+
   const { 
     data: marketSentiment, 
     isLoading: sentimentLoading,
@@ -33,7 +44,7 @@ export default function Dashboard() {
   } = useQuery({
     queryKey: ["/api/sentiment/index"],
     queryFn: () => api.getEnhancedSentiment(),
-    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const { 
@@ -61,6 +72,110 @@ export default function Dashboard() {
       />
 
       <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
+        {/* Market Regime Banner */}
+        <Card className="mb-4 sm:mb-6" data-testid="regime-banner">
+          <CardContent className="p-4">
+            {regimeLoading && !regimeSnapshot ? (
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-6 w-24" />
+                <Skeleton className="h-4 w-48" />
+              </div>
+            ) : regimeError && !regimeSnapshot ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">Failed to load market regime</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetchRegime()}
+                  data-testid="button-retry-regime"
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : regimeSnapshot ? (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">
+                      Market Regime:
+                    </span>
+                    <Badge
+                      variant={
+                        regimeSnapshot.regime === "Risk-On"
+                          ? "default"
+                          : regimeSnapshot.regime === "Risk-Off"
+                            ? "destructive"
+                            : regimeSnapshot.regime === "Policy Shock"
+                              ? "secondary"
+                              : "outline"
+                      }
+                      className="font-semibold"
+                      data-testid="text-regime-label"
+                    >
+                      {regimeSnapshot.regime}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      ({regimeSnapshot.confidence}% confidence)
+                    </span>
+                  </div>
+                  {regimeIsMock && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30"
+                    >
+                      Mock
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground flex-1">
+                  {regimeSnapshot.drivers.slice(0, 3).map((driver, i) => (
+                    <span key={i} className="flex items-center gap-1">
+                      <span
+                        className={
+                          driver.direction === "up"
+                            ? "text-green-500"
+                            : driver.direction === "down"
+                              ? "text-red-500"
+                              : "text-muted-foreground"
+                        }
+                      >
+                        {driver.direction === "up"
+                          ? "↑"
+                          : driver.direction === "down"
+                            ? "↓"
+                            : "→"}
+                      </span>
+                      {driver.label}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 sm:ml-auto">
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(regimeSnapshot.asOf).toLocaleTimeString()}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => refetchRegime()}
+                    disabled={regimeRefetching}
+                    className="h-7 w-7 p-0"
+                    data-testid="button-refresh-regime"
+                  >
+                    <RefreshCw
+                      className={`w-3.5 h-3.5 ${regimeRefetching ? "animate-spin" : ""}`}
+                    />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
           {/* Market Index Card */}

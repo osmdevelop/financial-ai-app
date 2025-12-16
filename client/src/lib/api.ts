@@ -44,6 +44,8 @@ import type {
   // Module E types
   TrumpIndexResponse,
   FedspeakResponse,
+  // Module F types
+  MarketRegimeSnapshot,
 } from "@shared/schema";
 
 export const api = {
@@ -317,6 +319,12 @@ export const api = {
 
   async getFedspeak(): Promise<FedspeakResponse> {
     const res = await apiRequest("GET", "/api/policy/fedspeak");
+    return res.json();
+  },
+
+  // MODULE F: Market Regime Engine
+  async getMarketRegimeSnapshot(): Promise<MarketRegimeSnapshot> {
+    const res = await apiRequest("GET", "/api/regime/snapshot");
     return res.json();
   },
 };

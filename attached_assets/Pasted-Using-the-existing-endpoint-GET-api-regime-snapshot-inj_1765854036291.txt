@@ -1,0 +1,95 @@
+Using the existing endpoint GET /api/regime/snapshot, inject the unified MarketRegimeSnapshot across the app. Do NOT change backend logic in this prompt.
+
+GOALS
+
+Create a client API method: getMarketRegimeSnapshot()
+
+Create a reusable hook: useMarketRegimeSnapshot(options?) that:
+
+fetches snapshot
+
+exposes loading/error/data
+
+supports refetch
+
+is null-safe
+
+surfaces meta.isMock and missingInputs
+
+caches in-memory for 5 minutes to reduce duplicate calls across pages
+
+UI integration in 4 places (minimal UI changes, consistent styling):
+A) Dashboard:
+
+Add a slim banner card at top (or near existing KPI cards) showing:
+
+Regime label + confidence
+
+2–3 driver bullets
+
+“Mock” badge when meta.isMock
+
+“Updated time”
+
+Keep it compact (no new charts)
+B) Daily Brief page:
+
+At top of page, add a “Regime Context” strip:
+
+Regime + one-sentence summary built from drivers (client-side template, no OpenAI)
+C) AI Insights page:
+
+Modify the prompt builder to always include:
+
+regime, confidence, key drivers (2–4), and any missing inputs note
+
+Add a small indicator “Regime context included” with tooltip listing missingInputs if any
+
+Ensure no broken portfolio API calls; keep current behavior
+D) Scenario Studio:
+
+Add a “Baseline Regime” section above sliders:
+
+regime + drivers
+
+This is informational only; does not affect calculation yet
+
+Ensure mock data is clearly labeled wherever displayed (use your existing “Demo/Mock” badge style).
+
+Add/extend tests:
+
+Component renders regime banner with mock badge when meta.isMock
+
+Hook returns error state and UI shows retry when endpoint fails
+
+AI Insights prompt builder includes regime context text
+
+IMPLEMENTATION DETAILS
+
+Follow existing patterns for cards, badges, and loading skeletons.
+
+DO NOT duplicate gauge widgets; keep this as text + badge + small list.
+
+Add data-testid to the new UI elements:
+
+regime-banner
+
+regime-context-strip
+
+regime-context-indicator
+
+baseline-regime
+
+Add a “Refresh” action where appropriate (Dashboard banner + Daily Brief), using the hook’s refetch.
+
+ACCEPTANCE CRITERIA
+
+Dashboard, Daily Brief, AI Insights, Scenario Studio all show regime context and do not crash if endpoint fails.
+
+When endpoint fails, show a consistent error state with Retry.
+
+AI Insights prompts always include regime context.
+
+Tests pass and new elements have data-testid coverage.
+
+No major layout redesign; keep it minimal and consistent.

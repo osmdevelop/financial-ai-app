@@ -7,9 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Sparkles, Info, TrendingUp, Shield, Activity } from "lucide-react";
+import { Brain, Sparkles, Info, TrendingUp, Shield, Activity, BarChart3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
 import type { AIInsightResponse } from "@shared/schema";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function Insights() {
   const [inputText, setInputText] = useState(
@@ -17,6 +23,12 @@ export default function Insights() {
   );
   const [insights, setInsights] = useState<AIInsightResponse | null>(null);
   const { toast } = useToast();
+
+  const {
+    snapshot: regimeSnapshot,
+    isMock: regimeIsMock,
+    missingInputs: regimeMissingInputs,
+  } = useMarketRegimeSnapshot();
 
   // Get market sentiment for context
   const { 
@@ -59,6 +71,25 @@ export default function Insights() {
     },
   });
 
+  const buildPromptWithRegimeContext = (userInput: string): string => {
+    if (!regimeSnapshot) return userInput;
+    
+    const topDrivers = regimeSnapshot.drivers.slice(0, 4);
+    const driverSummary = topDrivers
+      .map(d => `${d.label}: ${d.direction} (${d.strength})`)
+      .join(", ");
+    
+    let contextNote = `\n\n[Regime Context: Current market regime is ${regimeSnapshot.regime} with ${regimeSnapshot.confidence}% confidence. Key drivers: ${driverSummary}.`;
+    
+    if (regimeMissingInputs.length > 0) {
+      contextNote += ` Note: Missing inputs for ${regimeMissingInputs.join(", ")}.`;
+    }
+    
+    contextNote += "]";
+    
+    return userInput + contextNote;
+  };
+
   const handleExplain = () => {
     if (!inputText.trim()) {
       toast({
@@ -69,7 +100,8 @@ export default function Insights() {
       return;
     }
     
-    insightsMutation.mutate(inputText);
+    const enrichedPrompt = buildPromptWithRegimeContext(inputText);
+    insightsMutation.mutate(enrichedPrompt);
   };
 
   return (
@@ -241,6 +273,30 @@ export default function Insights() {
                       <span className="text-xs text-muted-foreground ml-2">
                         • Policy context included
                       </span>
+                    )}
+                    {regimeSnapshot && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className="text-xs text-primary ml-2 cursor-help flex items-center gap-1"
+                            data-testid="regime-context-indicator"
+                          >
+                            <BarChart3 className="w-3 h-3" />
+                            Regime context included
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs text-xs">
+                            Regime: {regimeSnapshot.regime} ({regimeSnapshot.confidence}% confidence)
+                            {regimeMissingInputs.length > 0 && (
+                              <>
+                                <br />
+                                Missing inputs: {regimeMissingInputs.join(", ")}
+                              </>
+                            )}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                   </span>
                   <Button 

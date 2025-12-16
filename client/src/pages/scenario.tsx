@@ -22,8 +22,11 @@ import {
   RefreshCw,
   Sparkles,
   Info,
+  AlertCircle,
+  BarChart3,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
 import {
   Tooltip,
   TooltipContent,
@@ -273,6 +276,14 @@ export default function Scenario() {
   const [results, setResults] = useState<AssetImpact[]>([]);
   const [hasCalculated, setHasCalculated] = useState(false);
 
+  const {
+    snapshot: regimeSnapshot,
+    isLoading: regimeLoading,
+    error: regimeError,
+    isMock: regimeIsMock,
+    refetch: refetchRegime,
+  } = useMarketRegimeSnapshot();
+
   const summarizeMutation = useMutation({
     mutationFn: async (data: { inputs: ScenarioInputs; results: AssetImpact[] }) => {
       const response = await apiRequest("POST", "/api/scenario/summarize", data);
@@ -328,6 +339,94 @@ export default function Scenario() {
             </p>
           </div>
         </div>
+
+        {/* Baseline Regime Section */}
+        <Card data-testid="baseline-regime">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-primary" />
+              Current Baseline Regime
+            </CardTitle>
+            <CardDescription>
+              Reference point for scenario analysis (informational only)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {regimeLoading && !regimeSnapshot ? (
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-6 w-24" />
+                <Skeleton className="h-4 w-64" />
+              </div>
+            ) : regimeError && !regimeSnapshot ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">Failed to load baseline regime</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetchRegime()}
+                  data-testid="button-retry-baseline-regime"
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : regimeSnapshot ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge
+                    variant={
+                      regimeSnapshot.regime === "Risk-On"
+                        ? "default"
+                        : regimeSnapshot.regime === "Risk-Off"
+                          ? "destructive"
+                          : regimeSnapshot.regime === "Policy Shock"
+                            ? "secondary"
+                            : "outline"
+                    }
+                    className="font-semibold text-sm px-3 py-1"
+                  >
+                    {regimeSnapshot.regime}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {regimeSnapshot.confidence}% confidence
+                  </span>
+                  {regimeIsMock && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30"
+                    >
+                      Mock
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {regimeSnapshot.drivers.slice(0, 4).map((driver, i) => (
+                    <Badge key={i} variant="outline" className="text-xs">
+                      <span
+                        className={
+                          driver.direction === "up"
+                            ? "text-green-500 mr-1"
+                            : driver.direction === "down"
+                              ? "text-red-500 mr-1"
+                              : "text-muted-foreground mr-1"
+                        }
+                      >
+                        {driver.direction === "up"
+                          ? "↑"
+                          : driver.direction === "down"
+                            ? "↓"
+                            : "→"}
+                      </span>
+                      {driver.label} ({driver.strength})
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
 
         {/* Scenario Inputs */}
         <Card data-testid="scenario-inputs-card">
