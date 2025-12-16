@@ -1,0 +1,134 @@
+Implement a unified “Market Regime Engine” that produces a single derived object used across the app. Do NOT redesign UI in this prompt. Focus on backend/service logic, shared types, and tests.
+
+GOALS
+
+Add a new backend endpoint: GET /api/regime/snapshot
+
+The endpoint returns a MarketRegimeSnapshot object derived from existing data sources already used in the app:
+
+Market sentiment index (same source the Sentiment page uses)
+
+Policy snapshot (Trump Index / Fedspeak) if available
+
+Volatility state (VIX-like or your existing volatility score/state)
+
+Risk appetite / market components if available (same source the Market Drivers page uses)
+
+Must be null-safe: if any upstream fetch fails, compute the snapshot from what’s available and include metadata indicating missing inputs.
+
+Must support existing “mock/sample fallback” behavior used elsewhere and label it clearly.
+
+DATA CONTRACT (Shared Type)
+Create a shared TypeScript type accessible by both server and client:
+
+type MarketRegime = "Risk-On" | "Neutral" | "Risk-Off" | "Policy Shock" | "Stagflation";
+type RegimeDriverKey =
+| "sentiment"
+| "policy"
+| "fed"
+| "volatility"
+| "rates"
+| "risk_appetite";
+
+export type MarketRegimeSnapshot = {
+asOf: string; // ISO
+regime: MarketRegime;
+confidence: number; // 0-100
+changedSinceYesterday: boolean;
+drivers: Array<{
+key: RegimeDriverKey;
+label: string; // human readable
+direction: "up" | "down" | "flat" | "mixed";
+strength: "low" | "medium" | "high";
+detail: string; // 1 sentence
+}>;
+inputs: {
+sentiment?: { score?: number; state?: string; asOf?: string; isMock?: boolean };
+policy?: { trumpZ?: number; trumpRisk?: string; isMock?: boolean };
+fed?: { tone?: "hawkish" | "dovish" | "neutral"; score?: number; isMock?: boolean };
+volatility?: { score?: number; state?: string; isMock?: boolean };
+riskAppetite?: { score?: number; state?: string; isMock?: boolean };
+};
+meta: {
+isMock: boolean; // true if ANY input or final snapshot is mock
+missingInputs: string[]; // e.g. ["policy", "volatility"]
+notes?: string;
+};
+};
+
+REGIME LOGIC (Keep it simple & deterministic)
+Implement a deterministic rules-based regime classifier (no OpenAI calls):
+
+Base regime starts from sentiment state/score:
+
+Risk-On if sentiment >= 65
+
+Risk-Off if sentiment <= 35
+
+Neutral otherwise
+
+Override to "Policy Shock" if policy trumpRisk is High OR trumpZ >= 1.5 AND confidence can be >= 70 if also volatility rising or sentiment falling.
+
+Volatility influence:
+
+If volatility state is High / score above a threshold, shift one notch toward Risk-Off (Risk-On→Neutral, Neutral→Risk-Off) unless Policy Shock already.
+
+Fed influence:
+
+If tone hawkish and sentiment weak (<50), bias toward Risk-Off.
+
+If tone dovish and sentiment strong (>55), bias toward Risk-On.
+
+Confidence:
+
+Start at 55.
+
++10 if 4+ inputs present, +5 if 3 inputs present, -10 if only 1 input.
+
++5 if drivers agree directionally, -5 if mixed.
+
+Clamp 0–100.
+
+changedSinceYesterday:
+
+If you have cached prior snapshot (or yesterday’s value) compute diff.
+
+If no history available, return false and add meta note "no history".
+
+CACHING
+
+Cache the computed snapshot for 15 minutes in the same caching approach used elsewhere in the backend.
+
+Also keep a “previous snapshot” (yesterday or last-known) if your storage approach exists; if not, store the last snapshot in cache and compare to current for changedSinceYesterday.
+
+FILES / STRUCTURE
+
+Reuse existing server structure: create a service module (e.g. server/services/regimeService.ts) and a route handler (e.g. server/routes/regime.ts) consistent with the other /api modules.
+
+Add shared types in a place already used for shared API types (e.g. shared/types or client/src/types + server import). Keep it clean; avoid duplicating types.
+
+TESTS
+
+Add unit tests for the regime classifier function with at least:
+
+Risk-On path
+
+Risk-Off path
+
+Policy Shock override path
+
+Volatility pushes toward Risk-Off
+
+Missing inputs still returns valid snapshot and meta.missingInputs populated
+
+Add a lightweight API route test (if you already have a pattern) that asserts response shape and status 200.
+
+ACCEPTANCE CRITERIA
+
+GET /api/regime/snapshot returns MarketRegimeSnapshot with stable shape every time.
+
+No page/UI changes in this prompt.
+
+No breaking changes to existing endpoints.
+
+Strong null-safety, clear meta labeling of mock vs real.
