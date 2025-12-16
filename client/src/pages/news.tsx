@@ -189,6 +189,7 @@ export default function NewsStream() {
 
   const clusters = newsResponse?.data?.clusters || [];
   const headlines = newsResponse?.data?.headlines || [];
+  const isMock = newsResponse?.meta?.isMock ?? false;
 
   // Filter clusters and headlines by search term
   const filteredClusters = useMemo(
@@ -222,12 +223,23 @@ export default function NewsStream() {
       />
 
       {/* Live indicator */}
-      <div className="px-4 md:px-6 pt-2">
+      <div className="px-4 md:px-6 pt-2 flex items-center gap-2">
         {!isLoading && (
-          <span className="text-[11px] text-muted-foreground">
-            {isFetching ? "Updating…" : "Live"} • Last update{" "}
-            {safeFormat(new Date(), "h:mm:ss a")}
-          </span>
+          <>
+            <span className="text-[11px] text-muted-foreground">
+              {isFetching ? "Updating…" : isMock ? "Sample Data" : "Live"} • Last update{" "}
+              {safeFormat(new Date(), "h:mm:ss a")}
+            </span>
+            {isMock && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30"
+                data-testid="badge-mock-news"
+              >
+                Sample Data
+              </Badge>
+            )}
+          </>
         )}
       </div>
 

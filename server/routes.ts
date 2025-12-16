@@ -1019,15 +1019,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const events = JSON.parse(sampleData);
 
       // Filter events within the requested days
+      const now = new Date();
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() + days);
 
       const filteredEvents = events.filter((event: any) => {
         const eventDate = new Date(event.timestamp);
-        return eventDate >= new Date() && eventDate <= cutoff;
+        return eventDate >= now && eventDate <= cutoff;
       });
 
-      res.json(filteredEvents);
+      res.json({
+        events: filteredEvents,
+        meta: {
+          isMock: true,
+          source: "Sample Data",
+          lastUpdated: new Date().toISOString()
+        }
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch economic events" });
     }
@@ -1144,7 +1152,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Asset Sheet API (MUST come after specific routes)
+  // MODULE D: Asset Overview 2.0 API Endpoint (MUST come before /api/asset/:symbol)
+  app.get("/api/asset/overview", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    
+    try {
+      const { symbol, assetType } = req.query;
+      
+      if (!symbol || !assetType) {
+        return res.status(400).json({ 
+          error: "Missing required parameters: symbol and assetType" 
+        });
+      }
+
+      if (!["equity", "etf", "crypto"].includes(assetType as string)) {
+        return res.status(400).json({ 
+          error: "assetType must be one of: equity, etf, crypto" 
+        });
+      }
+
+      // Import Module D services
+      const { AssetOverviewService } = await import("./asset-overview-service");
+      
+      const assetOverview = new AssetOverviewService();
+      const result = await assetOverview.getComprehensiveOverview(
+        symbol as string, 
+        assetType as "equity" | "etf" | "crypto"
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error("Asset overview error:", error);
+      res.status(500).json({ error: "Failed to get asset overview" });
+    }
+  });
+
+  // Asset Sheet API (MUST come after specific routes like /api/asset/overview)
   app.get("/api/asset/:symbol", async (req, res) => {
     try {
       const { symbol } = req.params;
@@ -1358,7 +1401,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         limit,
       });
       
-      res.json(result);
+      // Wrap in expected format with meta field
+      res.json({
+        data: {
+          headlines: result.headlines,
+          clusters: result.clusters,
+        },
+        meta: {
+          isMock: !result.freshness.isLive,
+          source: result.freshness.source,
+          lastUpdated: result.freshness.lastUpdated,
+          isLive: result.freshness.isLive,
+        }
+      });
     } catch (error) {
       console.error("News stream error:", error);
       res.status(500).json({ error: "Failed to get news stream" });
@@ -1921,43 +1976,7 @@ Provide response in JSON format: {
     }
   });
 
-  // MODULE D: Asset Overview 2.0 API Endpoints
-  // =============================================
-
-  app.get("/api/asset/overview", async (req, res) => {
-    res.setHeader("Cache-Control", "no-store");
-    
-    try {
-      const { symbol, assetType } = req.query;
-      
-      if (!symbol || !assetType) {
-        return res.status(400).json({ 
-          error: "Missing required parameters: symbol and assetType" 
-        });
-      }
-
-      if (!["equity", "etf", "crypto"].includes(assetType as string)) {
-        return res.status(400).json({ 
-          error: "assetType must be one of: equity, etf, crypto" 
-        });
-      }
-
-      // Import Module D services
-      const { AssetOverviewService } = await import("./asset-overview-service");
-      
-      const assetOverview = new AssetOverviewService();
-      const result = await assetOverview.getComprehensiveOverview(
-        symbol as string, 
-        assetType as "equity" | "etf" | "crypto"
-      );
-
-      res.json(result);
-    } catch (error) {
-      console.error("Asset overview error:", error);
-      res.status(500).json({ error: "Failed to get asset overview" });
-    }
-  });
-
+  // MODULE D: Asset Brief Endpoint
   app.post("/api/asset/brief", async (req, res) => {
     try {
       const { overviewPayload } = req.body;

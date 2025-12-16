@@ -7,15 +7,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, AlertTriangle, TrendingUp, Globe } from "lucide-react";
-import { format, addDays } from "date-fns";
+import { format } from "date-fns";
 
 export default function EconomicCalendar() {
   const [timeframe, setTimeframe] = useState<string>("7");
 
-  const { data: events, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["/api/econ/upcoming", timeframe],
     queryFn: () => api.getEconomicEvents(parseInt(timeframe)),
   });
+
+  const events = data?.events || [];
+  const isMock = data?.meta?.isMock ?? false;
 
   const getImportanceColor = (importance: string) => {
     switch (importance) {
@@ -73,6 +76,16 @@ export default function EconomicCalendar() {
             <Calendar className="h-4 w-4 mr-2" />
             Refresh
           </Button>
+          
+          {isMock && (
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30"
+              data-testid="badge-mock-economic"
+            >
+              Sample Data
+            </Badge>
+          )}
         </div>
 
         {/* Events List */}
@@ -110,7 +123,7 @@ export default function EconomicCalendar() {
           </div>
         ) : (
           <div className="space-y-4">
-            {events?.map((event) => (
+            {events.map((event) => (
               <Card key={event.id} className="hover:shadow-md transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
@@ -180,7 +193,7 @@ export default function EconomicCalendar() {
           </div>
         )}
         
-        {events?.length === 0 && !isLoading && (
+        {events.length === 0 && !isLoading && !error && (
           <div className="text-center py-12">
             <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">No economic events found for {getTimeframeLabel(timeframe).toLowerCase()}.</p>

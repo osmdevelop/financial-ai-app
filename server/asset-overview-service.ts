@@ -23,9 +23,16 @@ export class AssetOverviewService {
     symbol: string, 
     assetType: "equity" | "etf" | "crypto"
   ): Promise<AssetOverviewResponse> {
+    let usedMockData = false;
+    
     try {
       // Fetch multi-timeframe OHLC data
       const ohlcData = await this.fetchMultiTimeframeData(symbol, assetType);
+      
+      // Check if we got mock data by examining if the data has our mock signature
+      if (ohlcData["1d"].length > 0 && ohlcData["1d"][0].volume === 1000000) {
+        usedMockData = true; // Mock data uses 1000000 as volume
+      }
       
       // Get current price and change
       const currentData = await this.getCurrentPriceData(symbol, assetType);
@@ -49,8 +56,8 @@ export class AssetOverviewService {
       // Find relevant catalysts from news data
       const catalysts = await this.findRelevantCatalysts(symbol);
       
-      // Create freshness metadata
-      const freshness = this.createFreshnessMetadata();
+      // Create freshness metadata with mock flag
+      const freshness = this.createFreshnessMetadata(usedMockData);
 
       return {
         symbol,
@@ -67,8 +74,45 @@ export class AssetOverviewService {
       };
     } catch (error) {
       console.error(`Asset overview error for ${symbol}:`, error);
-      throw error;
+      // Return fallback mock data instead of throwing
+      return this.createFallbackResponse(symbol, assetType);
     }
+  }
+  
+  /**
+   * Create fallback response with mock data
+   */
+  private createFallbackResponse(symbol: string, assetType: "equity" | "etf" | "crypto"): AssetOverviewResponse {
+    const mockOhlcData = {
+      "1h": this.generateMockOHLCData("1h", 50),
+      "1d": this.generateMockOHLCData("1d", 365),
+      "1w": this.generateMockOHLCData("1w", 104),
+      "1m": this.generateMockOHLCData("1m", 60),
+      "3m": this.generateMockOHLCData("3m", 40),
+      "1y": this.generateMockOHLCData("1y", 20),
+    };
+    
+    const basePrice = 150;
+    const change = 2.5;
+    
+    return {
+      symbol,
+      assetType,
+      currentPrice: basePrice,
+      change,
+      changePct: (change / basePrice) * 100,
+      ohlcData: mockOhlcData,
+      indicators: TechnicalIndicatorCalculator.calculateAllIndicators(mockOhlcData["1d"]),
+      stats: ProbabilisticStatsCalculator.calculateAllStats(
+        mockOhlcData["1d"].map(d => ({ timestamp: d.timestamp, close: d.close }))
+      ),
+      supportResistance: SupportResistanceCalculator.calculateSupportResistance(
+        mockOhlcData["1d"],
+        basePrice
+      ),
+      catalysts: [],
+      freshness: this.createFreshnessMetadata(true)
+    };
   }
 
   /**
@@ -330,17 +374,20 @@ export class AssetOverviewService {
   /**
    * Create freshness metadata for the response
    */
-  private createFreshnessMetadata(): FreshnessMetadata {
+  private createFreshnessMetadata(isMock: boolean = false): FreshnessMetadata {
     const isMarketHours = this.isMarketHours();
     
     return {
       lastUpdated: new Date().toISOString(),
-      dataSource: process.env.DATA_MODE === "mock" ? "mock" : "live",
-      sourceName: "Alpha Vantage",
-      freshness: isMarketHours ? "realtime" : "recent",
-      disclaimer: isMarketHours 
-        ? "Market data may be delayed up to 15 minutes" 
-        : "Market is closed - showing last available data"
+      dataSource: isMock || process.env.DATA_MODE === "mock" ? "mock" : "live",
+      sourceName: isMock ? "Sample Data" : "Alpha Vantage",
+      freshness: isMock ? "mock" : (isMarketHours ? "realtime" : "recent"),
+      disclaimer: isMock 
+        ? "Showing sample data due to API limitations" 
+        : (isMarketHours 
+          ? "Market data may be delayed up to 15 minutes" 
+          : "Market is closed - showing last available data"),
+      isMock
     };
   }
 

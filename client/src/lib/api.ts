@@ -119,7 +119,7 @@ export const api = {
   },
 
   // Economic Calendar
-  async getEconomicEvents(days = 7): Promise<EconomicEvent[]> {
+  async getEconomicEvents(days = 7): Promise<{ events: EconomicEvent[]; meta: { isMock: boolean; source: string; lastUpdated: string } }> {
     const res = await apiRequest("GET", `/api/econ/upcoming?days=${days}`);
     return res.json();
   },

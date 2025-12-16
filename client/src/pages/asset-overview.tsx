@@ -312,9 +312,20 @@ export default function AssetOverview() {
                       </span>
                     </div>
                   </div>
-                  <Badge variant="secondary" className="text-sm px-3 py-1">
-                    {overview.freshness?.sourceName || "Data Source"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-sm px-3 py-1">
+                      {overview.freshness?.sourceName || "Data Source"}
+                    </Badge>
+                    {overview.freshness?.isMock && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30"
+                        data-testid="badge-mock-asset"
+                      >
+                        Sample Data
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -340,7 +351,7 @@ export default function AssetOverview() {
                       variant={overview.freshness?.freshness === "realtime" ? "default" : "secondary"}
                       className="text-sm"
                     >
-                      {overview.freshness?.freshness === "realtime" ? "Live" : "Delayed"}
+                      {overview.freshness?.isMock ? "Sample" : (overview.freshness?.freshness === "realtime" ? "Live" : "Delayed")}
                     </Badge>
                   </div>
                 </div>
