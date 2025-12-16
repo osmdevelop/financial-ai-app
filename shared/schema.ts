@@ -896,3 +896,68 @@ export const insertAlertSchema = alertSchema.omit({
 
 export type Alert = z.infer<typeof alertSchema>;
 export type InsertAlert = z.infer<typeof insertAlertSchema>;
+
+// MODULE F: Market Regime Engine Types and Schemas
+// ================================================
+
+export type MarketRegime = "Risk-On" | "Neutral" | "Risk-Off" | "Policy Shock" | "Stagflation";
+
+export type RegimeDriverKey =
+  | "sentiment"
+  | "policy"
+  | "fed"
+  | "volatility"
+  | "rates"
+  | "risk_appetite";
+
+export const regimeDriverSchema = z.object({
+  key: z.enum(["sentiment", "policy", "fed", "volatility", "rates", "risk_appetite"]),
+  label: z.string(),
+  direction: z.enum(["up", "down", "flat", "mixed"]),
+  strength: z.enum(["low", "medium", "high"]),
+  detail: z.string(),
+});
+
+export const marketRegimeSnapshotSchema = z.object({
+  asOf: z.string(),
+  regime: z.enum(["Risk-On", "Neutral", "Risk-Off", "Policy Shock", "Stagflation"]),
+  confidence: z.number().min(0).max(100),
+  changedSinceYesterday: z.boolean(),
+  drivers: z.array(regimeDriverSchema),
+  inputs: z.object({
+    sentiment: z.object({
+      score: z.number().optional(),
+      state: z.string().optional(),
+      asOf: z.string().optional(),
+      isMock: z.boolean().optional(),
+    }).optional(),
+    policy: z.object({
+      trumpZ: z.number().optional(),
+      trumpRisk: z.string().optional(),
+      isMock: z.boolean().optional(),
+    }).optional(),
+    fed: z.object({
+      tone: z.enum(["hawkish", "dovish", "neutral"]).optional(),
+      score: z.number().optional(),
+      isMock: z.boolean().optional(),
+    }).optional(),
+    volatility: z.object({
+      score: z.number().optional(),
+      state: z.string().optional(),
+      isMock: z.boolean().optional(),
+    }).optional(),
+    riskAppetite: z.object({
+      score: z.number().optional(),
+      state: z.string().optional(),
+      isMock: z.boolean().optional(),
+    }).optional(),
+  }),
+  meta: z.object({
+    isMock: z.boolean(),
+    missingInputs: z.array(z.string()),
+    notes: z.string().optional(),
+  }),
+});
+
+export type RegimeDriver = z.infer<typeof regimeDriverSchema>;
+export type MarketRegimeSnapshot = z.infer<typeof marketRegimeSnapshotSchema>;

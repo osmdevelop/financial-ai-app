@@ -2010,6 +2010,21 @@ Provide response in JSON format: {
     }
   });
 
+  // MODULE F: Market Regime Engine API
+  app.get("/api/regime/snapshot", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    
+    try {
+      const { getRegimeSnapshot } = await import("./services/regimeService");
+      const snapshot = await getRegimeSnapshot();
+      
+      res.json(snapshot);
+    } catch (error) {
+      console.error("Regime snapshot API error:", error);
+      res.status(500).json({ error: "Failed to get regime snapshot" });
+    }
+  });
+
   // Daily Brief Summary API
   let cachedDailySummary: { summary: string[]; generatedAt: string } | null = null;
   let lastSummaryGeneration = 0;
