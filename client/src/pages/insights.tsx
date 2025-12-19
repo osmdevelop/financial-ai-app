@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Sparkles, Info, TrendingUp, Shield, Activity, BarChart3 } from "lucide-react";
+import { Brain, Sparkles, Info, TrendingUp, Shield, Activity, BarChart3, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
+import { useFocusAssets } from "@/hooks/useFocusAssets";
 import type { AIInsightResponse } from "@shared/schema";
 import {
   Tooltip,
@@ -29,6 +30,9 @@ export default function Insights() {
     isMock: regimeIsMock,
     missingInputs: regimeMissingInputs,
   } = useMarketRegimeSnapshot();
+
+  const { focusAssets } = useFocusAssets();
+  const focusSymbols = focusAssets.map(a => a.symbol);
 
   // Get market sentiment for context
   const { 
@@ -233,6 +237,43 @@ export default function Insights() {
                   data-testid="input-insights"
                 />
                 
+                {/* Lens-aware Template Prompts */}
+                {focusSymbols.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Target className="h-3 w-3" />
+                      Lens templates:
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setInputText(`Analyze my focus assets (${focusSymbols.join(', ')}) performance in today's market regime. What should I watch for?`)}
+                      className="text-xs h-7 border-primary/30 bg-primary/5"
+                      data-testid="template-lens-analysis"
+                    >
+                      Analyze My Lens
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setInputText(`Given the current policy environment and market regime, should I consider adjusting my positions in ${focusSymbols.join(', ')}?`)}
+                      className="text-xs h-7 border-primary/30 bg-primary/5"
+                      data-testid="template-lens-positioning"
+                    >
+                      Positioning Check
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setInputText(`What are the key risks and catalysts for ${focusSymbols.join(', ')} this week based on economic calendar and policy developments?`)}
+                      className="text-xs h-7 border-primary/30 bg-primary/5"
+                      data-testid="template-lens-risks"
+                    >
+                      Risks & Catalysts
+                    </Button>
+                  </div>
+                )}
+
                 {/* Template Prompts */}
                 <div className="flex flex-wrap gap-2">
                   <span className="text-xs text-muted-foreground">Quick templates:</span>

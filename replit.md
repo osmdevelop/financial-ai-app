@@ -39,6 +39,7 @@ The backend uses Express.js with TypeScript in an ESM format, implementing a RES
 -   **Daily Market Brief**: AI-generated page with dynamic cards (Market Regime, Policy Risk, Fed Tone, Volatility), "What Moved Markets Today" analysis, "Asset Impact Snapshot," and a strict 5-sentence AI summary by OpenAI GPT-4o.
 -   **Scenario Studio**: "What-if" analysis tool with sliders for macro inputs (USD Index, 10Y Treasury Yield, VIX, Oil) to calculate asset impacts, with an AI summary feature.
 -   **Policy & Political Indexes**: Features Trump Policy Index, sensitive asset correlation analysis, Fedspeak tone analysis, and AI-powered policy news feed. Includes policy-themed clustering, sensitivity labels, and integration into AI insights and portfolio views.
+-   **Trader Lens**: Personalization feature allowing users to select up to 5 focus assets (stocks, ETFs, crypto) to receive tailored market intelligence across Dashboard, Daily Brief, Headlines, AI Insights, and Policy pages. Includes a "Should I Trade Today?" badge synthesizing regime, volatility, and policy risk signals with Green/Yellow/Red status levels.
 -   **Error Handling**: Comprehensive client-side error boundaries with retry mechanisms and server-side middleware.
 -   **Quality & Consistency**: Consolidated UI components (e.g., GaugeMeter), shared utilities, and added `data-testid` attributes for E2E testing.
 -   **Security**: Environment-based configuration for API keys and secure credential handling.

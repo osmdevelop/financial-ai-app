@@ -18,6 +18,8 @@ import {
   EnhancedSentimentIndex,
   Alert,
   InsertAlert,
+  FocusAsset,
+  InsertFocusAsset,
   prices,
   watchlist
 } from "@shared/schema";
@@ -77,6 +79,11 @@ export interface IStorage {
   updateAlert(id: string, updates: Partial<Alert>): Promise<Alert | null>;
   deleteAlert(id: string): Promise<void>;
   getEnabledAlerts(): Promise<Alert[]>;
+  
+  // Focus Assets (Trader Lens)
+  getFocusAssets(profileId?: string): Promise<FocusAsset[]>;
+  addFocusAsset(asset: InsertFocusAsset, profileId?: string): Promise<FocusAsset>;
+  removeFocusAsset(symbol: string, profileId?: string): Promise<void>;
   
   // Initialize sample data
   initializeSampleData(): Promise<void>;
@@ -614,6 +621,50 @@ export class DatabaseStorage implements IStorage {
 
   async getEnabledAlerts(): Promise<Alert[]> {
     return this.alerts.filter(a => a.enabled);
+  }
+
+  // Focus Assets (Trader Lens) - in-memory storage
+  private focusAssets: FocusAsset[] = [];
+  private static readonly MAX_FOCUS_ASSETS = 5;
+
+  async getFocusAssets(profileId: string = "default"): Promise<FocusAsset[]> {
+    return this.focusAssets
+      .filter(a => a.profileId === profileId)
+      .sort((a, b) => a.order - b.order);
+  }
+
+  async addFocusAsset(asset: InsertFocusAsset, profileId: string = "default"): Promise<FocusAsset> {
+    const existing = this.focusAssets.filter(a => a.profileId === profileId);
+    
+    if (existing.length >= DatabaseStorage.MAX_FOCUS_ASSETS) {
+      throw new Error(`Maximum of ${DatabaseStorage.MAX_FOCUS_ASSETS} focus assets allowed`);
+    }
+    
+    if (existing.some(a => a.symbol.toLowerCase() === asset.symbol.toLowerCase())) {
+      throw new Error(`Asset ${asset.symbol} is already in your focus list`);
+    }
+    
+    const newAsset: FocusAsset = {
+      id: randomUUID(),
+      profileId,
+      symbol: asset.symbol.toUpperCase(),
+      assetType: asset.assetType,
+      displayName: asset.displayName || null,
+      order: asset.order ?? existing.length,
+      createdAt: new Date(),
+    };
+    
+    this.focusAssets.push(newAsset);
+    return newAsset;
+  }
+
+  async removeFocusAsset(symbol: string, profileId: string = "default"): Promise<void> {
+    const index = this.focusAssets.findIndex(
+      a => a.profileId === profileId && a.symbol.toLowerCase() === symbol.toLowerCase()
+    );
+    if (index !== -1) {
+      this.focusAssets.splice(index, 1);
+    }
   }
 
   async initializeSampleData(): Promise<void> {

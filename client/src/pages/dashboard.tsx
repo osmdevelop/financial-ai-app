@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { GaugeMeter } from "@/components/ui/gauge-meter";
 import { DollarSign, TrendingUp, Rocket, Activity, RefreshCw, AlertCircle } from "lucide-react";
 import { PolicySnapshotCard } from "@/components/dashboard/PolicySnapshotCard";
+import { LensSnapshotCard } from "@/components/trader-lens/LensSnapshotCard";
 import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
 import { formatCurrency, formatPercent } from "@/lib/constants";
 import {
@@ -353,8 +354,9 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Policy Snapshot Card */}
-        <div className="mb-4 sm:mb-6 lg:mb-8">
+        {/* Trader Lens and Policy Snapshot Cards */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
+          <LensSnapshotCard />
           <PolicySnapshotCard />
         </div>
 

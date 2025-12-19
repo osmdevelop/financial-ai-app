@@ -5,12 +5,16 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, TrendingUp, TrendingDown, Minus, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, Minus, ExternalLink, ChevronDown, ChevronUp, Target } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { getSensitivityColor, getSensitivityTooltip } from "@/utils/policySensitivity";
+import { useFocusAssets } from "@/hooks/useFocusAssets";
 import type { TrumpIndexResponse, FedspeakResponse, PolicySensitivity } from "@shared/schema";
 
 export default function Policy() {
+  const { focusAssets } = useFocusAssets();
+  const focusSymbols = focusAssets.map(a => a.symbol);
+
   const { 
     data: trumpIndex, 
     isLoading: trumpLoading, 
@@ -61,6 +65,63 @@ export default function Policy() {
       />
       
       <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-8">
+        {/* Lens Relevance Strip */}
+        {focusSymbols.length > 0 && trumpIndex && (
+          <Card className="bg-primary/5 border-primary/20" data-testid="lens-policy-relevance">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Target className="h-5 w-5 text-primary" />
+                <span className="font-medium">Policy Impact on Your Focus Assets</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {focusAssets.map(asset => {
+                  const sensitivity = trumpIndex.sensitivities?.find(
+                    (s: PolicySensitivity) => s.symbol.toLowerCase() === asset.symbol.toLowerCase()
+                  );
+                  const hasSensitivity = !!sensitivity;
+                  const zScore = trumpIndex.zScore;
+                  
+                  let impactLevel = "Low";
+                  let impactColor = "text-green-600";
+                  if (hasSensitivity) {
+                    const beta = Math.abs(sensitivity.trumpBeta || 0);
+                    if (beta > 0.5 && Math.abs(zScore) > 1) {
+                      impactLevel = "High";
+                      impactColor = "text-red-600";
+                    } else if (beta > 0.3 && Math.abs(zScore) > 0.5) {
+                      impactLevel = "Medium";
+                      impactColor = "text-yellow-600";
+                    }
+                  }
+
+                  return (
+                    <div key={asset.id} className="flex items-center justify-between p-2 bg-card rounded-lg border">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="font-medium">{asset.symbol}</Badge>
+                        {sensitivity && (
+                          <span className="text-xs text-muted-foreground">
+                            Beta: {sensitivity.trumpBeta?.toFixed(2) || "N/A"}
+                          </span>
+                        )}
+                      </div>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${impactColor}`}
+                        data-testid={`policy-impact-${asset.symbol}`}
+                      >
+                        Policy Impact: {impactLevel}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Based on Trump Index z-score ({trumpIndex.zScore > 0 ? '+' : ''}{trumpIndex.zScore.toFixed(2)}) and historical asset sensitivities.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* SECTION 1: TRUMP INDEX */}
         <section>
           <div className="flex items-center justify-between mb-4">

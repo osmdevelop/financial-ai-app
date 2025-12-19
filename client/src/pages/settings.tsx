@@ -1,13 +1,18 @@
+import { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from "@/components/providers/theme-provider";
-import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, Sun } from "lucide-react";
+import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, Sun, Target } from "lucide-react";
+import { useFocusAssets } from "@/hooks/useFocusAssets";
+import { AssetPickerModal } from "@/components/trader-lens/AssetPickerModal";
 
 export default function Settings() {
   const { theme, setTheme, actualTheme } = useTheme();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const { focusAssets, maxAssets } = useFocusAssets();
 
   const getThemeIcon = (themeValue: string) => {
     switch (themeValue) {
@@ -36,6 +41,47 @@ export default function Settings() {
       
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-6">
+
+          {/* Trader Lens Section */}
+          <Card data-testid="settings-trader-lens">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                Trader Lens
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium">Focus Assets</h3>
+                  <Badge variant="secondary">
+                    {focusAssets.length}/{maxAssets}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Personalize your market view by selecting up to {maxAssets} focus assets. 
+                  The app will adapt headlines, insights, and daily briefs to prioritize these assets.
+                </p>
+                {focusAssets.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {focusAssets.map((asset) => (
+                      <Badge key={asset.id} variant="outline" data-testid={`settings-asset-${asset.symbol}`}>
+                        {asset.symbol}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPickerOpen(true)}
+                  data-testid="manage-focus-assets-btn"
+                >
+                  Manage Focus Assets
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
           
           {/* API Keys Section */}
           <Card>
@@ -238,6 +284,8 @@ export default function Settings() {
 
         </div>
       </main>
+
+      <AssetPickerModal open={pickerOpen} onOpenChange={setPickerOpen} />
     </div>
   );
 }

@@ -197,11 +197,36 @@ export const newsAnalyzeSchema = z.object({
   symbols: z.array(z.string()).default([]),
 });
 
+// Focus Assets table (Trader Lens)
+export const focusAssets = pgTable("focus_assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: text("profile_id").notNull().default("default"),
+  symbol: text("symbol").notNull(),
+  assetType: text("asset_type").notNull(), // "equity" | "etf" | "crypto" | "fx" | "commodity" | "other"
+  displayName: text("display_name"),
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  profileSymbolUnique: index("focus_assets_profile_symbol_idx").on(table.profileId, table.symbol),
+  profileIdx: index("focus_assets_profile_idx").on(table.profileId),
+}));
+
+export const insertFocusAssetSchema = createInsertSchema(focusAssets).pick({
+  symbol: true,
+  assetType: true,
+  displayName: true,
+  order: true,
+}).extend({
+  assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity", "other"]),
+});
+
 // Types
 export type Price = typeof prices.$inferSelect;
 export type WatchlistItem = typeof watchlist.$inferSelect;
+export type FocusAsset = typeof focusAssets.$inferSelect;
 export type InsertPrice = z.infer<typeof insertPriceSchema>;
 export type InsertWatchlistItem = z.infer<typeof insertWatchlistSchema>;
+export type InsertFocusAsset = z.infer<typeof insertFocusAssetSchema>;
 export type Event = typeof events.$inferSelect;
 export type EventAlert = typeof eventAlerts.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;

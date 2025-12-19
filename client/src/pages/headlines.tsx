@@ -51,10 +51,11 @@ export default function NewsStream() {
   const [policyFilter, setPolicyFilter] = useState<"all" | "policy">("all");
 
   // Focus assets & watchlist
-  const { data: focusAssets = [] } = useQuery({
+  const { data: focusData } = useQuery({
     queryKey: ["/api/focus-assets"],
-    queryFn: () => api.getFocusAssets("default"),
+    queryFn: () => api.getFocusAssets(),
   });
+  const focusAssets = focusData?.items ?? [];
 
   const { data: watchlist = [] } = useQuery({
     queryKey: ["/api/watchlist"],

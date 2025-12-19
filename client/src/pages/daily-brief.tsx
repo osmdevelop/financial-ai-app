@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { apiRequest } from "@/lib/queryClient";
@@ -8,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
+import { useFocusAssets } from "@/hooks/useFocusAssets";
+import { useTraderLensContext } from "@/hooks/useTraderLensContext";
 import {
   AlertTriangle,
   TrendingUp,
@@ -26,6 +29,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  Target,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -41,6 +45,11 @@ interface MarketDriver {
 }
 
 export default function DailyBrief() {
+  const [lensMode, setLensMode] = useState(false);
+  const { focusAssets } = useFocusAssets();
+  const lensContext = useTraderLensContext();
+  const focusSymbols = focusAssets.map(a => a.symbol);
+
   const {
     snapshot: regimeSnapshot,
     isLoading: regimeLoading,
@@ -84,14 +93,18 @@ export default function DailyBrief() {
     refetchInterval: 5 * 60 * 1000,
   });
 
-  // Fetch headlines for market drivers
+  // Fetch headlines for market drivers - respect Lens Mode
   const {
     data: headlines,
     isLoading: headlinesLoading,
     error: headlinesError,
   } = useQuery({
-    queryKey: ["/api/headlines/timeline"],
-    queryFn: () => api.getHeadlinesTimeline(undefined, "all", 20),
+    queryKey: ["/api/headlines/timeline", lensMode ? "lens" : "all", focusSymbols],
+    queryFn: () => api.getHeadlinesTimeline(
+      lensMode && focusSymbols.length > 0 ? focusSymbols : undefined,
+      lensMode && focusSymbols.length > 0 ? "focus" : "all",
+      20
+    ),
     refetchInterval: 5 * 60 * 1000,
   });
 
@@ -143,12 +156,25 @@ export default function DailyBrief() {
     },
   });
 
-  // Derive market drivers from headlines
-  const marketDrivers: MarketDriver[] = headlines?.slice(0, 5).map((h: any) => ({
+  // Filter headlines for focus assets when in Lens Mode
+  const filteredHeadlines = lensMode && focusSymbols.length > 0
+    ? (headlines || []).filter((h: any) => {
+        if (!h.symbols) return false;
+        return h.symbols.some((s: string) =>
+          focusSymbols.some(fs => 
+            s.toLowerCase().includes(fs.toLowerCase()) || 
+            fs.toLowerCase().includes(s.toLowerCase())
+          )
+        );
+      })
+    : headlines || [];
+
+  // Derive market drivers from headlines (respects Lens Mode via filteredHeadlines)
+  const marketDrivers: MarketDriver[] = filteredHeadlines.slice(0, 5).map((h: any) => ({
     driver: h.title?.substring(0, 80) + (h.title?.length > 80 ? "..." : "") || "Market News",
     direction: h.impactDirection === "up" ? "bullish" : h.impactDirection === "down" ? "bearish" : "neutral",
     confidence: h.impactConfidence && h.impactConfidence > 0.7 ? "high" : h.impactConfidence && h.impactConfidence > 0.4 ? "medium" : "low",
-  })) || [];
+  }));
 
   // Derive bias from regime
   const getRegimeBias = () => {
@@ -167,8 +193,8 @@ export default function DailyBrief() {
     return "None";
   };
 
-  // Define asset impact data
-  const assetImpact = [
+  // Define asset impact data - default market assets
+  const defaultAssetImpact = [
     { symbol: "SPY", name: "S&P 500 ETF", bias: getRegimeBias(), driver: "Sentiment index", risk: "medium" },
     { symbol: "QQQ", name: "Nasdaq 100 ETF", bias: getRegimeBias(), driver: "Tech sentiment", risk: "medium" },
     { symbol: "IWM", name: "Russell 2000 ETF", bias: sentiment?.score && sentiment.score > 50 ? "up" : "neutral", driver: "Risk appetite", risk: "high" },
@@ -178,6 +204,17 @@ export default function DailyBrief() {
     { symbol: "UUP", name: "US Dollar", bias: fedspeak?.currentTone === "hawkish" ? "up" : "neutral", driver: "Rate expectations", risk: "medium" },
     { symbol: "TNX", name: "10Y Treasury", bias: fedspeak?.currentTone === "hawkish" ? "up" : "down", driver: "Rate expectations", risk: "medium" },
   ];
+
+  // Lens Mode: Show focus assets instead of defaults
+  const assetImpact = lensMode && focusAssets.length > 0
+    ? focusAssets.map(asset => ({
+        symbol: asset.symbol,
+        name: asset.displayName || asset.symbol,
+        bias: getRegimeBias(),
+        driver: `Regime: ${regimeSnapshot?.regime || "Unknown"}`,
+        risk: "medium" as const,
+      }))
+    : defaultAssetImpact;
 
   const getDirectionIcon = (direction: string) => {
     switch (direction) {
@@ -234,6 +271,63 @@ export default function DailyBrief() {
       />
 
       <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6">
+        {/* Lens Toggle */}
+        {focusSymbols.length > 0 && (
+          <div className="flex items-center gap-3" data-testid="lens-toggle-container">
+            <Button
+              variant={lensMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => setLensMode(!lensMode)}
+              className="gap-2"
+              data-testid="toggle-lens-mode"
+            >
+              <Target className="h-4 w-4" />
+              {lensMode ? "Lens Mode On" : "Enable Lens Mode"}
+            </Button>
+            {lensMode && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Focusing on:</span>
+                {focusSymbols.map(s => (
+                  <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Lens Context Card (when Lens Mode is on) */}
+        {lensMode && (
+          <Card className="bg-primary/5 border-primary/20" data-testid="lens-context-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Target className="h-5 w-5 text-primary" />
+                <span className="font-medium">Trader Lens Context</span>
+                <Badge 
+                  variant="outline" 
+                  className={
+                    lensContext.shouldTradeToday.level === "Green" 
+                      ? "bg-green-500/10 text-green-600 border-green-500/30"
+                      : lensContext.shouldTradeToday.level === "Red"
+                        ? "bg-red-500/10 text-red-600 border-red-500/30"
+                        : "bg-yellow-500/10 text-yellow-600 border-yellow-500/30"
+                  }
+                  data-testid="lens-trade-badge"
+                >
+                  Trade Today: {lensContext.shouldTradeToday.level}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mb-2">{lensContext.shouldTradeToday.reason}</p>
+              {lensContext.relevantDrivers.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {lensContext.relevantDrivers.map((d, i) => (
+                    <Badge key={i} variant="outline" className="text-xs">{d}</Badge>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Informational Banner */}
         <Alert data-testid="alert-disclaimer">
           <Info className="h-4 w-4" />

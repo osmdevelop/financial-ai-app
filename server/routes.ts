@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import {
   insertPriceSchema,
   insertWatchlistSchema,
+  insertFocusAssetSchema,
   // Events Intelligence schemas
   eventPrebriefRequestSchema,
   eventPostmortemRequestSchema,
@@ -206,6 +207,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to remove from watchlist" });
+    }
+  });
+
+  // Focus Assets (Trader Lens) APIs
+  app.get("/api/focus-assets", async (req, res) => {
+    try {
+      const items = await storage.getFocusAssets();
+      res.json({ items, max: 5 });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch focus assets" });
+    }
+  });
+
+  app.post("/api/focus-assets", async (req, res) => {
+    try {
+      const validatedData = insertFocusAssetSchema.parse(req.body);
+      const item = await storage.addFocusAsset(validatedData);
+      res.json(item);
+    } catch (error: any) {
+      if (error?.message?.includes("Maximum")) {
+        res.status(400).json({ error: error.message });
+      } else if (error?.message?.includes("already")) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: "Invalid focus asset data" });
+      }
+    }
+  });
+
+  app.delete("/api/focus-assets/:symbol", async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      await storage.removeFocusAsset(symbol);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove focus asset" });
     }
   });
 

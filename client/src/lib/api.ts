@@ -15,6 +15,8 @@ import type {
   AssetSheetData,
   WatchlistItem,
   InsertWatchlistItem,
+  FocusAsset,
+  InsertFocusAsset,
   // Phase 3 types
   EnhancedMarketSentiment,
   SentimentNarrative,
@@ -325,6 +327,22 @@ export const api = {
   // MODULE F: Market Regime Engine
   async getMarketRegimeSnapshot(): Promise<MarketRegimeSnapshot> {
     const res = await apiRequest("GET", "/api/regime/snapshot");
+    return res.json();
+  },
+
+  // Focus Assets (Trader Lens)
+  async getFocusAssets(): Promise<{ items: FocusAsset[]; max: number }> {
+    const res = await apiRequest("GET", "/api/focus-assets");
+    return res.json();
+  },
+
+  async addFocusAsset(data: InsertFocusAsset): Promise<FocusAsset> {
+    const res = await apiRequest("POST", "/api/focus-assets", data);
+    return res.json();
+  },
+
+  async removeFocusAsset(symbol: string): Promise<{ success: boolean }> {
+    const res = await apiRequest("DELETE", `/api/focus-assets/${symbol}`);
     return res.json();
   },
 };
