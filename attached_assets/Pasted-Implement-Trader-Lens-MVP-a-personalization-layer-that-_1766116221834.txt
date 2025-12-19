@@ -1,0 +1,207 @@
+Implement “Trader Lens” (MVP) — a personalization layer that makes the app feel immediately useful to traders by filtering and summarizing everything around a user-selected set of focus assets.
+
+This is NOT a brokerage, NOT advice. It’s an informational research lens.
+
+========================================================
+GOAL
+========================================================
+Users choose up to 5 focus assets (across stocks/ETFs/crypto/FX if supported).
+The app adapts to those assets:
+- Daily Brief highlights what matters *for those assets*
+- Headlines defaults to focus-relevant stories (with a toggle to view all)
+- AI Insights prompts include “Trader Lens” context automatically
+- Dashboard shows a “Lens Snapshot” and a “Should I Trade Today?” condition badge
+- Policy / Regime pages cross-link to focus assets and show relevance
+
+Keep scope tight. No new paid services. Use existing providers and existing endpoints/hook patterns.
+
+========================================================
+DATA MODEL & STORAGE
+========================================================
+Implement Focus Assets storage with existing DB approach (Prisma/SQLite).
+
+If FocusAsset model already exists, reuse it. If not, add it:
+
+model FocusAsset {
+  id          String   @id @default(cuid())
+  profileId   String   // single default profile is fine (e.g. "default")
+  symbol      String
+  assetType   String   // "equity" | "etf" | "crypto" | "fx" | "commodity" | "other"
+  displayName String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  @@unique([profileId, symbol])
+  @@index([profileId])
+}
+
+Implement CRUD API:
+- GET    /api/focus-assets
+- POST   /api/focus-assets  { symbol, assetType, displayName? }  (enforce max 5)
+- DELETE /api/focus-assets/:symbol
+
+Return metadata:
+- { items: FocusAsset[], max: 5 }
+
+========================================================
+ASSET SEARCH / ADD UX (COINMARKETCAP-LIKE)
+========================================================
+Replace the current “add asset” method with a search-first picker:
+
+Create a reusable component:
+- <AssetPickerModal />
+
+Features:
+- Search input with debounce
+- Results list with icon, symbol, name, type
+- “Add” button per row, disabled if already selected or max reached
+- Selected section at top showing chosen assets (chips) + remove buttons
+- Save/Close
+
+Search sources:
+- Crypto: CoinGecko search endpoint (already available)
+- Stocks/ETFs/FX: implement a lightweight symbol search:
+  - Prefer Alpha Vantage SYMBOL_SEARCH if you have it already
+  - If rate-limited, use a small local curated list (SPY, QQQ, IWM, AAPL, MSFT, TSLA, NVDA, AMD, META, AMZN, GOOGL, GLD, SLV, XLE, XLF, UUP, FXI, etc.) as fallback
+- Always label results source and handle mock mode gracefully.
+
+Where to place:
+- Settings page: “Trader Lens” section with “Manage Focus Assets” button
+- Also add a small “Lens” chip/button in the top bar or dashboard that opens the picker
+
+========================================================
+TRADER LENS CONTEXT OBJECT
+========================================================
+Create a hook:
+- useFocusAssets()
+
+And a derived hook:
+- useTraderLensContext()
+
+It produces:
+type TraderLensContext = {
+  focusAssets: Array<{ symbol; assetType; displayName? }>;
+  lensSummary: string; // 1 sentence
+  shouldTradeToday: { level: "Green" | "Yellow" | "Red"; reason: string; meta: any };
+  relevantDrivers: string[]; // 3 bullets derived from regime/policy/sentiment
+  relevantHeadlines: Array<Headline>; // filtered from News/Headlines logic
+  asOf: string;
+  meta: { isMock: boolean; missing: string[] };
+}
+
+Compute:
+- Pull market regime snapshot from /api/regime/snapshot (already built)
+- Pull policy snapshot from /api/policy/trump-index and /api/policy/fedspeak (already built; tolerate failures)
+- Pull latest headlines stream (existing) and filter for relevance to focus assets (ticker/entity match + topic match)
+
+“Should I Trade Today?” (conditions, not advice):
+- Start at Yellow
+- Red if:
+  - regime == "Risk-Off" AND volatility is high (if present), OR
+  - regime == "Policy Shock", OR
+  - missing key inputs AND user is in LIVE mode (uncertain)
+- Green if:
+  - regime == "Risk-On" AND volatility not high AND policy risk not high
+- Otherwise Yellow
+Return a short reason string.
+
+========================================================
+INTEGRATE TRADER LENS ACROSS THE APP
+========================================================
+
+1) DASHBOARD
+Add a new card: “Lens Snapshot”
+- Shows selected assets (up to 5 chips)
+- Shows “Should I Trade Today?” badge (Green/Yellow/Red) with reason tooltip
+- Shows 2–3 “relevant drivers” bullets
+- Shows “Manage Lens” button opens AssetPickerModal
+
+Add data-testid:
+- lens-snapshot
+- trade-today-badge
+- manage-lens-btn
+
+2) DAILY BRIEF
+Modify Daily Brief content to be lens-first:
+- A “For Your Lens” section at the top:
+  - one sentence lensSummary
+  - top 3 relevant headlines (filtered)
+  - “What changed that matters to your lens” (use regime drivers + policy clusters when relevant)
+- Keep a toggle: “Lens | All Market” (default Lens if focus assets exist; otherwise All Market)
+
+Add data-testid:
+- lens-toggle
+- lens-brief-section
+
+3) HEADLINES / NEWS
+Default filter:
+- If focus assets exist, default to “Lens” feed (ticker/entity match)
+- Provide toggle chips: “Lens” and “All”
+- When Lens filter is active, highlight matched tickers in headline rows
+
+Add data-testid:
+- headlines-filter-lens
+- headlines-filter-all
+
+4) AI INSIGHTS
+Inject Trader Lens context into every AI prompt:
+- Append a “Trader Lens Context” block:
+  - focusAssets list
+  - shouldTradeToday level + reason
+  - key regime drivers
+  - top 3 relevant headlines (title + source, no huge text)
+
+Add two new template buttons (in addition to existing):
+- “What matters today for my lens?”
+- “What are the main risks to my focus assets?”
+
+Ensure null-safe: if no focus assets, do nothing.
+
+Add data-testid:
+- lens-context-indicator
+- lens-template-1
+- lens-template-2
+
+5) POLICY PAGE & SCENARIO STUDIO (light touch)
+- Policy page: show a small “Relevance to your Lens” strip:
+  - which of focus assets appear in sensitiveAssets (policy-sensitive)
+- Scenario Studio: show baseline regime and lens assets list above sliders (informational only)
+
+========================================================
+ERROR HANDLING & MOCK LABELING
+========================================================
+- Every lens component must show whether it’s using Mock/Live/Cached, reusing your DataStatusBadge pattern.
+- If focus assets exist but data sources fail, show “Lens data partially available” and list missing sources.
+
+========================================================
+TESTS
+========================================================
+Add tests using existing stack (RTL + Vitest/Jest):
+- FocusAssets CRUD:
+  - Cannot add more than 5 (API returns 400 + message)
+  - Add/remove works
+- Dashboard Lens Snapshot renders:
+  - shows selected assets
+  - shows trade today badge
+- Headlines defaults to Lens when assets exist:
+  - filter toggle works
+- AI Insights prompt builder includes Trader Lens context when focus assets exist
+- AssetPickerModal:
+  - Add button disables when max reached
+  - Remove works
+
+========================================================
+CONSTRAINTS
+========================================================
+- No new paid APIs/services
+- No brokerage/advice language
+- Keep UI minimal and consistent with existing theme
+- Do not redesign existing pages beyond adding these sections/toggles
+- Ensure performance: cache calls to regime/policy/news in hooks where possible
+
+========================================================
+DONE WHEN
+========================================================
+- User can select up to 5 focus assets via an AssetPickerModal (CoinMarketCap-like flow).
+- Dashboard, Daily Brief, Headlines, and AI Insights clearly adapt to the selected lens.
+- “Should I Trade Today?” badge appears with reason and is condition-based.
+- Everything is null-safe, labels mock data, and tests pass.
