@@ -1,0 +1,197 @@
+ Implement a “Daily Brief Ritual” pass that turns
+the Daily Brief into the canonical, habit-forming entry point of the app.
+
+This prompt is about PRODUCT EXPERIENCE, not new data or features.
+
+============================================================
+GOAL
+============================================================
+Make Daily Brief the one page a trader opens once per day to answer:
+
+1) Do I need to trade today?
+2) What changed since yesterday?
+3) What matters specifically for MY focus assets?
+4) What should I watch next?
+
+The page must be:
+- Short
+- Opinionated
+- Lens-first
+- Calm (reduce noise)
+- Consistent every day
+
+============================================================
+SCOPE
+============================================================
+Modify ONLY the Daily Brief page and routing behavior.
+Do NOT add new APIs or data sources.
+Reuse:
+- Market Regime Snapshot
+- Trader Lens context
+- Policy + Sentiment + Volatility data
+- Headlines + Events already available
+
+============================================================
+STEP 1 — MAKE DAILY BRIEF THE DEFAULT ENTRY
+============================================================
+- Update routing so app opens on /daily-brief by default.
+- Keep Dashboard accessible, but not the landing page.
+- Sidebar: visually highlight “Daily Brief” as primary (subtle dot or label).
+
+============================================================
+STEP 2 — DAILY BRIEF STRUCTURE (STRICT)
+============================================================
+
+Rebuild the page into EXACTLY these sections, top to bottom:
+
+------------------------------------------------------------
+SECTION 1 — TODAY’S MARKET CALL (HERO)
+------------------------------------------------------------
+Big, bold, single sentence.
+
+Examples:
+- “Conditions are mixed — selective trading only.”
+- “Risk-off regime — caution across most assets.”
+- “Risk-on with low volatility — favorable conditions.”
+
+Rules:
+- Generated deterministically from:
+  - Market regime
+  - Volatility
+  - Policy shock state
+  - Trader Lens exposure
+- NO AI here.
+- Add small badge:
+  - Green / Yellow / Red (reuse Should I Trade Today logic)
+- data-testid="daily-call"
+
+------------------------------------------------------------
+SECTION 2 — WHAT CHANGED (OR DIDN’T)
+------------------------------------------------------------
+Only show if something changed since yesterday.
+
+Examples:
+- “Fed tone shifted from Neutral → Hawkish”
+- “Policy risk increased due to tariff headlines”
+- “Volatility compressed while sentiment improved”
+
+If NOTHING changed:
+- Show exactly:
+  “No major regime changes since yesterday.”
+
+Rules:
+- Max 3 bullets.
+- Derived from Market Regime Snapshot diff logic.
+- data-testid="daily-changes"
+
+------------------------------------------------------------
+SECTION 3 — YOUR LENS IMPACT
+------------------------------------------------------------
+Lens-only section. If no focus assets exist, show a prompt to add them.
+
+Content:
+- One sentence:
+  “Your focus assets are currently most exposed to:”
+- Then 1–2 bullets:
+  - “Policy risk via FXI”
+  - “Volatility via QQQ”
+
+Rules:
+- Pull from Trader Lens context.
+- No charts.
+- No prices.
+- data-testid="lens-impact"
+
+------------------------------------------------------------
+SECTION 4 — HEADLINES THAT MATTER (MAX 3)
+------------------------------------------------------------
+Show only lens-relevant headlines.
+
+Each item:
+- Title
+- Source
+- Tiny tag: Policy / Macro / Earnings
+- Optional confidence indicator
+
+Rules:
+- Hard cap: 3 headlines.
+- No scrolling inside this section.
+- Add “View all lens headlines” link.
+- data-testid="lens-headlines"
+
+------------------------------------------------------------
+SECTION 5 — WHAT TO WATCH NEXT
+------------------------------------------------------------
+One upcoming catalyst.
+
+Examples:
+- “Tomorrow’s CPI print — impacts rate-sensitive assets.”
+- “Fed speaker later today — could shift tone.”
+
+Rules:
+- Choose highest relevance to lens if possible.
+- Only ONE item.
+- data-testid="watch-next"
+
+------------------------------------------------------------
+SECTION 6 — AI SUMMARY (OPTIONAL, COLLAPSIBLE)
+------------------------------------------------------------
+Collapsed by default.
+
+Button: “Read AI summary”
+Expands to a 4–5 sentence summary:
+- Uses existing AI pipeline
+- Must follow structure:
+  - Context
+  - Change
+  - Lens impact
+  - Risk note
+  - What could change
+
+Rules:
+- No predictions
+- No advice
+- Professional tone
+
+data-testid="ai-summary"
+
+============================================================
+STEP 3 — COPY & LANGUAGE PASS
+============================================================
+Rewrite all Daily Brief copy to:
+- Sound like a senior trader / strategist
+- Avoid hype words (“explosive”, “massive”, etc.)
+- Prefer calm, factual language
+
+Examples:
+GOOD:
+- “Conditions favor caution.”
+BAD:
+- “Markets look dangerous today.”
+
+============================================================
+STEP 4 — UX & GUARDRAILS
+============================================================
+- Add “Informational only” banner (subtle, non-intrusive).
+- Show data freshness timestamp at bottom.
+- If data is mock or partial:
+  - Show one-line note: “Some inputs unavailable — view with caution.”
+
+============================================================
+STEP 5 — TESTS
+============================================================
+Add tests for:
+- Daily Brief renders all sections in order.
+- “No major changes” message appears when applicable.
+- Lens Impact section hides when no focus assets exist.
+- Headlines capped at 3.
+- AI Summary collapsed by default.
+- data-testid coverage for all sections.
+
+============================================================
+DONE WHEN
+============================================================
+- App opens to Daily Brief.
+- A trader can read the entire page in under 60 seconds.
+- Page answers “Should I trade today?” without scrolling.
+- Daily Brief feels like a *daily ritual*, not a dashboard.
