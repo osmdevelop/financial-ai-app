@@ -1,0 +1,178 @@
+Implement “Watchlist + In-App Alerts Lite”
+to increase daily engagement for traders.
+
+Constraints:
+- No authentication
+- No Firebase
+- No push notifications yet
+- No new paid APIs
+- Must work fully with local storage and existing backend endpoints
+- Informational only; no advice language
+
+============================================================
+GOAL
+============================================================
+1) Watchlist: Users can save assets beyond Trader Lens (up to 50).
+2) Alerts Lite: Users can create simple in-app alerts based on:
+   - Market regime changes
+   - Policy shock / Trump index threshold
+   - Fedspeak tone change
+   - Price move % threshold (ONLY if you already have pricing endpoint; otherwise skip)
+3) In-app Notifications: Alerts generate entries in a notifications feed with timestamps.
+4) UI integrates smoothly with existing pages (Daily Brief, Headlines, Asset Overview).
+
+============================================================
+A) WATCHLIST (LOCAL STORAGE)
+============================================================
+
+Storage key: "watchlist_v1"
+Model:
+type WatchlistItem = {
+  symbol: string;
+  assetType: string;
+  displayName?: string;
+  addedAt: string; // ISO
+};
+
+Features:
+- Add to watchlist from:
+  - Asset Overview page (button: “Add to Watchlist” / “Remove”)
+  - Trader Lens AssetPickerModal results rows (small star icon)
+- Watchlist page OR Watchlist section in Settings:
+  - List items
+  - Search/filter within watchlist
+  - Remove item
+- Limit watchlist to 50 items; show friendly message if exceeded.
+
+UI:
+- Add sidebar item: “Watchlist”
+  Route: /watchlist
+- Each row shows symbol, name, type, and “Open” link to Asset Overview.
+- Add data-testid coverage:
+  - add-watchlist
+  - remove-watchlist
+  - watchlist-page
+
+============================================================
+B) ALERTS LITE (LOCAL STORAGE + BACKEND SIGNALS)
+============================================================
+
+Storage key: "alerts_v1"
+Model:
+type AlertRule =
+  | { id: string; type: "regime_change"; enabled: boolean; createdAt: string }
+  | { id: string; type: "policy_shock"; enabled: boolean; createdAt: string }
+  | { id: string; type: "trump_z_above"; threshold: number; enabled: boolean; createdAt: string }
+  | { id: string; type: "fedspeak_change"; enabled: boolean; createdAt: string };
+
+(Price threshold alerts only if you already have a working pricing endpoint; otherwise omit.)
+
+Polling:
+- Create a lightweight client-side evaluator that runs every 5 minutes while the app is open:
+  - Uses GET /api/regime/snapshot
+  - Uses GET /api/policy/trump-index
+  - Uses GET /api/policy/fedspeak
+- Compare current state vs last-seen state stored locally ("alerts_last_state_v1")
+
+Trigger conditions:
+- regime_change: trigger if snapshot.regime differs from last seen
+- policy_shock: trigger if snapshot.regime === "Policy Shock" and last seen was not
+- trump_z_above: trigger if trump zScore crosses upward above threshold
+- fedspeak_change: trigger if tone.current differs from last seen
+
+Debounce:
+- Do not trigger the same rule more than once per 6 hours unless state changes again.
+
+============================================================
+C) IN-APP NOTIFICATIONS FEED
+============================================================
+
+Storage key: "notifications_v1"
+Model:
+type AppNotification = {
+  id: string;
+  ruleId: string;
+  title: string;
+  message: string;
+  severity: "info" | "warning" | "critical";
+  createdAt: string; // ISO
+  read: boolean;
+  link?: string; // route to open (e.g. /daily-brief, /policy)
+};
+
+UI:
+- Add a bell icon in the header/top bar:
+  - Shows unread count badge
+  - Opens a dropdown panel with last 10 notifications
+  - “View all” link to /notifications
+- /notifications page:
+  - List all notifications
+  - Mark all read
+  - Clear all
+  - Each item links to relevant page (Daily Brief / Policy)
+- data-testid:
+  - notif-bell
+  - notif-count
+  - notif-item
+  - notifications-page
+
+============================================================
+D) ALERTS UI (SIMPLE PRESETS)
+============================================================
+
+Add an “Alerts” section in Settings OR a new /alerts page:
+- Toggle presets:
+  - “Notify me when market regime changes”
+  - “Notify me when Policy Shock triggers”
+  - “Notify me when Trump Index exceeds Xσ” (input default 1.5)
+  - “Notify me when Fed tone changes”
+- Enable/disable per rule
+- Show “Last checked” timestamp
+- Use DataStatusBadge if inputs are mock/partial.
+
+data-testid:
+- alerts-page
+- alert-toggle-regime
+- alert-toggle-policyshock
+- alert-threshold-trump
+- alert-toggle-fedspeak
+
+============================================================
+E) INTEGRATIONS (SMALL BUT VALUABLE)
+============================================================
+
+Daily Brief:
+- If any unread notifications exist, show a small “New alerts” chip near the top linking to /notifications.
+
+Headlines:
+- Add optional scope “Watchlist” filter:
+  - shows headlines matching any watchlist symbol
+  - if empty, show EmptyStateCard suggesting adding watchlist items
+
+Asset Overview:
+- Add “Add/Remove Watchlist” button with instant feedback.
+
+============================================================
+F) ERROR HANDLING, MOCK LABELING, TESTS
+============================================================
+
+- All polling/evaluation must be null-safe and not crash the app.
+- If endpoints fail, evaluator should skip and try next cycle.
+- Label notifications if generated under mock/partial data:
+  add “(Based on partial data)” to message.
+
+Tests:
+- Watchlist add/remove persists to localStorage
+- Alert evaluator triggers a notification when regime changes
+- Notifications dropdown shows unread count
+- Mark read / clear works
+- data-testid coverage validated
+
+============================================================
+DONE WHEN
+============================================================
+- Users can maintain a watchlist and filter headlines by it.
+- Users can enable alerts presets and see notifications generated in-app.
+- Bell icon + notifications pages work reliably with local storage only.
+- No new APIs, no auth, no push notifications.
+- App remains stable with mock/partial data and tests pass.
