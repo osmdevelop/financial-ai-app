@@ -18,6 +18,8 @@ import {
   Scale,
   FlaskConical,
   FileText,
+  Star,
+  Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -29,6 +31,7 @@ const navigation = [
   { name: "Sentiment", href: "/sentiment", icon: Activity },
   { name: "News Stream", href: "/news", icon: Newspaper },
   { name: "Asset Overview", href: "/asset-overview", icon: Search },
+  { name: "Watchlist", href: "/watchlist", icon: Star },
   { name: "Market Recap", href: "/market-recap", icon: Globe },
   { name: "Earnings", href: "/earnings", icon: TrendingUp },
   { name: "Economic Calendar", href: "/economic-calendar", icon: Calendar },
@@ -38,6 +41,7 @@ const navigation = [
 ];
 
 const secondaryNavigation = [
+  { name: "Alerts", href: "/alerts", icon: Bell },
   { name: "Settings", href: "/settings", icon: Settings },
   { name: "Help", href: "/help", icon: HelpCircle },
 ];

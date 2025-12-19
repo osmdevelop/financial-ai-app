@@ -12,6 +12,8 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000;
 
 let evaluatorInterval: ReturnType<typeof setInterval> | null = null;
 
+const inFlightAlerts = new Set<string>();
+
 type AlertRule = {
   id: string;
   type: string;
@@ -69,23 +71,42 @@ async function fetchCurrentState(): Promise<{
   return state;
 }
 
-function createNotification(
+function tryCreateNotification(
   ruleId: string,
   title: string,
   message: string,
   severity: NotificationSeverity,
   link: string,
   isMock: boolean
-) {
-  const finalMessage = isMock ? `${message} (Based on partial data)` : message;
+): boolean {
+  if (inFlightAlerts.has(ruleId)) {
+    return false;
+  }
   
-  addNotificationDirect({
-    ruleId,
-    title,
-    message: finalMessage,
-    severity,
-    link,
-  });
+  inFlightAlerts.add(ruleId);
+  
+  try {
+    const finalMessage = isMock ? `${message} (Based on partial data)` : message;
+    
+    const result = addNotificationDirect({
+      ruleId,
+      title,
+      message: finalMessage,
+      severity,
+      link,
+    });
+    
+    if (result.success) {
+      recordTrigger(ruleId);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error("Failed to create notification for alert:", ruleId, e);
+    return false;
+  } finally {
+    inFlightAlerts.delete(ruleId);
+  }
 }
 
 async function evaluateAlerts(): Promise<void> {
@@ -112,7 +133,7 @@ async function evaluateAlerts(): Promise<void> {
           currentState.regime !== undefined &&
           lastState.regime !== currentState.regime
         ) {
-          createNotification(
+          tryCreateNotification(
             alert.id,
             "Market Regime Changed",
             `Market regime has shifted from ${lastState.regime} to ${currentState.regime}.`,
@@ -120,7 +141,6 @@ async function evaluateAlerts(): Promise<void> {
             "/daily-brief",
             currentState.isMock || false
           );
-          recordTrigger(alert.id);
         }
         break;
 
@@ -129,7 +149,7 @@ async function evaluateAlerts(): Promise<void> {
           currentState.isPolicyShock &&
           !lastState.isPolicyShock
         ) {
-          createNotification(
+          tryCreateNotification(
             alert.id,
             "Policy Shock Detected",
             "Market has entered a Policy Shock regime. Consider reviewing your positions.",
@@ -137,7 +157,6 @@ async function evaluateAlerts(): Promise<void> {
             "/policy",
             currentState.isMock || false
           );
-          recordTrigger(alert.id);
         }
         break;
 
@@ -149,7 +168,7 @@ async function evaluateAlerts(): Promise<void> {
           currentState.trumpZScore > threshold &&
           lastState.trumpZScore <= threshold
         ) {
-          createNotification(
+          tryCreateNotification(
             alert.id,
             "Trump Index Alert",
             `Trump Policy Index has crossed above ${threshold}σ (current: ${currentState.trumpZScore.toFixed(2)}σ).`,
@@ -157,7 +176,6 @@ async function evaluateAlerts(): Promise<void> {
             "/policy",
             currentState.isMock || false
           );
-          recordTrigger(alert.id);
         }
         break;
 
@@ -167,7 +185,7 @@ async function evaluateAlerts(): Promise<void> {
           currentState.fedspeakTone !== undefined &&
           lastState.fedspeakTone !== currentState.fedspeakTone
         ) {
-          createNotification(
+          tryCreateNotification(
             alert.id,
             "Fed Tone Changed",
             `Federal Reserve tone has shifted from ${lastState.fedspeakTone} to ${currentState.fedspeakTone}.`,
@@ -175,7 +193,6 @@ async function evaluateAlerts(): Promise<void> {
             "/policy",
             currentState.isMock || false
           );
-          recordTrigger(alert.id);
         }
         break;
     }

@@ -42,6 +42,7 @@ import {
   Clock,
   Eye,
   EyeOff,
+  Star,
 } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,7 @@ import type {
   AssetSearchResult,
 } from "@shared/schema";
 import { PolicyImpactPanel } from "@/components/asset/PolicyImpactPanel";
+import { useWatchlist } from "@/hooks/useWatchlist";
 
 export default function AssetOverview() {
   const { toast } = useToast();
@@ -67,6 +69,7 @@ export default function AssetOverview() {
     atr: false,
   });
   const [showStats, setShowStats] = useState(true);
+  const { isInWatchlist, addToWatchlist, removeFromWatchlist, isFull } = useWatchlist();
 
   // Asset search query
   const { data: searchResults = [] } = useQuery({
@@ -135,6 +138,36 @@ export default function AssetOverview() {
       title: "Alert Feature Coming Soon",
       description: `Price alerts for ${overview.symbol} will be available soon.`,
     });
+  };
+
+  const handleWatchlistToggle = () => {
+    if (!selectedAsset) return;
+    
+    if (isInWatchlist(selectedAsset.symbol)) {
+      removeFromWatchlist(selectedAsset.symbol);
+      toast({
+        title: "Removed from Watchlist",
+        description: `${selectedAsset.symbol} has been removed from your watchlist.`,
+      });
+    } else {
+      const success = addToWatchlist({
+        symbol: selectedAsset.symbol,
+        assetType: selectedAsset.assetType,
+        displayName: selectedAsset.name,
+      });
+      if (success) {
+        toast({
+          title: "Added to Watchlist",
+          description: `${selectedAsset.symbol} has been added to your watchlist.`,
+        });
+      } else {
+        toast({
+          title: "Watchlist Full",
+          description: "You've reached the maximum of 50 watchlist items.",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   const getChangeColor = (change: number) => {
@@ -265,6 +298,16 @@ export default function AssetOverview() {
                 >
                   <Activity className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
                   Refresh
+                </Button>
+                
+                <Button
+                  onClick={handleWatchlistToggle}
+                  variant={selectedAsset && isInWatchlist(selectedAsset.symbol) ? "default" : "outline"}
+                  disabled={!selectedAsset || (isFull && selectedAsset && !isInWatchlist(selectedAsset.symbol))}
+                  data-testid={selectedAsset && isInWatchlist(selectedAsset.symbol) ? "remove-watchlist" : "add-watchlist"}
+                >
+                  <Star className={cn("h-4 w-4 mr-2", selectedAsset && isInWatchlist(selectedAsset.symbol) && "fill-current")} />
+                  {selectedAsset && isInWatchlist(selectedAsset.symbol) ? "Watchlist" : "Add to Watchlist"}
                 </Button>
                 
                 <Button

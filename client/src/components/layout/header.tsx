@@ -1,4 +1,5 @@
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { User } from "lucide-react";
 
 interface HeaderProps {
@@ -17,6 +18,7 @@ export function Header({ title, subtitle }: HeaderProps) {
         </div>
         <div className="flex items-center space-x-2 md:space-x-4">
           <div className="flex items-center space-x-2">
+            <NotificationBell />
             <ThemeToggle />
             <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
               <User className="text-muted-foreground text-sm" />

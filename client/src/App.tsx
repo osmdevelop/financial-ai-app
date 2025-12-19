@@ -25,7 +25,11 @@ import Policy from "@/pages/policy";
 import Scenario from "@/pages/scenario";
 import Settings from "@/pages/settings";
 import DailyBrief from "@/pages/daily-brief";
+import Watchlist from "@/pages/watchlist";
+import Alerts from "@/pages/alerts";
+import Notifications from "@/pages/notifications";
 import NotFound from "@/pages/not-found";
+import { startAlertEvaluator } from "@/services/alertEvaluator";
 
 // Redirect component for portfolio routes
 function PortfolioRedirect() {
@@ -58,6 +62,9 @@ function Router() {
       <Route path="/market-recap" component={MarketRecap} />
       <Route path="/policy" component={Policy} />
       <Route path="/scenario" component={Scenario} />
+      <Route path="/watchlist" component={Watchlist} />
+      <Route path="/alerts" component={Alerts} />
+      <Route path="/notifications" component={Notifications} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
@@ -68,6 +75,10 @@ function AppContent() {
   const [selectedAsset, setSelectedAsset] = useState<AssetSearchResult | null>(null);
   const [showAssetSheet, setShowAssetSheet] = useState(false);
   const { open: commandPaletteOpen, setOpen: setCommandPaletteOpen } = useCommandPalette();
+
+  useEffect(() => {
+    startAlertEvaluator();
+  }, []);
 
   const handleAssetSelect = (asset: AssetSearchResult) => {
     setSelectedAsset(asset);

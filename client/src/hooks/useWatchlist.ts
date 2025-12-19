@@ -19,11 +19,13 @@ function getStoredWatchlist(): WatchlistItem[] {
   }
 }
 
-function saveWatchlist(items: WatchlistItem[]): void {
+function saveWatchlist(items: WatchlistItem[]): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    return true;
   } catch (e) {
     console.error("Failed to save watchlist:", e);
+    return false;
   }
 }
 
@@ -43,14 +45,14 @@ export function useWatchlist() {
   const addToWatchlist = useCallback((item: Omit<WatchlistItem, "addedAt">): boolean => {
     const current = getStoredWatchlist();
     
+    const existingIndex = current.findIndex(
+      (w) => w.symbol.toLowerCase() === item.symbol.toLowerCase()
+    );
+    if (existingIndex >= 0) return true;
+    
     if (current.length >= MAX_ITEMS) {
       return false;
     }
-    
-    const exists = current.some(
-      (w) => w.symbol.toLowerCase() === item.symbol.toLowerCase()
-    );
-    if (exists) return true;
     
     const newItem: WatchlistItem = {
       ...item,
@@ -58,9 +60,17 @@ export function useWatchlist() {
     };
     
     const updated = [...current, newItem];
-    saveWatchlist(updated);
-    setWatchlist(updated);
-    return true;
+    
+    if (updated.length > MAX_ITEMS) {
+      return false;
+    }
+    
+    const saved = saveWatchlist(updated);
+    if (saved) {
+      setWatchlist(updated);
+      return true;
+    }
+    return false;
   }, []);
 
   const removeFromWatchlist = useCallback((symbol: string): void => {
@@ -68,8 +78,9 @@ export function useWatchlist() {
     const updated = current.filter(
       (w) => w.symbol.toLowerCase() !== symbol.toLowerCase()
     );
-    saveWatchlist(updated);
-    setWatchlist(updated);
+    if (saveWatchlist(updated)) {
+      setWatchlist(updated);
+    }
   }, []);
 
   const isInWatchlist = useCallback((symbol: string): boolean => {
@@ -79,8 +90,9 @@ export function useWatchlist() {
   }, [watchlist]);
 
   const clearWatchlist = useCallback((): void => {
-    saveWatchlist([]);
-    setWatchlist([]);
+    if (saveWatchlist([])) {
+      setWatchlist([]);
+    }
   }, []);
 
   return {

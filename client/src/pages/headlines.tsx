@@ -102,7 +102,6 @@ export default function NewsStream() {
     refetchIntervalInBackground: true,
     refetchOnReconnect: true,
     refetchOnWindowFocus: false, // avoid jolt when switching tabs
-    keepPreviousData: true, // <— key to avoid content “swap” feel
     staleTime: 0,
   });
 

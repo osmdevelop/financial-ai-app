@@ -27,6 +27,7 @@ import {
   ExternalLink,
   Plus,
   Newspaper,
+  Bell,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { Link } from "wouter";
@@ -34,6 +35,7 @@ import { OnboardingLiteModal, useOnboardingState } from "@/components/onboarding
 import { AssetPickerModal } from "@/components/trader-lens/AssetPickerModal";
 import { DataStatusBadge } from "@/components/ui/data-status-badge";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface DailySummaryResponse {
   summary: string[];
@@ -52,6 +54,7 @@ export default function DailyBrief() {
   const focusSymbols = focusAssets.map(a => a.symbol);
   
   const { shouldShowOnboarding } = useOnboardingState(focusAssets.length);
+  const { unreadCount } = useNotifications();
   
   useEffect(() => {
     if (!focusAssetsLoading && shouldShowOnboarding) {
@@ -306,9 +309,23 @@ export default function DailyBrief() {
 
       <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 max-w-4xl mx-auto w-full">
         {/* Informational Banner - Subtle */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="info-banner">
-          <Info className="h-3 w-3" />
-          <span>Informational only. Not investment advice.</span>
+        <div className="flex items-center justify-between" data-testid="info-banner">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Info className="h-3 w-3" />
+            <span>Informational only. Not investment advice.</span>
+          </div>
+          {unreadCount > 0 && (
+            <Link href="/notifications">
+              <Badge 
+                variant="secondary" 
+                className="flex items-center gap-1 cursor-pointer hover:bg-secondary/80"
+                data-testid="alerts-chip"
+              >
+                <Bell className="h-3 w-3" />
+                {unreadCount} new alert{unreadCount !== 1 ? "s" : ""}
+              </Badge>
+            </Link>
+          )}
         </div>
 
         {/* SECTION 1: Today's Market Call (HERO) */}

@@ -15,6 +15,7 @@ export type AppNotification = {
 
 const STORAGE_KEY = "notifications_v1";
 const MAX_NOTIFICATIONS = 100;
+const DEDUPE_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 function generateId(): string {
   return `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -29,11 +30,13 @@ function getStoredNotifications(): AppNotification[] {
   }
 }
 
-function saveNotifications(notifications: AppNotification[]): void {
+function saveNotifications(notifications: AppNotification[]): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
+    return true;
   } catch (e) {
     console.error("Failed to save notifications:", e);
+    return false;
   }
 }
 
@@ -113,19 +116,40 @@ export function useNotifications() {
 
 export function addNotificationDirect(
   notif: Omit<AppNotification, "id" | "createdAt" | "read">
-): AppNotification {
-  const newNotification: AppNotification = {
-    ...notif,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-    read: false,
-  };
-  
-  const current = getStoredNotifications();
-  const updated = [newNotification, ...current].slice(0, MAX_NOTIFICATIONS);
-  saveNotifications(updated);
-  
-  window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
-  
-  return newNotification;
+): { success: boolean; notification?: AppNotification } {
+  try {
+    const current = getStoredNotifications();
+    
+    const now = Date.now();
+    const existingRecent = current.find(
+      (n) =>
+        n.ruleId === notif.ruleId &&
+        now - new Date(n.createdAt).getTime() < DEDUPE_WINDOW_MS
+    );
+    
+    if (existingRecent) {
+      return { success: true, notification: existingRecent };
+    }
+    
+    const newNotification: AppNotification = {
+      ...notif,
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      read: false,
+    };
+    
+    const updated = [newNotification, ...current].slice(0, MAX_NOTIFICATIONS);
+    const saved = saveNotifications(updated);
+    
+    if (!saved) {
+      return { success: false };
+    }
+    
+    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
+    
+    return { success: true, notification: newNotification };
+  } catch (e) {
+    console.error("Failed to add notification:", e);
+    return { success: false };
+  }
 }

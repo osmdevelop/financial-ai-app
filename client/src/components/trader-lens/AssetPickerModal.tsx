@@ -13,8 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Plus, X, Loader2, TrendingUp, Bitcoin, BarChart3, DollarSign } from "lucide-react";
+import { Search, Plus, X, Loader2, TrendingUp, Bitcoin, BarChart3, DollarSign, Star } from "lucide-react";
 import type { AssetSearchResult } from "@shared/schema";
+import { useWatchlist } from "@/hooks/useWatchlist";
+import { useToast } from "@/hooks/use-toast";
 
 interface AssetPickerModalProps {
   open: boolean;
@@ -48,6 +50,8 @@ function getAssetTypeBadgeVariant(assetType: string): "default" | "secondary" | 
 export function AssetPickerModal({ open, onOpenChange }: AssetPickerModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const { focusAssets, maxAssets, addAsset, removeAsset, isAdding, isRemoving } = useFocusAssets();
+  const { isInWatchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
+  const { toast } = useToast();
 
   const { data: searchResults, isLoading: isSearching } = useQuery({
     queryKey: ["/api/search", searchQuery],
@@ -73,6 +77,34 @@ export function AssetPickerModal({ open, onOpenChange }: AssetPickerModalProps) 
 
   const handleRemoveAsset = (symbol: string) => {
     removeAsset(symbol);
+  };
+
+  const handleWatchlistToggle = (asset: AssetSearchResult) => {
+    if (isInWatchlist(asset.symbol)) {
+      removeFromWatchlist(asset.symbol);
+      toast({
+        title: "Removed from Watchlist",
+        description: `${asset.symbol} removed from watchlist.`,
+      });
+    } else {
+      const success = addToWatchlist({
+        symbol: asset.symbol,
+        assetType: asset.assetType,
+        displayName: asset.name,
+      });
+      if (success) {
+        toast({
+          title: "Added to Watchlist",
+          description: `${asset.symbol} added to watchlist.`,
+        });
+      } else {
+        toast({
+          title: "Watchlist Full",
+          description: "Maximum 50 items reached.",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   return (
@@ -176,24 +208,36 @@ export function AssetPickerModal({ open, onOpenChange }: AssetPickerModalProps) 
                           </p>
                         </div>
                       </div>
-                      <Button
-                        variant={selected ? "secondary" : "default"}
-                        size="sm"
-                        onClick={() => handleAddAsset(asset)}
-                        disabled={disabled}
-                        data-testid={`add-asset-btn-${asset.symbol}`}
-                      >
-                        {selected ? (
-                          "Added"
-                        ) : isAdding ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add
-                          </>
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleWatchlistToggle(asset)}
+                          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                          title={isInWatchlist(asset.symbol) ? "Remove from Watchlist" : "Add to Watchlist"}
+                          data-testid={isInWatchlist(asset.symbol) ? `remove-watchlist-${asset.symbol}` : `add-watchlist-${asset.symbol}`}
+                        >
+                          <Star
+                            className={`h-4 w-4 ${isInWatchlist(asset.symbol) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground"}`}
+                          />
+                        </button>
+                        <Button
+                          variant={selected ? "secondary" : "default"}
+                          size="sm"
+                          onClick={() => handleAddAsset(asset)}
+                          disabled={disabled}
+                          data-testid={`add-asset-btn-${asset.symbol}`}
+                        >
+                          {selected ? (
+                            "Added"
+                          ) : isAdding ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
