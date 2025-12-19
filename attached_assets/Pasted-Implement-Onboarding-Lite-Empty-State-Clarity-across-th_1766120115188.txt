@@ -1,0 +1,272 @@
+Implement “Onboarding Lite” + “Empty-State Clarity” across the app.
+This is a UX/product clarity task. Do NOT add new market features, data sources, pages, or redesign the UI.
+Reuse existing components, styling, and storage patterns.
+
+============================================================
+GOAL
+============================================================
+Make the app self-explanatory for first-time users:
+- Guide them to set up Trader Lens (focus assets)
+- Explain what the Daily Brief does in 10 seconds
+- Ensure every empty/partial state has helpful copy + a clear next action
+- Preserve calm, professional tone (no hype, no advice)
+
+============================================================
+SCOPE
+============================================================
+A) First-run onboarding (one-time)
+B) Empty-states & partial-data states (copy + CTAs) across key pages
+C) Consistent “data unavailable / mock / partial” messaging
+D) Tests + data-testid coverage
+
+No backend changes required unless strictly necessary for existing UI to function.
+
+============================================================
+A) FIRST-RUN ONBOARDING (ONE-TIME)
+============================================================
+
+Trigger condition:
+- If user has 0 focus assets (Trader Lens not configured), show an onboarding overlay on:
+  1) Daily Brief (primary)
+  2) Dashboard Lens Snapshot (if still accessible)
+
+Persistence:
+- Store completion in local storage:
+  key: "onboarding_v1_complete" = "true"
+- Onboarding shows only if:
+  onboarding not complete AND focusAssets.length === 0
+
+Component:
+- Create <OnboardingLiteModal /> in /client/src/components/onboarding/
+- Use existing modal/dialog component used elsewhere (no new design system).
+
+Content (strict, short):
+Title: “Set up your Trader Lens”
+Body (3 bullets max):
+1) “Add up to 5 focus assets you actually trade.”
+2) “Daily Brief and Headlines will filter to what matters for those assets.”
+3) “Check the Daily Brief once per day to stay oriented.”
+
+Primary CTA:
+- “Add Focus Assets” → opens existing AssetPickerModal
+Secondary CTA:
+- “Not now” → closes modal (does NOT set complete)
+Tertiary CTA (small text):
+- “Skip onboarding” → sets onboarding_v1_complete = true and closes
+
+Optional:
+- If user closes modal (X) treat same as “Not now”.
+
+Data/test ids:
+- data-testid="onboarding-modal"
+- data-testid="onboarding-add-assets"
+- data-testid="onboarding-skip"
+- data-testid="onboarding-close"
+
+Placement:
+- Daily Brief page:
+  - If trigger condition met, show modal automatically after initial render.
+- Settings page:
+  - Add a “Replay onboarding” button (only visible if onboarding complete):
+    - clears onboarding_v1_complete and opens modal
+  - data-testid="replay-onboarding"
+
+============================================================
+B) EMPTY STATES & PARTIAL DATA STATES (COPY + CTA)
+============================================================
+
+Implement a shared component for empty/partial states:
+- <EmptyStateCard />
+Props:
+- title
+- description
+- actionLabel?
+- onAction?
+- variant?: "empty" | "partial" | "error"
+- isMock?: boolean
+- missingInputs?: string[]
+- data-testid
+
+Use it across pages to standardize messaging.
+
+Tone rules:
+- Calm, factual, helpful
+- No “buy/sell” language
+- Avoid hype words
+- Prefer “No material … detected” over “Nothing happened”
+
+------------------------------------------------------------
+1) DAILY BRIEF (Lens-first)
+------------------------------------------------------------
+
+Case: No focus assets
+- Replace “Your Lens Impact” content with EmptyStateCard:
+  Title: “Add focus assets to personalize this brief”
+  Description:
+    “Choose up to 5 tickers you care about. Headlines and drivers will automatically filter to what matters for them.”
+  CTA: “Add Focus Assets” → opens AssetPickerModal
+  data-testid="empty-lens-impact"
+
+Case: Lens headlines empty
+- In “Headlines That Matter” section:
+  Title: “No material headlines for your focus assets”
+  Description:
+    “We didn’t detect any high-signal news affecting your selected assets today. You can still view all headlines.”
+  CTA: “View All Headlines” → switches to All feed / navigates to Headlines page
+  data-testid="empty-lens-headlines"
+
+Case: What Changed has no changes (already implemented)
+- Ensure exact text:
+  “No major regime changes since yesterday.”
+  data-testid="no-major-changes"
+
+Case: Partial inputs (meta.missingInputs not empty OR mock mode)
+- Show small inline note under hero:
+  “Some inputs are unavailable — view with extra caution.”
+  If missingInputs exists, show in tooltip (comma list).
+  data-testid="brief-partial-note"
+
+------------------------------------------------------------
+2) HEADLINES PAGE
+------------------------------------------------------------
+
+Case: Lens mode active but 0 focus assets
+- Show EmptyStateCard at top of feed:
+  Title: “Set up your Trader Lens to filter headlines”
+  Description:
+    “Add up to 5 focus assets to automatically see only the news that affects them.”
+  CTA: “Add Focus Assets”
+  data-testid="headlines-empty-lens"
+
+Case: Lens mode with focus assets but no matches
+- Show:
+  Title: “No headlines matched your focus assets”
+  Description:
+    “Try All headlines or adjust your focus assets.”
+  CTA buttons:
+    - “View All”
+    - “Manage Focus Assets”
+  data-testid="headlines-no-matches"
+
+Case: Headlines fetch error
+- Standard error EmptyStateCard:
+  Title: “Headlines unavailable”
+  Description: “We couldn’t load headlines right now.”
+  CTA: “Retry”
+  data-testid="headlines-error"
+
+------------------------------------------------------------
+3) AI INSIGHTS PAGE
+------------------------------------------------------------
+
+Case: No focus assets (Trader Lens templates still visible but contextual indicator)
+- Show a small inline tip near templates:
+  “Add focus assets to get lens-specific prompts and filtering.”
+  CTA: “Add Focus Assets”
+  data-testid="insights-add-lens-tip"
+
+Case: Context injection partially missing
+- If regime/policy/sentiment context missing:
+  Show a compact warning strip (you already have warning banner; ensure it’s consistent):
+  Text:
+    “Some context data is unavailable. The AI response may be less specific today.”
+  data-testid="insights-context-partial"
+
+Case: AI call fails
+- Error state with retry:
+  Title: “AI Insights unavailable”
+  Description: “Try again in a moment.”
+  CTA: “Retry”
+  data-testid="insights-error"
+
+------------------------------------------------------------
+4) POLICY PAGE
+------------------------------------------------------------
+
+Case: Focus assets exist but none are policy-sensitive
+- Replace “Relevance to your Lens” strip with:
+  “None of your focus assets appear highly policy-sensitive right now.”
+  Add CTA: “View policy-sensitive assets list” (scrolls to table)
+  data-testid="policy-lens-none"
+
+Case: Policy endpoints partial/mock
+- Show DataStatusBadge at top of each major card/section (if not already):
+  - Live/Cached/Mock/Unavailable
+  data-testid="policy-data-status"
+
+------------------------------------------------------------
+5) SCENARIO STUDIO
+------------------------------------------------------------
+
+Case: No focus assets
+- Baseline regime section still shows, but add EmptyStateCard:
+  Title: “Add focus assets to evaluate scenarios faster”
+  Description:
+    “With a Trader Lens, scenario results and summaries highlight what matters for your tickers.”
+  CTA: “Add Focus Assets”
+  data-testid="scenario-add-lens"
+
+------------------------------------------------------------
+6) EARNINGS & ECONOMIC CALENDAR
+------------------------------------------------------------
+
+Ensure these pages have:
+- Empty state when no events found:
+  “No upcoming events found in this window.”
+  CTA: “Change date range” (or reset filters)
+- Error state with Retry
+- Mock labeling where applicable
+
+Add data-testid:
+- earnings-empty
+- earnings-error
+- econ-empty
+- econ-error
+
+============================================================
+C) CONSISTENT DATA STATUS BADGE
+============================================================
+
+If a reusable badge exists (Live/Cached/Mock/Error), reuse it.
+If not, create <DataStatusBadge /> and use it minimally in:
+- Daily Brief (top)
+- Headlines (top)
+- Policy (per section)
+- Insights (context indicator)
+- Scenario Studio (baseline section)
+
+Rules:
+- If any key data is mock -> show “Mock”
+- If partial -> “Partial”
+- If all live/cached -> “Live” or “Cached” depending on your metadata
+
+============================================================
+D) TESTS
+============================================================
+
+Add/extend tests using existing testing stack:
+
+1) Onboarding modal:
+- Shows when onboarding not complete AND focus assets empty
+- “Add Focus Assets” triggers AssetPickerModal open (can mock the open handler)
+- “Skip onboarding” sets localStorage onboarding_v1_complete
+- “Not now” closes but does NOT set onboarding complete
+
+2) Empty states:
+- Daily Brief shows empty-lens-impact when no focus assets
+- Headlines shows headlines-no-matches when focus assets exist but no matching headlines
+- Insights shows insights-add-lens-tip when no focus assets
+- Earnings/Econ empty states render correctly
+
+3) data-testid:
+- Verify key data-testid exist for new UI elements
+
+============================================================
+ACCEPTANCE CRITERIA
+============================================================
+
+- First-time users immediately see how to set up Trader Lens without hunting.
+- Every empty state explains “why” and gives a clear next action.
+- Copy is calm, professional, and consistent.
+- No new pages, no major UI redesign, no new APIs.
+- All tests pass.
