@@ -22,8 +22,8 @@ import {
 import { Button } from "@/components/ui/button";
 
 const navigation = [
-  { name: "Daily Brief", href: "/daily-brief", icon: FileText },
-  { name: "Dashboard", href: "/", icon: BarChart3 },
+  { name: "Daily Brief", href: "/", icon: FileText, isPrimary: true },
+  { name: "Dashboard", href: "/dashboard", icon: BarChart3 },
   { name: "Market Drivers", href: "/today", icon: Target },
   { name: "AI Insights", href: "/insights", icon: Brain },
   { name: "Sentiment", href: "/sentiment", icon: Activity },
@@ -120,7 +120,8 @@ export function Sidebar() {
           </div>
           <ul className="space-y-2 px-4">
             {navigation.map((item) => {
-              const isActive = location === item.href;
+              const isActive = location === item.href || (item.href === "/" && location === "/daily-brief");
+              const isPrimary = 'isPrimary' in item && item.isPrimary;
               return (
                 <li key={item.name}>
                   <Link href={item.href}>
@@ -135,6 +136,9 @@ export function Sidebar() {
                     >
                       <item.icon className="mr-4 h-5 w-5" />
                       {item.name}
+                      {isPrimary && !isActive && (
+                        <span className="ml-auto w-2 h-2 rounded-full bg-primary animate-pulse" />
+                      )}
                     </span>
                   </Link>
                 </li>

@@ -41,8 +41,9 @@ function PortfolioRedirect() {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={DailyBrief} />
       <Route path="/daily-brief" component={DailyBrief} />
+      <Route path="/dashboard" component={Dashboard} />
       <Route path="/today" component={Today} />
       <Route path="/portfolio" component={PortfolioRedirect} />
       <Route path="/portfolio-v1" component={PortfolioRedirect} />
