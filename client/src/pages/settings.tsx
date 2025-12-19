@@ -9,12 +9,14 @@ import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, 
 import { useFocusAssets } from "@/hooks/useFocusAssets";
 import { AssetPickerModal } from "@/components/trader-lens/AssetPickerModal";
 import { useOnboardingState } from "@/components/onboarding/OnboardingLiteModal";
+import { useLocation } from "wouter";
 
 export default function Settings() {
   const { theme, setTheme, actualTheme } = useTheme();
   const [pickerOpen, setPickerOpen] = useState(false);
   const { focusAssets, maxAssets } = useFocusAssets();
   const { resetOnboarding } = useOnboardingState(focusAssets.length);
+  const [, setLocation] = useLocation();
 
   const getThemeIcon = (themeValue: string) => {
     switch (themeValue) {
@@ -87,7 +89,7 @@ export default function Settings() {
                     size="sm"
                     onClick={() => {
                       resetOnboarding();
-                      window.location.href = "/brief";
+                      setLocation("/daily-brief");
                     }}
                     data-testid="replay-onboarding-btn"
                     className="text-muted-foreground"
