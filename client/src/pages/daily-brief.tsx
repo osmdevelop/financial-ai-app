@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { apiRequest } from "@/lib/queryClient";
@@ -25,9 +25,15 @@ import {
   Eye,
   Target,
   ExternalLink,
+  Plus,
+  Newspaper,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { Link } from "wouter";
+import { OnboardingLiteModal, useOnboardingState } from "@/components/onboarding/OnboardingLiteModal";
+import { AssetPickerModal } from "@/components/trader-lens/AssetPickerModal";
+import { DataStatusBadge } from "@/components/ui/data-status-badge";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
 
 interface DailySummaryResponse {
   summary: string[];
@@ -38,9 +44,21 @@ type TradeLevel = "Green" | "Yellow" | "Red";
 
 export default function DailyBrief() {
   const [aiSummaryOpen, setAiSummaryOpen] = useState(false);
-  const { focusAssets } = useFocusAssets();
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  
+  const { focusAssets, isLoading: focusAssetsLoading } = useFocusAssets();
   const lensContext = useTraderLensContext();
   const focusSymbols = focusAssets.map(a => a.symbol);
+  
+  const { shouldShowOnboarding } = useOnboardingState(focusAssets.length);
+  
+  useEffect(() => {
+    if (!focusAssetsLoading && shouldShowOnboarding) {
+      const timer = setTimeout(() => setOnboardingOpen(true), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [focusAssetsLoading, shouldShowOnboarding]);
 
   const {
     snapshot: regimeSnapshot,
@@ -332,7 +350,7 @@ export default function DailyBrief() {
               {isLoading ? (
                 <Skeleton className="h-5 w-full" />
               ) : whatChanged.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" data-testid="no-major-changes">
                   No major regime changes since yesterday.
                 </p>
               ) : (
@@ -354,21 +372,18 @@ export default function DailyBrief() {
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
             Your Lens Impact
           </h3>
-          <Card>
-            <CardContent className="p-4">
-              {focusAssets.length === 0 ? (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    No focus assets selected.
-                  </p>
-                  <Link href="/settings">
-                    <Button variant="ghost" size="sm" className="text-xs gap-1">
-                      <Target className="h-3 w-3" />
-                      Add focus assets
-                    </Button>
-                  </Link>
-                </div>
-              ) : (
+          {focusAssets.length === 0 ? (
+            <EmptyStateCard
+              title="Add focus assets to personalize this brief"
+              description="Choose up to 5 tickers you care about. Headlines and drivers will automatically filter to what matters for them."
+              actionLabel="Add Focus Assets"
+              onAction={() => setAssetPickerOpen(true)}
+              icon={<Target className="h-10 w-10 text-muted-foreground" />}
+              data-testid="empty-lens-impact"
+            />
+          ) : (
+            <Card>
+              <CardContent className="p-4">
                 <div className="space-y-3">
                   <p className="text-sm">
                     Your focus assets are currently most exposed to:
@@ -394,9 +409,9 @@ export default function DailyBrief() {
                     ))}
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </section>
 
         {/* SECTION 4: Headlines That Matter (Max 3) */}
@@ -421,13 +436,34 @@ export default function DailyBrief() {
                   ))}
                 </div>
               ) : focusSymbols.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Add focus assets to see relevant headlines.
-                </p>
+                <div className="text-center py-4" data-testid="empty-lens-headlines">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Add focus assets to see relevant headlines.
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setAssetPickerOpen(true)}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Focus Assets
+                  </Button>
+                </div>
               ) : lensHeadlines.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No significant headlines for your focus assets today.
-                </p>
+                <div className="text-center py-4" data-testid="empty-lens-headlines">
+                  <Newspaper className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    No material headlines for your focus assets
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    We didn't detect any high-signal news affecting your selected assets today. You can still view all headlines.
+                  </p>
+                  <Link href="/news">
+                    <Button variant="outline" size="sm">
+                      View All Headlines
+                    </Button>
+                  </Link>
+                </div>
               ) : (
                 <ul className="space-y-3">
                   {lensHeadlines.map((h: any, idx: number) => (
@@ -547,21 +583,39 @@ export default function DailyBrief() {
         {/* Data Freshness Footer */}
         <footer className="pt-4 pb-8 border-t border-border/30">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              <span>
-                Data as of {sentiment?.as_of ? formatTimestamp(sentiment.as_of) : "recently"}
-              </span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                <span>
+                  Data as of {sentiment?.as_of ? formatTimestamp(sentiment.as_of) : "recently"}
+                </span>
+              </div>
+              <DataStatusBadge 
+                status={isMockData ? "mock" : "live"} 
+                data-testid="brief-data-status"
+              />
             </div>
             {isMockData && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1" data-testid="brief-partial-note">
                 <AlertTriangle className="h-3 w-3" />
-                <span>Some inputs unavailable — view with caution.</span>
+                <span>Some inputs are unavailable — view with extra caution.</span>
               </div>
             )}
           </div>
         </footer>
       </main>
+      
+      <OnboardingLiteModal
+        open={onboardingOpen}
+        onOpenChange={setOnboardingOpen}
+        onAddAssets={() => setAssetPickerOpen(true)}
+        focusAssetsCount={focusAssets.length}
+      />
+      
+      <AssetPickerModal
+        open={assetPickerOpen}
+        onOpenChange={setAssetPickerOpen}
+      />
     </div>
   );
 }
