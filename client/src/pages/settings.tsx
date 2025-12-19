@@ -5,14 +5,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from "@/components/providers/theme-provider";
-import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, Sun, Target } from "lucide-react";
+import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, Sun, Target, RotateCcw } from "lucide-react";
 import { useFocusAssets } from "@/hooks/useFocusAssets";
 import { AssetPickerModal } from "@/components/trader-lens/AssetPickerModal";
+import { useOnboardingState } from "@/components/onboarding/OnboardingLiteModal";
 
 export default function Settings() {
   const { theme, setTheme, actualTheme } = useTheme();
   const [pickerOpen, setPickerOpen] = useState(false);
   const { focusAssets, maxAssets } = useFocusAssets();
+  const { resetOnboarding } = useOnboardingState(focusAssets.length);
 
   const getThemeIcon = (themeValue: string) => {
     switch (themeValue) {
@@ -71,14 +73,29 @@ export default function Settings() {
                     ))}
                   </div>
                 )}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setPickerOpen(true)}
-                  data-testid="manage-focus-assets-btn"
-                >
-                  Manage Focus Assets
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setPickerOpen(true)}
+                    data-testid="manage-focus-assets-btn"
+                  >
+                    Manage Focus Assets
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      resetOnboarding();
+                      window.location.href = "/brief";
+                    }}
+                    data-testid="replay-onboarding-btn"
+                    className="text-muted-foreground"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Replay Onboarding
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

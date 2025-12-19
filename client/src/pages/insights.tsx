@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Sparkles, Info, TrendingUp, Shield, Activity, BarChart3, Target } from "lucide-react";
+import { Brain, Sparkles, Info, TrendingUp, Shield, Activity, BarChart3, Target, Lightbulb } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
 import { useFocusAssets } from "@/hooks/useFocusAssets";
@@ -17,6 +17,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Link } from "wouter";
+import { DataStatusBadge } from "@/components/ui/data-status-badge";
 
 export default function Insights() {
   const [inputText, setInputText] = useState(
@@ -123,6 +125,29 @@ export default function Insights() {
               Get AI-powered analysis and insights about market trends and your portfolio
             </p>
           </div>
+          
+          {/* Lens Tip - Show when no focus assets */}
+          {focusSymbols.length === 0 && (
+            <Card className="mb-6 bg-primary/5 border-primary/20" data-testid="lens-tip-card">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <Lightbulb className="w-5 h-5 text-primary mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-1">Personalize your insights</p>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Add focus assets to unlock personalized analysis templates tailored to your portfolio.
+                    </p>
+                    <Link href="/settings">
+                      <Button variant="outline" size="sm" className="gap-1">
+                        <Target className="h-3 w-3" />
+                        Add Focus Assets
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Context Error Banner */}
           {(sentimentError || trumpError || fedspeakError) && (

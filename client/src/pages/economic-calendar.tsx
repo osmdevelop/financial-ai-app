@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, AlertTriangle, TrendingUp, Globe } from "lucide-react";
 import { format } from "date-fns";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { DataStatusBadge } from "@/components/ui/data-status-badge";
 
 export default function EconomicCalendar() {
   const [timeframe, setTimeframe] = useState<string>("7");
@@ -194,10 +196,14 @@ export default function EconomicCalendar() {
         )}
         
         {events.length === 0 && !isLoading && !error && (
-          <div className="text-center py-12">
-            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No economic events found for {getTimeframeLabel(timeframe).toLowerCase()}.</p>
-          </div>
+          <EmptyStateCard
+            title="No economic events scheduled"
+            description={`No economic events found for ${getTimeframeLabel(timeframe).toLowerCase()}. Try selecting a different timeframe.`}
+            actionLabel="Refresh"
+            onAction={() => refetch()}
+            icon={<Calendar className="h-10 w-10 text-muted-foreground" />}
+            data-testid="empty-economic-events"
+          />
         )}
       </main>
     </div>

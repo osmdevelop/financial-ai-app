@@ -6,12 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, TrendingUp, TrendingDown, DollarSign, Target } from "lucide-react";
+import { Calendar, TrendingUp, TrendingDown, DollarSign, Target, Lightbulb } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/constants";
 import { format, addDays, subDays } from "date-fns";
+import { useFocusAssets } from "@/hooks/useFocusAssets";
+import { Link } from "wouter";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
 
 export default function Earnings() {
   const [timeframe, setTimeframe] = useState<string>("this_week");
+  const { focusAssets } = useFocusAssets();
+  const focusSymbols = focusAssets.map(a => a.symbol);
 
   const { data: earnings, isLoading, error, refetch } = useQuery({
     queryKey: ["/api/earnings/upcoming"],
@@ -152,10 +157,37 @@ export default function Earnings() {
         )}
         
         {earnings?.length === 0 && !isLoading && (
-          <div className="text-center py-12">
-            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No earnings reports found for {getTimeframeLabel(timeframe).toLowerCase()}.</p>
-          </div>
+          <EmptyStateCard
+            title="No earnings reports scheduled"
+            description={`No earnings reports found for ${getTimeframeLabel(timeframe).toLowerCase()}. Try selecting a different timeframe.`}
+            actionLabel="Refresh"
+            onAction={() => refetch()}
+            icon={<Calendar className="h-10 w-10 text-muted-foreground" />}
+            data-testid="empty-earnings"
+          />
+        )}
+
+        {/* Lens Tip - Show when no focus assets */}
+        {!isLoading && !error && focusSymbols.length === 0 && earnings && earnings.length > 0 && (
+          <Card className="mt-6 bg-primary/5 border-primary/20" data-testid="earnings-lens-tip">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Lightbulb className="w-5 h-5 text-primary mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-1">Track earnings for your assets</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Add focus assets to highlight earnings reports that matter most to your portfolio.
+                  </p>
+                  <Link href="/settings">
+                    <Button variant="outline" size="sm" className="gap-1">
+                      <Target className="h-3 w-3" />
+                      Add Focus Assets
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </main>
     </div>

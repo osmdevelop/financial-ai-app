@@ -12,8 +12,12 @@ import {
   Newspaper,
   Users,
   Target,
+  Plus,
 } from "lucide-react";
 import { RefreshCcw } from "lucide-react";
+import { Link } from "wouter";
+import { DataStatusBadge } from "@/components/ui/data-status-badge";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { format, isValid } from "date-fns";
 import type { Headline, NewsCluster, NewsStreamResponse } from "@shared/schema";
 import {
@@ -409,21 +413,34 @@ export default function NewsStream() {
                 </div>
               ))
             ) : (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <div className="text-muted-foreground">
-                    <Newspaper className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                    <h3 className="font-medium mb-2">No headlines found</h3>
-                    <p className="text-sm">
-                      {scope === "focus"
-                        ? "No news found for your focus assets. Try adding more assets or switch to all headlines."
-                        : scope === "watchlist"
-                          ? "No news found for your watchlist. Try adding more symbols or switch to all headlines."
-                          : "Try adjusting your search terms or check back later for new headlines."}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <div data-testid="empty-headlines">
+                {scope === "focus" ? (
+                  <EmptyStateCard
+                    title="No headlines for your focus assets"
+                    description="We didn't find any recent news matching your selected focus assets. Try adding more assets or switch to all headlines."
+                    actionLabel="Switch to All Headlines"
+                    onAction={() => setScope("all")}
+                    icon={<Target className="h-10 w-10 text-muted-foreground" />}
+                    data-testid="empty-focus-headlines"
+                  />
+                ) : scope === "watchlist" ? (
+                  <EmptyStateCard
+                    title="No headlines for your watchlist"
+                    description="We didn't find any recent news matching your watchlist symbols. Try adding more symbols or switch to all headlines."
+                    actionLabel="Switch to All Headlines"
+                    onAction={() => setScope("all")}
+                    icon={<Newspaper className="h-10 w-10 text-muted-foreground" />}
+                    data-testid="empty-watchlist-headlines"
+                  />
+                ) : (
+                  <EmptyStateCard
+                    title="No headlines available"
+                    description="Try adjusting your search terms or check back later for new headlines."
+                    icon={<Newspaper className="h-10 w-10 text-muted-foreground" />}
+                    data-testid="empty-all-headlines"
+                  />
+                )}
+              </div>
             )}
           </div>
         )}

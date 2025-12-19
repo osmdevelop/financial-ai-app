@@ -5,11 +5,13 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, TrendingUp, TrendingDown, Minus, ExternalLink, ChevronDown, ChevronUp, Target } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, Minus, ExternalLink, ChevronDown, ChevronUp, Target, Lightbulb } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { getSensitivityColor, getSensitivityTooltip } from "@/utils/policySensitivity";
 import { useFocusAssets } from "@/hooks/useFocusAssets";
 import type { TrumpIndexResponse, FedspeakResponse, PolicySensitivity } from "@shared/schema";
+import { Link } from "wouter";
+import { DataStatusBadge } from "@/components/ui/data-status-badge";
 
 export default function Policy() {
   const { focusAssets } = useFocusAssets();
@@ -65,7 +67,30 @@ export default function Policy() {
       />
       
       <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-8">
-        {/* Lens Relevance Strip */}
+        {/* Lens Relevance Strip - Show tip when no focus assets */}
+        {focusSymbols.length === 0 && (
+          <Card className="bg-primary/5 border-primary/20" data-testid="lens-policy-tip">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Lightbulb className="w-5 h-5 text-primary mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-1">See policy impact on your assets</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Add focus assets to see how policy changes and Trump Index movements may affect your positions.
+                  </p>
+                  <Link href="/settings">
+                    <Button variant="outline" size="sm" className="gap-1">
+                      <Target className="h-3 w-3" />
+                      Add Focus Assets
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Lens Relevance Strip - Show when focus assets exist */}
         {focusSymbols.length > 0 && trumpIndex && (
           <Card className="bg-primary/5 border-primary/20" data-testid="lens-policy-relevance">
             <CardContent className="p-4">

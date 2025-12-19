@@ -24,9 +24,13 @@ import {
   Info,
   AlertCircle,
   BarChart3,
+  Lightbulb,
+  Target,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
+import { useFocusAssets } from "@/hooks/useFocusAssets";
+import { Link } from "wouter";
 import {
   Tooltip,
   TooltipContent,
@@ -276,6 +280,9 @@ export default function Scenario() {
   const [results, setResults] = useState<AssetImpact[]>([]);
   const [hasCalculated, setHasCalculated] = useState(false);
 
+  const { focusAssets } = useFocusAssets();
+  const focusSymbols = focusAssets.map(a => a.symbol);
+
   const {
     snapshot: regimeSnapshot,
     isLoading: regimeLoading,
@@ -322,6 +329,29 @@ export default function Scenario() {
       />
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+        {/* Lens Tip - Show when no focus assets */}
+        {focusSymbols.length === 0 && (
+          <Card className="bg-primary/5 border-primary/20" data-testid="scenario-lens-tip">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Lightbulb className="w-5 h-5 text-primary mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-1">Personalize your scenario analysis</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Add focus assets to see how macro scenarios specifically impact your portfolio positions.
+                  </p>
+                  <Link href="/settings">
+                    <Button variant="outline" size="sm" className="gap-1">
+                      <Target className="h-3 w-3" />
+                      Add Focus Assets
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Disclaimer Banner */}
         <div
           className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-start gap-3"
