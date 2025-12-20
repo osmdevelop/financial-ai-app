@@ -20,6 +20,7 @@ import {
   FileText,
   Star,
   Bell,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -41,6 +42,7 @@ const navigation = [
 ];
 
 const secondaryNavigation = [
+  { name: "History", href: "/history", icon: History },
   { name: "Alerts", href: "/alerts", icon: Bell },
   { name: "Settings", href: "/settings", icon: Settings },
   { name: "Help", href: "/help", icon: HelpCircle },

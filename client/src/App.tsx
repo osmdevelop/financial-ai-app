@@ -28,6 +28,7 @@ import DailyBrief from "@/pages/daily-brief";
 import Watchlist from "@/pages/watchlist";
 import Alerts from "@/pages/alerts";
 import Notifications from "@/pages/notifications";
+import History from "@/pages/history";
 import NotFound from "@/pages/not-found";
 import { startAlertEvaluator } from "@/services/alertEvaluator";
 
@@ -65,6 +66,7 @@ function Router() {
       <Route path="/watchlist" component={Watchlist} />
       <Route path="/alerts" component={Alerts} />
       <Route path="/notifications" component={Notifications} />
+      <Route path="/history" component={History} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

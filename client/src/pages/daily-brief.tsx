@@ -28,6 +28,8 @@ import {
   Plus,
   Newspaper,
   Bell,
+  Save,
+  History,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { Link } from "wouter";
@@ -36,6 +38,14 @@ import { AssetPickerModal } from "@/components/trader-lens/AssetPickerModal";
 import { DataStatusBadge } from "@/components/ui/data-status-badge";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { useNotifications } from "@/hooks/useNotifications";
+import {
+  captureDailySnapshot,
+  getYesterdaySnapshot,
+  compareSnapshots,
+  hasCapturedToday,
+  type DailySnapshot,
+  type CaptureContext,
+} from "@/lib/history-storage";
 
 interface DailySummaryResponse {
   summary: string[];
@@ -48,6 +58,8 @@ export default function DailyBrief() {
   const [aiSummaryOpen, setAiSummaryOpen] = useState(false);
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [snapshotSaved, setSnapshotSaved] = useState(hasCapturedToday());
+  const [yesterdaySnapshot, setYesterdaySnapshot] = useState<DailySnapshot | null>(null);
   
   const { focusAssets, isLoading: focusAssetsLoading } = useFocusAssets();
   const lensContext = useTraderLensContext();
@@ -145,6 +157,12 @@ export default function DailyBrief() {
   const isLoading = regimeLoading || sentimentLoading || policyLoading || fedLoading;
   const isMockData = regimeIsMock || regimeSnapshot?.meta?.isMock;
 
+  // Load yesterday's snapshot for comparison
+  useEffect(() => {
+    const yesterday = getYesterdaySnapshot();
+    setYesterdaySnapshot(yesterday);
+  }, []);
+
   const generateMarketCall = useMemo(() => {
     if (!regimeSnapshot && !sentiment) {
       return { text: "Market conditions are being assessed.", level: "Yellow" as TradeLevel };
@@ -190,7 +208,162 @@ export default function DailyBrief() {
     return { text, level };
   }, [regimeSnapshot, sentiment, trumpIndex]);
 
+  const generateMarketCallText = generateMarketCall.text;
+  const generateMarketCallLevel = generateMarketCall.level;
+
+  // Build current snapshot for comparison
+  const currentTodaySnapshot = useMemo((): DailySnapshot | null => {
+    if (!generateMarketCallText) return null;
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    
+    return {
+      id: todayStr,
+      date: todayStr,
+      createdAt: now.toISOString(),
+      dailyCall: generateMarketCallText,
+      shouldTradeToday: {
+        level: generateMarketCallLevel,
+        reason: generateMarketCallText,
+      },
+      regime: regimeSnapshot ? {
+        regime: regimeSnapshot.regime,
+        confidence: regimeSnapshot.confidence,
+        drivers: (regimeSnapshot.drivers || []).slice(0, 3).map((d: any) => ({
+          key: d.label || d.key || "driver",
+          detail: d.detail || `${d.direction || ""} (${d.strength || ""})`.trim(),
+        })),
+      } : undefined,
+      policy: trumpIndex ? {
+        trumpZ: trumpIndex.zScore,
+        trumpRisk: trumpIndex.zScore !== undefined
+          ? (trumpIndex.zScore > 1.5 ? "high" : trumpIndex.zScore > 0.5 ? "moderate" : "low")
+          : undefined,
+      } : undefined,
+      fed: fedspeak ? {
+        tone: (fedspeak.currentTone?.toLowerCase()) as "hawkish" | "dovish" | "neutral" | undefined,
+        score: fedspeak.toneScore,
+      } : undefined,
+      volatility: sentiment ? {
+        state: sentiment.score !== undefined
+          ? (sentiment.score > 60 ? "low" : sentiment.score > 40 ? "normal" : "elevated")
+          : undefined,
+        score: sentiment.score,
+      } : undefined,
+      meta: {
+        isMock: !!isMockData,
+        missingInputs: lensContext.meta.missing || [],
+      },
+    };
+  }, [generateMarketCallText, generateMarketCallLevel, regimeSnapshot, trumpIndex, fedspeak, sentiment, isMockData, lensContext.meta.missing]);
+
+  // Compare yesterday to today for "What Changed" section
+  const historyDelta = useMemo(() => {
+    if (!yesterdaySnapshot || !currentTodaySnapshot) return null;
+    return compareSnapshots(yesterdaySnapshot, currentTodaySnapshot);
+  }, [yesterdaySnapshot, currentTodaySnapshot]);
+
+  // Auto-capture snapshot when data is loaded
+  useEffect(() => {
+    if (isLoading || !generateMarketCallText) return;
+    if (snapshotSaved) return;
+
+    const context: CaptureContext = {
+      dailyCall: generateMarketCallText,
+      shouldTradeToday: {
+        level: generateMarketCallLevel,
+        reason: generateMarketCallText,
+      },
+      focusAssets: focusAssets.map(a => ({
+        symbol: a.symbol,
+        assetType: a.assetType || "stock",
+        displayName: a.displayName || undefined,
+      })),
+      regime: regimeSnapshot ? {
+        regime: regimeSnapshot.regime,
+        confidence: regimeSnapshot.confidence,
+        drivers: regimeSnapshot.drivers,
+      } : undefined,
+      policy: trumpIndex ? {
+        zScore: trumpIndex.zScore,
+        risk: trumpIndex.zScore !== undefined
+          ? (trumpIndex.zScore > 1.5 ? "high" : trumpIndex.zScore > 0.5 ? "moderate" : "low")
+          : undefined,
+      } : undefined,
+      fed: fedspeak ? {
+        currentTone: fedspeak.currentTone,
+        toneScore: fedspeak.toneScore,
+      } : undefined,
+      sentiment: sentiment ? {
+        score: sentiment.score,
+        regime: sentiment.regime,
+      } : undefined,
+      meta: {
+        isMock: !!isMockData,
+        missingInputs: lensContext.meta.missing || [],
+      },
+    };
+
+    const captured = captureDailySnapshot(context);
+    if (captured) {
+      setSnapshotSaved(true);
+    }
+  }, [isLoading, generateMarketCallText, generateMarketCallLevel, snapshotSaved, focusAssets, regimeSnapshot, trumpIndex, fedspeak, sentiment, isMockData, lensContext.meta.missing]);
+
+  // Manual save handler
+  const handleManualSave = () => {
+    if (!generateMarketCallText) return;
+
+    const context: CaptureContext = {
+      dailyCall: generateMarketCallText,
+      shouldTradeToday: {
+        level: generateMarketCallLevel,
+        reason: generateMarketCallText,
+      },
+      focusAssets: focusAssets.map(a => ({
+        symbol: a.symbol,
+        assetType: a.assetType || "stock",
+        displayName: a.displayName || undefined,
+      })),
+      regime: regimeSnapshot ? {
+        regime: regimeSnapshot.regime,
+        confidence: regimeSnapshot.confidence,
+        drivers: regimeSnapshot.drivers,
+      } : undefined,
+      policy: trumpIndex ? {
+        zScore: trumpIndex.zScore,
+        risk: trumpIndex.zScore !== undefined
+          ? (trumpIndex.zScore > 1.5 ? "high" : trumpIndex.zScore > 0.5 ? "moderate" : "low")
+          : undefined,
+      } : undefined,
+      fed: fedspeak ? {
+        currentTone: fedspeak.currentTone,
+        toneScore: fedspeak.toneScore,
+      } : undefined,
+      sentiment: sentiment ? {
+        score: sentiment.score,
+        regime: sentiment.regime,
+      } : undefined,
+      meta: {
+        isMock: !!isMockData,
+        missingInputs: lensContext.meta.missing || [],
+      },
+    };
+
+    const captured = captureDailySnapshot(context, true);
+    if (captured) {
+      setSnapshotSaved(true);
+    }
+  };
+
+  // Combine history-based changes with fallback to API-based changes
   const whatChanged = useMemo(() => {
+    // If we have history delta, use it
+    if (historyDelta && historyDelta.changes.length > 0) {
+      return historyDelta.changes.map(c => `${c.label}: ${c.from} → ${c.to}`);
+    }
+
+    // Fallback to API-based change detection
     const changes: string[] = [];
 
     if (regimeSnapshot?.changedSinceYesterday) {
@@ -208,7 +381,9 @@ export default function DailyBrief() {
     }
 
     return changes.slice(0, 3);
-  }, [regimeSnapshot, fedspeak, trumpIndex]);
+  }, [historyDelta, regimeSnapshot, fedspeak, trumpIndex]);
+
+  const hasHistoryData = !!yesterdaySnapshot;
 
   const lensExposures = useMemo(() => {
     if (focusAssets.length === 0) return [];
@@ -359,17 +534,32 @@ export default function DailyBrief() {
 
         {/* SECTION 2: What Changed (or Didn't) */}
         <section data-testid="daily-changes">
-          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
-            What Changed
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              What Changed
+            </h3>
+            <Link href="/history">
+              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">
+                <History className="h-3 w-3" />
+                View History
+              </Button>
+            </Link>
+          </div>
           <Card>
             <CardContent className="p-4">
               {isLoading ? (
                 <Skeleton className="h-5 w-full" />
               ) : whatChanged.length === 0 ? (
-                <p className="text-sm text-muted-foreground" data-testid="no-major-changes">
-                  No major regime changes since yesterday.
-                </p>
+                <div>
+                  <p className="text-sm text-muted-foreground" data-testid="no-major-changes">
+                    No major regime changes since yesterday.
+                  </p>
+                  {!hasHistoryData && (
+                    <p className="text-xs text-muted-foreground/70 mt-2 italic" data-testid="brief-history-hint">
+                      History will appear after your first snapshot is saved.
+                    </p>
+                  )}
+                </div>
               ) : (
                 <ul className="space-y-2">
                   {whatChanged.map((change, idx) => (
@@ -612,12 +802,22 @@ export default function DailyBrief() {
                 data-testid="brief-data-status"
               />
             </div>
-            {isMockData && (
-              <div className="flex items-center gap-1" data-testid="brief-partial-note">
-                <AlertTriangle className="h-3 w-3" />
-                <span>Some inputs are unavailable — view with extra caution.</span>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {isMockData && (
+                <div className="flex items-center gap-1" data-testid="brief-partial-note">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span>Some inputs are unavailable — view with extra caution.</span>
+                </div>
+              )}
+              <button
+                onClick={handleManualSave}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="save-today-snapshot"
+              >
+                <Save className="h-3 w-3" />
+                {snapshotSaved ? "Saved today" : "Save today"}
+              </button>
+            </div>
           </div>
         </footer>
       </main>
