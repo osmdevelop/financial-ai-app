@@ -368,3 +368,7 @@ export function hasCapturedToday(): boolean {
   const lastCapture = getLastCaptureDate();
   return lastCapture === today;
 }
+
+// Aliases for backwards compatibility
+export const getAllSnapshots = getSnapshots;
+export const clearAllSnapshots = clearHistory;
