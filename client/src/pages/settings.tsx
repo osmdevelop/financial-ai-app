@@ -1,15 +1,130 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from "@/components/providers/theme-provider";
-import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, Sun, Target, RotateCcw } from "lucide-react";
+import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, Sun, Target, RotateCcw, History, Download, Trash2 } from "lucide-react";
 import { useFocusAssets } from "@/hooks/useFocusAssets";
 import { AssetPickerModal } from "@/components/trader-lens/AssetPickerModal";
 import { useOnboardingState } from "@/components/onboarding/OnboardingLiteModal";
 import { useLocation } from "wouter";
+import { getAllSnapshots, clearAllSnapshots, DailySnapshot } from "@/lib/history-storage";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+function HistorySection() {
+  const [snapshots, setSnapshots] = useState<DailySnapshot[]>([]);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+
+  useEffect(() => {
+    setSnapshots(getAllSnapshots());
+  }, []);
+
+  const handleExport = () => {
+    const data = JSON.stringify(snapshots, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `osm-fin-history-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleClear = () => {
+    clearAllSnapshots();
+    setSnapshots([]);
+    setClearDialogOpen(false);
+  };
+
+  const oldestDate = snapshots.length > 0 
+    ? new Date(snapshots[snapshots.length - 1].date).toLocaleDateString()
+    : null;
+  const newestDate = snapshots.length > 0 
+    ? new Date(snapshots[0].date).toLocaleDateString()
+    : null;
+
+  return (
+    <>
+      <Card data-testid="settings-history">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-5 w-5" />
+            History
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="p-4 border rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium">Daily Snapshots</h3>
+              <Badge variant="secondary">
+                {snapshots.length} saved
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mb-3">
+              {snapshots.length > 0 
+                ? `Tracking market conditions from ${oldestDate} to ${newestDate}. Data is stored locally in your browser.`
+                : "No snapshots saved yet. Visit the Daily Brief page to start capturing market conditions."}
+            </p>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleExport}
+                disabled={snapshots.length === 0}
+                data-testid="button-export-history"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setClearDialogOpen(true)}
+                disabled={snapshots.length === 0}
+                className="text-destructive hover:text-destructive"
+                data-testid="button-clear-history"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear All
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all history?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all {snapshots.length} daily snapshots from your browser. 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClear} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Clear All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
 
 export default function Settings() {
   const { theme, setTheme, actualTheme } = useTheme();
@@ -265,6 +380,9 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
+
+          {/* History Section */}
+          <HistorySection />
 
           {/* Information Section */}
           <Card>
