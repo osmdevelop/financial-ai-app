@@ -1,0 +1,215 @@
+Implement “What Changed” History (7–30 days) to add continuity and trust.
+This is a lightweight history/timeline feature that records daily snapshots and lets users review past regimes/drivers.
+
+Constraints:
+- No authentication
+- No Firebase
+- Use localStorage only
+- No new paid APIs
+- No redesign; reuse existing components (Cards, Badges, EmptyStateCard, DataStatusBadge)
+- Must be null-safe and work with mock/partial data
+- Must include tests + data-testid
+
+============================================================
+GOAL
+============================================================
+1) Persist a once-per-day “Daily Snapshot” derived from existing app outputs:
+   - Daily Brief “Today’s Market Call” sentence
+   - Market regime snapshot (regime + confidence + top drivers)
+   - Trader Lens status (focus assets count + shouldTradeToday level)
+   - Policy summary (Trump z-score & risk) if available
+   - Fed tone (hawkish/dovish/neutral) if available
+   - Volatility state if available
+   - Data status flags (live/mock/partial) + missing inputs list
+
+2) Show a new “History” page with:
+   - Timeline list by date (most recent first)
+   - Filters: 7 days / 30 days
+   - Highlight changes vs previous day
+   - Click item to open “Snapshot Detail” (same page) OR open Daily Brief with a query param to view that day’s snapshot (no server history required)
+
+3) Integrate “What Changed” history into Daily Brief:
+   - If there’s a prior snapshot, compute deltas and show “Compared to yesterday” summary
+   - Use yesterday snapshot even if current day is partial/mock
+
+============================================================
+DATA MODEL (LOCAL STORAGE)
+============================================================
+Storage keys:
+- "history_snapshots_v1"  (array)
+- "history_last_capture_v1" (string date, YYYY-MM-DD)
+
+Types:
+type DailySnapshot = {
+  id: string; // date-based unique id: YYYY-MM-DD
+  date: string; // YYYY-MM-DD (local time)
+  createdAt: string; // ISO
+  dailyCall: string; // Today’s Market Call hero sentence
+  shouldTradeToday?: { level: "Green" | "Yellow" | "Red"; reason?: string };
+  focusAssets?: Array<{ symbol: string; assetType: string; displayName?: string }>;
+  regime?: { regime: string; confidence: number; drivers: Array<{ key: string; detail: string }> };
+  policy?: { trumpZ?: number; trumpRisk?: string };
+  fed?: { tone?: "hawkish" | "dovish" | "neutral"; score?: number };
+  volatility?: { state?: string; score?: number };
+  meta: {
+    isMock: boolean;
+    missingInputs: string[];
+    notes?: string;
+  };
+};
+
+Capture rule:
+- Record at most once per calendar day (America/Chicago user timezone assumptions are fine; use local date).
+- Keep a maximum of 45 snapshots in storage (prune older).
+
+============================================================
+A) CAPTURE LOGIC (AUTOMATIC)
+============================================================
+Implement a service/helper:
+- captureDailySnapshot(context) that:
+  - Accepts the already-fetched objects you have on Daily Brief:
+    - TraderLensContext
+    - MarketRegimeSnapshot
+    - Policy snapshot pieces (if available)
+  - Produces DailySnapshot
+  - Saves to localStorage if not already captured today
+  - Returns whether capture occurred
+
+Trigger capture:
+- On Daily Brief page load AFTER the page has successfully computed/assembled:
+  - dailyCall string
+  - shouldTradeToday badge
+  - regime snapshot (or partial)
+- If AI Summary fails, still capture (AI is optional).
+- If everything fails, do not capture.
+
+Also add a manual “Save today” action (small link in footer) that forces capture; this helps testing.
+data-testid="save-today-snapshot"
+
+============================================================
+B) HISTORY PAGE UI
+============================================================
+Route:
+- Add sidebar item “History”
+- New route: /history
+
+Page structure:
+1) Header: “History”
+   - Segmented control: “7D” and “30D”
+   - Button: “Clear History” (confirm modal)
+   data-testid:
+     - history-page
+     - history-range-7d
+     - history-range-30d
+     - history-clear
+
+2) Timeline list:
+Each row (Card):
+- Date (e.g., “Tue, Jan 6”)
+- Regime badge + confidence
+- ShouldTradeToday badge
+- Short dailyCall (truncate)
+- DataStatusBadge (Live/Mock/Partial)
+- “Changed” chips (only if changed vs previous day):
+  - Regime changed
+  - Fed tone changed
+  - Policy risk changed (e.g., Low→High or trumpZ crossing threshold)
+  - Volatility state changed
+data-testid per item:
+- history-item-YYYY-MM-DD
+
+3) Detail panel:
+On click row, open an inline detail view (either drawer/modal or right-side panel; keep it simple):
+- Full dailyCall
+- Top drivers bullets (up to 3)
+- What changed vs previous day (bullets)
+- Link: “Open Daily Brief”
+data-testid="history-detail"
+
+Empty state:
+- Use EmptyStateCard
+  Title: “No history yet”
+  Description: “Your daily snapshots will appear here after you open the Daily Brief.”
+  CTA: “Go to Daily Brief”
+
+============================================================
+C) DELTA / “WHAT CHANGED” ENGINE
+============================================================
+Implement a compareSnapshots(prev, curr) helper that returns:
+type SnapshotDelta = {
+  changes: Array<{ key: string; label: string; from?: string; to?: string }>;
+  summary: string; // one calm sentence
+};
+
+Rules:
+- Regime change: prev.regime.regime -> curr.regime.regime
+- Fed tone change: prev.fed.tone -> curr.fed.tone
+- Policy risk change: prev.policy.trumpRisk -> curr.policy.trumpRisk
+- Volatility state change: prev.volatility.state -> curr.volatility.state
+- ShouldTradeToday change: prev.shouldTradeToday.level -> curr.shouldTradeToday.level
+
+Summary:
+- If no changes: “No major changes versus yesterday.”
+- If 1–2: “Key change: X; Y.”
+- If >2: “Multiple drivers shifted versus yesterday.”
+
+Make sure compare handles missing fields gracefully.
+
+============================================================
+D) DAILY BRIEF INTEGRATION
+============================================================
+On Daily Brief:
+- Load yesterday snapshot if present.
+- Use compareSnapshots(yesterday, todayComputedSnapshot) to populate the “What Changed” section.
+- If today is partial but yesterday exists, still show deltas based on fields available.
+- If no history exists, keep current behavior (“No major regime changes since yesterday.”) but add a subtle note:
+  “History will appear after your first snapshot is saved.”
+  data-testid="brief-history-hint"
+
+============================================================
+E) SETTINGS INTEGRATION
+============================================================
+In Settings:
+- Add small “History” section:
+  - “Export history” button (optional: JSON export to file via browser download)
+  - “Clear history” button
+data-testid="settings-history"
+
+If export is included:
+- Download a JSON file with snapshots array
+
+============================================================
+F) TESTS
+============================================================
+Add tests (follow existing RTL/Vitest patterns):
+
+1) captureDailySnapshot:
+- Captures once per day
+- Does not duplicate capture on second load same day
+- Prunes to max 45
+
+2) compareSnapshots:
+- Detects regime change
+- Detects fed tone change
+- Handles missing fields without crashing
+
+3) History page:
+- Renders empty state when no snapshots
+- Shows items when snapshots exist
+- Range filter 7D/30D works
+- Clicking item opens detail
+
+4) Daily Brief integration:
+- Shows brief-history-hint when no history
+- Uses yesterday snapshot to compute changes when available
+
+Add data-testid coverage assertions.
+
+============================================================
+DONE WHEN
+============================================================
+- Opening Daily Brief automatically saves a DailySnapshot once per day.
+- /history shows a readable timeline with change highlights.
+- Daily Brief “What Changed” uses snapshot memory when available.
+- Clearing history works.
+- Tests pass and app remains stable with mock/partial data.
