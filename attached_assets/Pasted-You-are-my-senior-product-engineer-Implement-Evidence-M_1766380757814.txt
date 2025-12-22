@@ -1,0 +1,243 @@
+You are my senior product engineer. Implement “Evidence Mode” (v1) to increase credibility:
+show sources, freshness, and the exact inputs used for AI summaries.
+
+Constraints:
+- No authentication
+- No new paid APIs/services
+- Prefer reusing existing metadata (DataStatusBadge, timestamps, article source fields)
+- No major UI redesign; keep it compact and optional (collapsed by default)
+- Must be null-safe and work with live/mock/partial data
+- Must include tests + data-testid coverage
+
+============================================================
+GOAL
+============================================================
+Add an optional Evidence Mode across key surfaces so traders can verify:
+1) Where claims came from (sources)
+2) How fresh data is (timestamps / cached age)
+3) What inputs AI used (prompt context + structured inputs)
+
+Evidence Mode should be:
+- OFF/collapsed by default
+- Easily discoverable (small toggle “Evidence”)
+- Consistent across pages
+
+============================================================
+SCOPE (PAGES)
+============================================================
+Implement Evidence Mode in:
+A) Daily Brief (most important)
+B) Policy page (clusters + quotes)
+C) AI Insights (prompt/context transparency)
+D) Headlines (optional: show match + source chips)
+(Scenario Studio optional only if trivial; do not expand scope)
+
+============================================================
+A) SHARED COMPONENTS
+============================================================
+
+1) EvidenceToggle
+- Small toggle/button labeled “Evidence”
+- Shows state (on/off) per page and persists globally
+- Storage: localStorage key "evidence_mode_v1" = "true"/"false"
+- data-testid="evidence-toggle"
+
+2) EvidencePanel
+Reusable collapsible panel component:
+Props:
+- title
+- items: EvidenceItem[]
+- meta: { asOf?: string; isMock?: boolean; missingInputs?: string[]; cacheAgeMs?: number }
+EvidenceItem:
+type EvidenceItem =
+  | { kind: "source"; label: string; value: string; href?: string }
+  | { kind: "timestamp"; label: string; value: string }
+  | { kind: "input"; label: string; value: string }
+  | { kind: "note"; label: string; value: string };
+
+Panel UI:
+- Compact list (label + value)
+- “Copy inputs” button (copies the input/context block)
+- Uses DataStatusBadge when meta indicates mock/partial
+- data-testid="evidence-panel"
+- data-testid="evidence-copy"
+
+3) SourceChips
+- Small chips for sources (e.g., “WSJ”, “Reuters”, “FOMC”, “Alpha Vantage”, “CoinGecko”)
+- Optional link when URL available
+- data-testid="source-chip"
+
+============================================================
+B) DAILY BRIEF EVIDENCE
+============================================================
+
+Add an “Evidence” toggle near the Share button or footer.
+
+When Evidence Mode is ON:
+1) For “Today’s Market Call”
+- Show:
+  - As-of timestamp
+  - Which signals contributed:
+    - Regime snapshot (regime, confidence)
+    - Policy state (trump risk/z)
+    - Fed tone
+    - Volatility state
+  - Missing inputs list (if any)
+  - DataStatusBadge (Live/Mock/Partial)
+
+2) For “What Changed”
+- Show the source of comparison:
+  - “Compared using History snapshot (YYYY-MM-DD)” if available
+  - Else “Compared using API diff”
+- Show the exact fields compared (regime/fed/policy/vol/conditions)
+
+3) For “Headlines That Matter”
+- For each of the 3 headlines:
+  - Show SourceChip (publisher)
+  - “Matched to: [symbols]” if lens matched
+  - Show published time if available
+
+4) For “What to Watch Next”
+- Show event source (Economic Calendar / Earnings / Derived)
+- Show timestamp
+
+Implementation details:
+- Do NOT clutter main view; Evidence should appear as a collapsible panel below each section,
+  or one combined EvidencePanel at bottom with anchors.
+- Keep it consistent and compact.
+
+data-testid additions:
+- daily-brief-evidence
+- daily-brief-evidence-call
+- daily-brief-evidence-changes
+- daily-brief-evidence-headlines
+
+============================================================
+C) POLICY PAGE EVIDENCE
+============================================================
+
+When Evidence Mode ON:
+1) Policy Themes / Clusters
+- Each cluster card should include:
+  - “Based on N articles”
+  - SourceChips for top 3 publishers
+  - As-of timestamp
+  - If AI summary was generated:
+    - Show “Inputs used” list (topic labels + article titles)
+    - “Copy inputs” button
+  - DataStatusBadge
+
+2) Fed quotes section
+- For each quote:
+  - SourceChip + published time
+  - Any implied odds extraction: show “Derived from: [headline/quote]”
+  - If tone classification was AI-based: show confidence and inputs summary
+
+data-testid:
+- policy-evidence
+- policy-cluster-evidence
+- policy-quote-evidence
+
+============================================================
+D) AI INSIGHTS EVIDENCE
+============================================================
+
+Add “Evidence” toggle on AI Insights page.
+
+When ON:
+1) Show “Prompt Context Used” panel:
+- Include:
+  - Trader Lens context block (if enabled)
+  - Regime snapshot summary
+  - Policy snapshot summary
+  - Top headlines summary
+  - Data status + missing inputs
+- Add “Copy context” button that copies the exact context string injected into the model.
+
+2) Show “Model + Settings”
+- model name (from your config)
+- temperature/top_p if applicable
+- max tokens if set
+- (Do not display API key)
+
+3) For each AI response, add a small “Show Inputs” disclosure:
+- Expands to show the same context used for that answer (if stored),
+  otherwise show the current context.
+- Must not exceed reasonable size; truncate with “Show more”.
+
+data-testid:
+- insights-evidence
+- insights-context-panel
+- insights-copy-context
+- insights-show-inputs
+
+============================================================
+E) HEADLINES PAGE (LIGHT TOUCH)
+============================================================
+
+When Evidence Mode ON:
+- Each headline row shows:
+  - SourceChip
+  - Published time (if available)
+  - Matched symbols (if lens/watchlist matched)
+- Do not add new panels; just inline chips.
+
+data-testid:
+- headlines-evidence-row
+
+============================================================
+F) HOOKS / STATE
+============================================================
+
+Implement:
+- useEvidenceMode() hook with:
+  - enabled boolean
+  - toggle()
+  - persisted to localStorage
+- Ensure it is globally consistent across pages.
+
+============================================================
+G) ERROR HANDLING / PARTIAL DATA
+============================================================
+
+Evidence Mode must:
+- Never crash if metadata is missing
+- Display “Unavailable” gracefully
+- Clearly label mock/partial:
+  - “Mock data used for: [X]”
+  - “Missing inputs: [policy, volatility]”
+
+============================================================
+H) TESTS
+============================================================
+
+Add/extend tests (RTL/Vitest):
+1) Evidence mode persistence:
+- Toggle on persists to localStorage and remains on after rerender/navigation
+
+2) Daily Brief evidence rendering:
+- Evidence panels appear when enabled
+- Headlines show SourceChips
+- “Copy inputs” works (mock clipboard)
+
+3) AI Insights evidence:
+- Context panel renders
+- Copy context calls clipboard with expected text
+
+4) Policy page evidence:
+- Cluster evidence shows “Based on N articles” and SourceChips when enabled
+
+5) Disabled state:
+- Evidence components do not render when evidence_mode_v1 is false
+
+Ensure all new elements have data-testid and tests assert them.
+
+============================================================
+DONE WHEN
+============================================================
+- Evidence Mode toggle exists and persists globally
+- Daily Brief shows sources/freshness/inputs without clutter
+- Policy page shows cluster sources + summary provenance
+- AI Insights shows prompt context and allows copying it
+- Headlines rows show source/published time when Evidence Mode ON
+- Works in mock/partial/live modes and tests pass
