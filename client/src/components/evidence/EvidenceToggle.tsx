@@ -14,6 +14,8 @@ export function EvidenceToggle({ enabled, onToggle, className }: EvidenceToggleP
       variant="outline"
       size="sm"
       onClick={onToggle}
+      aria-pressed={enabled}
+      aria-label={enabled ? "Disable evidence mode" : "Enable evidence mode"}
       className={cn(
         "h-7 gap-1.5 text-xs",
         enabled && "bg-primary/10 border-primary/30 text-primary",

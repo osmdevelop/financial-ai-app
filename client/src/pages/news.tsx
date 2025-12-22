@@ -28,7 +28,7 @@ import { EvidenceToggle, SourceChip } from "@/components/evidence";
 const POLL_NEWS_MS = 30_000;
 
 // News cluster component
-function NewsClusterCard({ cluster }: { cluster: NewsStreamResponse['clusters'][0] }) {
+function NewsClusterCard({ cluster, evidenceEnabled }: { cluster: NewsStreamResponse['clusters'][0]; evidenceEnabled?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   
   const visibleHeadlines = expanded ? cluster.headlines : cluster.headlines.slice(0, 3);
@@ -74,16 +74,28 @@ function NewsClusterCard({ cluster }: { cluster: NewsStreamResponse['clusters'][
             <div 
               key={headline.id}
               className={`p-3 rounded-lg border ${index === 0 ? 'bg-primary/5 border-primary/20' : 'bg-muted/20'}`}
+              data-testid={`cluster-headline-${headline.id}`}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <h4 className="font-semibold text-foreground leading-tight mb-1">
-                    {headline.title}
-                  </h4>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h4 className="font-semibold text-foreground leading-tight">
+                      {headline.title}
+                    </h4>
+                    {evidenceEnabled && headline.source && (
+                      <SourceChip label={headline.source} href={headline.url} />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 flex-wrap">
                     <span className="font-medium">{headline.source}</span>
                     <span>•</span>
                     <TimeAgo date={headline.published} />
+                    {evidenceEnabled && headline.symbols && headline.symbols.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span className="text-primary">Matched: {headline.symbols.slice(0, 3).join(", ")}</span>
+                      </>
+                    )}
                   </div>
                   {headline.summary && (
                     <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
@@ -377,7 +389,7 @@ export default function NewsStream() {
                 </div>
                 <div className="space-y-4">
                   {filteredClusters.map((cluster, index) => (
-                    <NewsClusterCard key={index} cluster={cluster} />
+                    <NewsClusterCard key={index} cluster={cluster} evidenceEnabled={evidenceEnabled} />
                   ))}
                 </div>
               </div>
