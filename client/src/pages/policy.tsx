@@ -6,16 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, TrendingUp, TrendingDown, Minus, ExternalLink, ChevronDown, ChevronUp, Target, Lightbulb } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { getSensitivityColor, getSensitivityTooltip } from "@/utils/policySensitivity";
 import { useFocusAssets } from "@/hooks/useFocusAssets";
 import type { TrumpIndexResponse, FedspeakResponse, PolicySensitivity } from "@shared/schema";
 import { Link } from "wouter";
 import { DataStatusBadge } from "@/components/ui/data-status-badge";
+import { useEvidenceMode } from "@/hooks/useEvidenceMode";
+import { EvidenceToggle, EvidencePanel, SourceChip, SourceChips } from "@/components/evidence";
+import type { EvidenceItem, EvidenceMeta } from "@/components/evidence";
 
 export default function Policy() {
   const { focusAssets } = useFocusAssets();
   const focusSymbols = focusAssets.map(a => a.symbol);
+  const { enabled: evidenceEnabled, toggle: toggleEvidence } = useEvidenceMode();
 
   const { 
     data: trumpIndex, 
@@ -67,6 +71,10 @@ export default function Policy() {
       />
       
       <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-8">
+        {/* Evidence Toggle */}
+        <div className="flex justify-end" data-testid="policy-evidence">
+          <EvidenceToggle enabled={evidenceEnabled} onToggle={toggleEvidence} />
+        </div>
         {/* Lens Relevance Strip - Show tip when no focus assets */}
         {focusSymbols.length === 0 && (
           <Card className="bg-primary/5 border-primary/20" data-testid="lens-policy-tip">
@@ -302,12 +310,37 @@ export default function Policy() {
                   <CardContent>
                     <div className="space-y-4" data-testid="policy-clusters">
                       {trumpIndex.clusters.map((cluster) => (
-                        <PolicyCluster
-                          key={cluster.id}
-                          cluster={cluster}
-                          allNews={trumpIndex.recentNews}
-                          getIntensityBadge={getIntensityBadge}
-                        />
+                        <div key={cluster.id}>
+                          <PolicyCluster
+                            cluster={cluster}
+                            allNews={trumpIndex.recentNews}
+                            getIntensityBadge={getIntensityBadge}
+                          />
+                          {/* Evidence Panel for each cluster */}
+                          {evidenceEnabled && (
+                            <EvidencePanel
+                              title={`${cluster.label || (cluster as any).topic || "Cluster"} Evidence`}
+                              data-testid="policy-cluster-evidence"
+                              items={[
+                                { kind: "note", label: "Based on", value: `${cluster.newsIds?.length || (cluster as any).articleIds?.length || (cluster as any).count || 0} articles` },
+                                { kind: "input", label: "Topic", value: cluster.label || cluster.topics?.join(", ") || "N/A" },
+                                ...(cluster.newsIds || (cluster as any).articleIds || []).slice(0, 3).map((id: string) => {
+                                  const article = trumpIndex.recentNews?.find((n: any) => n.id === id);
+                                  return {
+                                    kind: "source" as const,
+                                    label: "Article",
+                                    value: article?.title?.slice(0, 60) || id,
+                                    href: article?.url,
+                                  };
+                                }),
+                              ] as EvidenceItem[]}
+                              meta={{
+                                asOf: trumpIndex.lastUpdated ? format(new Date(trumpIndex.lastUpdated), "h:mm a") : undefined,
+                              } as EvidenceMeta}
+                              className="mt-2"
+                            />
+                          )}
+                        </div>
                       ))}
                     </div>
                   </CardContent>
@@ -463,9 +496,15 @@ export default function Policy() {
                       <div key={idx} className="border-b dark:border-gray-800 pb-4 last:border-0">
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <div className="flex-1">
-                            <div className="font-semibold dark:text-white">{quote.speaker}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold dark:text-white">{quote.speaker}</span>
+                              {evidenceEnabled && quote.url && (
+                                <SourceChip label="Source" href={quote.url} />
+                              )}
+                            </div>
                             <div className="text-xs text-muted-foreground">
                               {formatDistanceToNow(new Date(quote.date), { addSuffix: true })}
+                              {evidenceEnabled && ` • ${format(new Date(quote.date), "MMM d, h:mm a")}`}
                             </div>
                           </div>
                           <Badge className={getToneColor(quote.tone)}>
@@ -492,6 +531,22 @@ export default function Policy() {
                         <div className="text-xs text-muted-foreground mt-1">
                           Confidence: {(quote.confidence * 100).toFixed(0)}%
                         </div>
+                        
+                        {/* Evidence Panel for each quote */}
+                        {evidenceEnabled && (
+                          <EvidencePanel
+                            title="Quote Evidence"
+                            data-testid="policy-quote-evidence"
+                            items={[
+                              { kind: "source", label: "Speaker", value: quote.speaker },
+                              { kind: "timestamp", label: "Date", value: format(new Date(quote.date), "MMM d, yyyy h:mm a") },
+                              { kind: "input", label: "Tone", value: quote.tone },
+                              { kind: "input", label: "Confidence", value: `${(quote.confidence * 100).toFixed(0)}%` },
+                              ...(quote.impliedOdds ? [{ kind: "note" as const, label: "Derived", value: `Implied odds: ${quote.impliedOdds}` }] : []),
+                            ] as EvidenceItem[]}
+                            className="mt-2"
+                          />
+                        )}
                       </div>
                     ))}
                     {fedspeak.recentQuotes.length === 0 && (

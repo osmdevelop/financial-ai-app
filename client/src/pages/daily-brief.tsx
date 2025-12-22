@@ -48,6 +48,9 @@ import { DataStatusBadge } from "@/components/ui/data-status-badge";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useToast } from "@/hooks/use-toast";
+import { useEvidenceMode } from "@/hooks/useEvidenceMode";
+import { EvidenceToggle, EvidencePanel, SourceChip } from "@/components/evidence";
+import type { EvidenceItem, EvidenceMeta } from "@/components/evidence";
 import {
   captureDailySnapshot,
   getYesterdaySnapshot,
@@ -76,6 +79,7 @@ export default function DailyBrief() {
   
   const shareCardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { enabled: evidenceEnabled, toggle: toggleEvidence } = useEvidenceMode();
   
   const { focusAssets, isLoading: focusAssetsLoading } = useFocusAssets();
   const lensContext = useTraderLensContext();
@@ -595,6 +599,7 @@ export default function DailyBrief() {
                 </Badge>
               </Link>
             )}
+            <EvidenceToggle enabled={evidenceEnabled} onToggle={toggleEvidence} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -656,6 +661,27 @@ export default function DailyBrief() {
               )}
             </CardContent>
           </Card>
+          
+          {/* Evidence Panel for Market Call */}
+          {evidenceEnabled && !isLoading && (
+            <EvidencePanel
+              title="Market Call Evidence"
+              data-testid="daily-brief-evidence-call"
+              items={[
+                { kind: "timestamp", label: "As of", value: sentiment?.as_of ? format(new Date(sentiment.as_of), "MMM d, h:mm a") : "N/A" },
+                { kind: "input", label: "Regime", value: regimeSnapshot ? `${regimeSnapshot.regime} (${regimeSnapshot.confidence}% confidence)` : "Unavailable" },
+                { kind: "input", label: "Policy Risk", value: trumpIndex ? `Trump Z: ${trumpIndex.zScore?.toFixed(2) ?? "N/A"}` : "Unavailable" },
+                { kind: "input", label: "Fed Tone", value: fedspeak ? `${fedspeak.currentTone} (${fedspeak.toneScore?.toFixed(2) ?? "N/A"})` : "Unavailable" },
+                { kind: "input", label: "Volatility", value: sentiment ? `Score: ${sentiment.score ?? "N/A"}` : "Unavailable" },
+              ] as EvidenceItem[]}
+              meta={{
+                asOf: sentiment?.as_of ? format(new Date(sentiment.as_of), "h:mm a") : undefined,
+                isMock: !!isMockData,
+                missingInputs: lensContext.meta.missing || [],
+              } as EvidenceMeta}
+              className="mt-2"
+            />
+          )}
         </section>
 
         {/* SECTION 2: What Changed (or Didn't) */}
@@ -698,6 +724,32 @@ export default function DailyBrief() {
               )}
             </CardContent>
           </Card>
+          
+          {/* Evidence Panel for What Changed */}
+          {evidenceEnabled && !isLoading && (
+            <EvidencePanel
+              title="What Changed Evidence"
+              data-testid="daily-brief-evidence-changes"
+              items={[
+                { 
+                  kind: "source", 
+                  label: "Comparison", 
+                  value: hasHistoryData 
+                    ? `History snapshot (${yesterdaySnapshot?.date || "N/A"})` 
+                    : "API diff (no history yet)" 
+                },
+                { kind: "input", label: "Fields compared", value: "regime, fed tone, policy, volatility, conditions" },
+                ...(whatChanged.length === 0 
+                  ? [{ kind: "note" as const, label: "Status", value: "No material changes detected" }]
+                  : whatChanged.map((c, i) => ({ kind: "input" as const, label: `Change ${i + 1}`, value: c }))
+                ),
+              ] as EvidenceItem[]}
+              meta={{
+                isMock: !!isMockData,
+              } as EvidenceMeta}
+              className="mt-2"
+            />
+          )}
         </section>
 
         {/* SECTION 3: Your Lens Impact */}
@@ -805,14 +857,24 @@ export default function DailyBrief() {
                       className="pb-3 last:pb-0 border-b last:border-0 border-border/50"
                       data-testid={`headline-item-${idx}`}
                     >
-                      <p className="text-sm font-medium leading-snug mb-1">{h.title}</p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-sm font-medium leading-snug">{h.title}</p>
+                        {evidenceEnabled && h.source && (
+                          <SourceChip label={h.source} />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                           {getHeadlineCategory(h)}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
                           {h.source || "Market news"}
                         </span>
+                        {evidenceEnabled && h.symbols?.length > 0 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Matched: {h.symbols.slice(0, 3).join(", ")}
+                          </span>
+                        )}
                       </div>
                     </li>
                   ))}
@@ -820,6 +882,23 @@ export default function DailyBrief() {
               )}
             </CardContent>
           </Card>
+          
+          {/* Evidence Panel for Headlines */}
+          {evidenceEnabled && !headlinesLoading && lensHeadlines.length > 0 && (
+            <EvidencePanel
+              title="Headlines Evidence"
+              data-testid="daily-brief-evidence-headlines"
+              items={lensHeadlines.map((h: any, idx: number) => ({
+                kind: "source" as const,
+                label: `Headline ${idx + 1}`,
+                value: `${h.source || "Unknown"} - ${h.published ? format(new Date(h.published), "h:mm a") : "N/A"}`,
+              }))}
+              meta={{
+                isMock: !!isMockData,
+              } as EvidenceMeta}
+              className="mt-2"
+            />
+          )}
         </section>
 
         {/* SECTION 5: What to Watch Next */}
@@ -850,6 +929,23 @@ export default function DailyBrief() {
               )}
             </CardContent>
           </Card>
+          
+          {/* Evidence Panel for Watch Next */}
+          {evidenceEnabled && !econLoading && watchNext && (
+            <EvidencePanel
+              title="Watch Next Evidence"
+              data-testid="daily-brief-evidence-watchnext"
+              items={[
+                { kind: "source", label: "Source", value: "Economic Calendar" },
+                { kind: "timestamp", label: "Scheduled", value: watchNext.time },
+                { kind: "input", label: "Impact", value: watchNext.impact },
+              ] as EvidenceItem[]}
+              meta={{
+                isMock: !!isMockData,
+              } as EvidenceMeta}
+              className="mt-2"
+            />
+          )}
         </section>
 
         {/* SECTION 6: AI Summary (Collapsible, Collapsed by Default) */}

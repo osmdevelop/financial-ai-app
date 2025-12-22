@@ -28,6 +28,8 @@ import {
   getImpactIcon,
   TimeAgo,
 } from "@/lib/news-utils";
+import { useEvidenceMode } from "@/hooks/useEvidenceMode";
+import { EvidenceToggle, SourceChip } from "@/components/evidence";
 
 const POLL_HEADLINES_MS = 30_000;
 
@@ -53,6 +55,7 @@ export default function NewsStream() {
   const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [policyFilter, setPolicyFilter] = useState<"all" | "policy">("all");
+  const { enabled: evidenceEnabled, toggle: toggleEvidence } = useEvidenceMode();
 
   // Focus assets & watchlist
   const { data: focusData } = useQuery({
@@ -151,6 +154,7 @@ export default function NewsStream() {
               data-testid="input-search"
             />
             <div className="flex items-center gap-3">
+              <EvidenceToggle enabled={evidenceEnabled} onToggle={toggleEvidence} />
               <Button
                 variant="outline"
                 size="sm"
@@ -309,15 +313,23 @@ export default function NewsStream() {
                         </div>
 
                         {/* Timeline content */}
-                        <div className="ml-12">
+                        <div className="ml-12" data-testid="headlines-evidence-row">
                           <Card className="hover:shadow-md transition-all duration-200 border-l-4 border-l-primary/20">
                             <CardContent className="p-4">
                               <div className="flex items-start justify-between gap-4 mb-3">
                                 <div className="flex-1">
-                                  <h3 className="font-semibold text-foreground leading-tight mb-2">
-                                    {headline.title}
-                                  </h3>
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <div className="flex items-start justify-between gap-2 mb-2">
+                                    <h3 className="font-semibold text-foreground leading-tight">
+                                      {headline.title}
+                                    </h3>
+                                    {evidenceEnabled && (headline as any).source && (
+                                      <SourceChip 
+                                        label={(headline as any).source} 
+                                        href={(headline as any).url}
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                                     <span className="font-medium">
                                       {(headline as any).source}
                                     </span>
@@ -329,6 +341,14 @@ export default function NewsStream() {
                                     <span>
                                       <TimeAgo date={headline.published} />
                                     </span>
+                                    {evidenceEnabled && (headline as any).symbols?.length > 0 && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="text-primary">
+                                          Matched: {(headline as any).symbols.slice(0, 3).join(", ")}
+                                        </span>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               </div>

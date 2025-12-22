@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Sparkles, Info, TrendingUp, Shield, Activity, BarChart3, Target, Lightbulb } from "lucide-react";
+import { Brain, Sparkles, Info, TrendingUp, Shield, Activity, BarChart3, Target, Lightbulb, Copy, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
 import { useFocusAssets } from "@/hooks/useFocusAssets";
@@ -19,13 +19,19 @@ import {
 } from "@/components/ui/tooltip";
 import { Link } from "wouter";
 import { DataStatusBadge } from "@/components/ui/data-status-badge";
+import { useEvidenceMode } from "@/hooks/useEvidenceMode";
+import { EvidenceToggle, EvidencePanel } from "@/components/evidence";
+import type { EvidenceItem, EvidenceMeta } from "@/components/evidence";
 
 export default function Insights() {
   const [inputText, setInputText] = useState(
     "Analyze the recent performance of tech stocks and their impact on my portfolio diversification strategy."
   );
   const [insights, setInsights] = useState<AIInsightResponse | null>(null);
+  const [lastPromptContext, setLastPromptContext] = useState<string>("");
+  const [contextCopied, setContextCopied] = useState(false);
   const { toast } = useToast();
+  const { enabled: evidenceEnabled, toggle: toggleEvidence } = useEvidenceMode();
 
   const {
     snapshot: regimeSnapshot,
@@ -107,7 +113,59 @@ export default function Insights() {
     }
     
     const enrichedPrompt = buildPromptWithRegimeContext(inputText);
+    setLastPromptContext(enrichedPrompt);
     insightsMutation.mutate(enrichedPrompt);
+  };
+
+  const handleCopyContext = async () => {
+    try {
+      await navigator.clipboard.writeText(lastPromptContext || buildPromptWithRegimeContext(inputText));
+      setContextCopied(true);
+      setTimeout(() => setContextCopied(false), 2000);
+      toast({
+        title: "Context copied",
+        description: "Prompt context copied to clipboard.",
+      });
+    } catch (error) {
+      toast({
+        title: "Copy failed",
+        description: "Could not copy context to clipboard.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const buildContextSummary = (): EvidenceItem[] => {
+    const items: EvidenceItem[] = [];
+    
+    if (focusSymbols.length > 0) {
+      items.push({ kind: "input", label: "Focus Assets", value: focusSymbols.join(", ") });
+    }
+    
+    if (regimeSnapshot) {
+      items.push({ kind: "input", label: "Regime", value: `${regimeSnapshot.regime} (${regimeSnapshot.confidence}% confidence)` });
+      regimeSnapshot.drivers.slice(0, 3).forEach((d) => {
+        items.push({ kind: "input", label: d.label, value: `${d.direction} (${d.strength})` });
+      });
+    }
+    
+    if (trumpIndex) {
+      items.push({ kind: "input", label: "Policy Risk", value: `Trump Z: ${trumpIndex.zScore?.toFixed(2) ?? "N/A"}` });
+    }
+    
+    if (fedspeak) {
+      items.push({ kind: "input", label: "Fed Tone", value: `${fedspeak.currentTone} (${fedspeak.toneScore?.toFixed(2) ?? "N/A"})` });
+    }
+    
+    if (marketSentiment) {
+      items.push({ kind: "input", label: "Sentiment", value: `Score: ${marketSentiment.score ?? "N/A"}` });
+    }
+    
+    if (regimeMissingInputs.length > 0) {
+      items.push({ kind: "note", label: "Missing", value: regimeMissingInputs.join(", ") });
+    }
+    
+    return items;
   };
 
   return (
@@ -119,12 +177,55 @@ export default function Insights() {
       
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl">
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold text-foreground mb-2">AI Market Insights</h3>
-            <p className="text-sm text-muted-foreground">
-              Get AI-powered analysis and insights about market trends and your portfolio
-            </p>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">AI Market Insights</h3>
+              <p className="text-sm text-muted-foreground">
+                Get AI-powered analysis and insights about market trends and your portfolio
+              </p>
+            </div>
+            <EvidenceToggle enabled={evidenceEnabled} onToggle={toggleEvidence} />
           </div>
+          
+          {/* Evidence Context Panel */}
+          {evidenceEnabled && (
+            <div className="mb-6 space-y-4" data-testid="insights-evidence">
+              <EvidencePanel
+                title="Prompt Context Used"
+                data-testid="insights-context-panel"
+                items={[
+                  { kind: "input", label: "Model", value: "GPT-4o" },
+                  ...buildContextSummary(),
+                ]}
+                meta={{
+                  isMock: regimeIsMock,
+                  missingInputs: regimeMissingInputs,
+                } as EvidenceMeta}
+                defaultOpen={true}
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyContext}
+                  className="h-7 text-xs gap-1"
+                  data-testid="insights-copy-context"
+                >
+                  {contextCopied ? (
+                    <>
+                      <Check className="h-3 w-3" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3" />
+                      Copy context
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
           
           {/* Lens Tip - Show when no focus assets */}
           {focusSymbols.length === 0 && (
