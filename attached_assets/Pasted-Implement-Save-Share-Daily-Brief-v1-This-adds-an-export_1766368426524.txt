@@ -1,0 +1,114 @@
+Implement “Save & Share Daily Brief” (v1).
+This adds an exportable, shareable snapshot of the Daily Brief in a clean format.
+
+Constraints:
+- No authentication
+- No backend changes required
+- No paid services
+- Keep UI minimal and consistent
+- Export must work with local-only data (mock/partial supported)
+- Do NOT export any private keys or sensitive info (none exists)
+- Must include tests + data-testid
+
+============================================================
+GOAL
+============================================================
+1) Add a “Share” button to the Daily Brief page that exports the brief as:
+   - PNG image (required)
+   - (Optional) PDF later; not in this prompt unless trivial
+2) The export should include:
+   - App name + date + time + timezone
+   - Today’s Market Call
+   - What Changed (max 3 bullets or “No major changes”)
+   - Lens Impact (or “Add focus assets”)
+   - Headlines That Matter (max 3)
+   - What to Watch Next (1 item)
+   - DataStatus summary (Live/Mock/Partial + timestamp)
+   - Informational disclaimer line
+3) The exported image should be:
+   - Clean, high-contrast, readable
+   - Uses a dedicated “ShareCard” layout optimized for screenshot
+   - Always includes mock/partial labels if applicable
+
+============================================================
+IMPLEMENTATION APPROACH
+============================================================
+A) Create a dedicated component:
+- <DailyBriefShareCard />
+- It renders the same brief content but in a fixed-width layout (e.g. 900px),
+  optimized for image export.
+- It should accept data props (no fetching inside).
+
+B) Rendering strategy:
+- When user clicks “Share”:
+  1) Render DailyBriefShareCard inside a hidden/offscreen container
+  2) Use a client-side DOM-to-image approach to export PNG:
+     - Prefer a lightweight library already available in project
+     - If not available, add one common choice (html-to-image or dom-to-image)
+  3) Download the PNG (filename: OSMFin_DailyBrief_YYYY-MM-DD.png)
+
+C) Add a small toast after export:
+- “Daily Brief exported”
+
+D) Add “Copy text summary” secondary action:
+- Copies a short plaintext version to clipboard:
+  - Date
+  - Market call
+  - 3 key drivers
+  - Watch next
+  - Data status
+
+============================================================
+UI CHANGES (DAILY BRIEF)
+============================================================
+- Add a “Share” button near the top-right of Daily Brief (or near AI summary toggle).
+- Add a dropdown menu:
+  - “Export as Image”
+  - “Copy Text Summary”
+- Add data-testid:
+  - daily-brief-share
+  - daily-brief-export-image
+  - daily-brief-copy-text
+
+============================================================
+SHARE CARD DESIGN (STRICT)
+============================================================
+The exported card should include the following sections (in order):
+1) Header row: “OSM Fin — Daily Brief” + Date + Time
+2) Market Call row with badge (Green/Yellow/Red)
+3) What Changed (3 bullets max; else “No major changes”)
+4) Lens Impact (2 bullets max; else prompt)
+5) Headlines That Matter (3 max, each with tag)
+6) Watch Next (1 item)
+7) Footer row:
+   - DataStatusBadge summary (Live/Mock/Partial)
+   - “As of …”
+   - “Informational only. Not investment advice.”
+
+No charts. No long text. No scrolling.
+
+============================================================
+ERROR HANDLING
+============================================================
+- If export fails, show toast: “Export failed. Try again.”
+- If data is missing, render placeholders gracefully.
+- If content is mock/partial, show clear label in both UI and export.
+
+============================================================
+TESTS
+============================================================
+Add tests (RTL/Vitest):
+1) Daily Brief shows Share button and menu items.
+2) Clicking “Copy Text Summary” calls clipboard API with expected content (mock clipboard).
+3) Export flow:
+   - Mock the image export function and assert it’s called with the ShareCard node.
+4) DataStatus label is present on ShareCard when meta.isMock or partial.
+
+============================================================
+DONE WHEN
+============================================================
+- User can export a clean PNG of the Daily Brief.
+- User can copy a concise text version to clipboard.
+- Export includes date/time and data status labels.
+- Works with live/mock/partial data without crashing.
+- Tests pass.
