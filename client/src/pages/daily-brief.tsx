@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { apiRequest } from "@/lib/queryClient";
@@ -12,6 +12,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMarketRegimeSnapshot } from "@/hooks/useMarketRegimeSnapshot";
 import { useFocusAssets } from "@/hooks/useFocusAssets";
 import { useTraderLensContext } from "@/hooks/useTraderLensContext";
@@ -30,6 +36,9 @@ import {
   Bell,
   Save,
   History,
+  Share2,
+  Image,
+  Copy,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { Link } from "wouter";
@@ -38,6 +47,7 @@ import { AssetPickerModal } from "@/components/trader-lens/AssetPickerModal";
 import { DataStatusBadge } from "@/components/ui/data-status-badge";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useToast } from "@/hooks/use-toast";
 import {
   captureDailySnapshot,
   getYesterdaySnapshot,
@@ -46,6 +56,8 @@ import {
   type DailySnapshot,
   type CaptureContext,
 } from "@/lib/history-storage";
+import { DailyBriefShareCard, generateTextSummary, type ShareCardData } from "@/components/daily-brief/DailyBriefShareCard";
+import { toPng } from "html-to-image";
 
 interface DailySummaryResponse {
   summary: string[];
@@ -60,6 +72,10 @@ export default function DailyBrief() {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [snapshotSaved, setSnapshotSaved] = useState(hasCapturedToday());
   const [yesterdaySnapshot, setYesterdaySnapshot] = useState<DailySnapshot | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  
+  const shareCardRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
   
   const { focusAssets, isLoading: focusAssetsLoading } = useFocusAssets();
   const lensContext = useTraderLensContext();
@@ -210,6 +226,7 @@ export default function DailyBrief() {
 
   const generateMarketCallText = generateMarketCall.text;
   const generateMarketCallLevel = generateMarketCall.level;
+  const hasEssentialData = !!generateMarketCallText && generateMarketCallText !== "Market conditions are being assessed.";
 
   // Build current snapshot for comparison
   const currentTodaySnapshot = useMemo((): DailySnapshot | null => {
@@ -475,6 +492,82 @@ export default function DailyBrief() {
     return styles[level];
   };
 
+  const shareCardData = useMemo((): ShareCardData => {
+    const now = new Date();
+    const dataStatus = isMockData ? "mock" : (lensContext.meta.missing?.length > 0 ? "partial" : "live");
+    
+    return {
+      date: now,
+      marketCall: {
+        text: generateMarketCall.text,
+        level: generateMarketCall.level,
+      },
+      whatChanged: whatChanged,
+      lensImpact: lensExposures,
+      focusAssets: focusSymbols,
+      headlines: lensHeadlines.map((h: any) => ({
+        title: h.title,
+        category: getHeadlineCategory(h),
+      })),
+      watchNext: watchNext,
+      dataStatus: dataStatus as "live" | "mock" | "partial",
+      dataTimestamp: sentiment?.as_of 
+        ? format(new Date(sentiment.as_of), "MMM d, h:mm a")
+        : format(now, "MMM d, h:mm a"),
+    };
+  }, [generateMarketCall, whatChanged, lensExposures, focusSymbols, lensHeadlines, watchNext, isMockData, lensContext.meta.missing, sentiment, getHeadlineCategory]);
+
+  const handleExportImage = async () => {
+    if (!shareCardRef.current) return;
+    
+    setIsExporting(true);
+    try {
+      const dataUrl = await toPng(shareCardRef.current, {
+        quality: 1,
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+      });
+      
+      const link = document.createElement("a");
+      link.download = `OSMFin_DailyBrief_${format(new Date(), "yyyy-MM-dd")}.png`;
+      link.href = dataUrl;
+      link.click();
+      
+      toast({
+        title: "Daily Brief exported",
+        description: "Image saved to your downloads folder.",
+      });
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({
+        title: "Export failed",
+        description: "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleCopyText = async () => {
+    try {
+      const textSummary = generateTextSummary(shareCardData);
+      await navigator.clipboard.writeText(textSummary);
+      
+      toast({
+        title: "Copied to clipboard",
+        description: "Text summary ready to paste.",
+      });
+    } catch (error) {
+      console.error("Copy failed:", error);
+      toast({
+        title: "Copy failed",
+        description: "Try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header
@@ -489,18 +582,51 @@ export default function DailyBrief() {
             <Info className="h-3 w-3" />
             <span>Informational only. Not investment advice.</span>
           </div>
-          {unreadCount > 0 && (
-            <Link href="/notifications">
-              <Badge 
-                variant="secondary" 
-                className="flex items-center gap-1 cursor-pointer hover:bg-secondary/80"
-                data-testid="alerts-chip"
-              >
-                <Bell className="h-3 w-3" />
-                {unreadCount} new alert{unreadCount !== 1 ? "s" : ""}
-              </Badge>
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <Link href="/notifications">
+                <Badge 
+                  variant="secondary" 
+                  className="flex items-center gap-1 cursor-pointer hover:bg-secondary/80"
+                  data-testid="alerts-chip"
+                >
+                  <Bell className="h-3 w-3" />
+                  {unreadCount} new alert{unreadCount !== 1 ? "s" : ""}
+                </Badge>
+              </Link>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 gap-1"
+                  disabled={!hasEssentialData || isExporting}
+                  data-testid="daily-brief-share"
+                >
+                  <Share2 className="h-3 w-3" />
+                  Share
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  onClick={handleExportImage}
+                  disabled={isExporting}
+                  data-testid="daily-brief-export-image"
+                >
+                  <Image className="h-4 w-4 mr-2" />
+                  Export as Image
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={handleCopyText}
+                  data-testid="daily-brief-copy-text"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Text Summary
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         {/* SECTION 1: Today's Market Call (HERO) */}
@@ -833,6 +959,16 @@ export default function DailyBrief() {
         open={assetPickerOpen}
         onOpenChange={setAssetPickerOpen}
       />
+      
+      {/* Hidden Share Card for Export */}
+      <div 
+        className="fixed left-[-9999px] top-[-9999px]" 
+        aria-hidden="true"
+      >
+        <div ref={shareCardRef}>
+          <DailyBriefShareCard data={shareCardData} />
+        </div>
+      </div>
     </div>
   );
 }
