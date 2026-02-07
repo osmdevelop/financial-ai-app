@@ -9,8 +9,11 @@ import type {
   UpcomingEarning,
   EarningsHistory,
   EarningsPrediction,
+  EarningsTranscriptSummary,
   EconomicEvent,
   EconomicImpact,
+  EventImpactStats,
+  EventImpactPreviewItem,
   AssetSearchResult,
   AssetSheetData,
   WatchlistItem,
@@ -43,18 +46,30 @@ import type {
   // Module D types
   AssetOverviewResponse,
   AssetBriefResponse,
+  AssetNarrativeResponse,
   // Module E types
   TrumpIndexResponse,
   FedspeakResponse,
   // Module F types
   MarketRegimeSnapshot,
+  CrossAssetRegimeResponse,
+  // Options signal lite
+  OptionsSignalsResponse,
+  // Crypto on-chain decision signals
+  OnChainSignalsResponse,
 } from "@shared/schema";
 
 export const api = {
-  // AI Insights
+  // AI Insights (75s timeout so the button doesn't stay stuck)
   async getInsights(text: string): Promise<AIInsightResponse> {
-    const res = await apiRequest("POST", "/api/insights/explain", { text });
-    return res.json();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 75_000);
+    try {
+      const res = await apiRequest("POST", "/api/insights/explain", { text }, controller.signal);
+      return res.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
   },
 
   // Market Sentiment
@@ -117,6 +132,30 @@ export const api = {
 
   async predictEarnings(symbol: string): Promise<EarningsPrediction> {
     const res = await apiRequest("POST", "/api/earnings/predict", { symbol });
+    return res.json();
+  },
+
+  async getEarningsTranscriptSummary(symbol: string): Promise<EarningsTranscriptSummary> {
+    const res = await apiRequest("GET", `/api/earnings/transcript-summary?symbol=${encodeURIComponent(symbol)}`);
+    return res.json();
+  },
+
+  async analyzeEarningsTranscript(request: {
+    symbol?: string;
+    transcriptText: string;
+    date?: string;
+  }): Promise<EarningsTranscriptSummary> {
+    const res = await apiRequest("POST", "/api/earnings/analyze-transcript", request);
+    return res.json();
+  },
+
+  async getOptionsSignals(symbol: string): Promise<OptionsSignalsResponse> {
+    const res = await apiRequest("GET", `/api/options/signals?symbol=${encodeURIComponent(symbol)}`);
+    return res.json();
+  },
+
+  async getOnChainSignals(): Promise<OnChainSignalsResponse> {
+    const res = await apiRequest("GET", "/api/crypto/onchain-signals");
     return res.json();
   },
 
@@ -204,8 +243,8 @@ export const api = {
     return res.json();
   },
 
-  // Market Recap
-  async getMarketRecap(): Promise<MarketRecap> {
+  // Market Recap. Returns { data, meta: { isMock } } for Data Mode.
+  async getMarketRecap(): Promise<{ data: MarketRecap; meta: { isMock: boolean } }> {
     const res = await apiRequest("GET", "/api/recap/daily");
     return res.json();
   },
@@ -284,6 +323,21 @@ export const api = {
     return res.json();
   },
 
+  // Event Impact Engine
+  async getEventImpact(eventType?: string, horizon: number = 48): Promise<{ stats: EventImpactStats[]; horizon: number }> {
+    const params = new URLSearchParams();
+    if (eventType) params.set("eventType", eventType);
+    params.set("horizon", String(horizon));
+    const res = await apiRequest("GET", `/api/events/impact?${params}`);
+    return res.json();
+  },
+
+  async getEventImpactForAsset(symbol: string, horizon: number = 48): Promise<{ symbol: string; horizon: number; stats: EventImpactStats[] }> {
+    const params = new URLSearchParams({ symbol, horizon: String(horizon) });
+    const res = await apiRequest("GET", `/api/events/impact/for-asset?${params}`);
+    return res.json();
+  },
+
   async postEventsTranslate(request: EventTranslateRequest): Promise<{ data: EventTranslateResponse; meta: FreshnessMetadata }> {
     const res = await apiRequest("POST", "/api/events/translate", request);
     return res.json();
@@ -313,6 +367,18 @@ export const api = {
     return res.json();
   },
 
+  async getAssetNarrative(
+    symbol: string,
+    days: number = 7,
+    options?: { changePct?: number; period?: string }
+  ): Promise<AssetNarrativeResponse> {
+    const params = new URLSearchParams({ symbol, days: String(days) });
+    if (options?.changePct != null) params.set("changePct", String(options.changePct));
+    if (options?.period) params.set("period", options.period);
+    const res = await apiRequest("GET", `/api/asset/narrative?${params}`);
+    return res.json();
+  },
+
   // MODULE E: Policy & Political Indexes
   async getTrumpIndex(): Promise<TrumpIndexResponse> {
     const res = await apiRequest("GET", "/api/policy/trump-index");
@@ -324,9 +390,28 @@ export const api = {
     return res.json();
   },
 
+  async getPolicyNewsIntensity(): Promise<{
+    policyNewsIntensity: number;
+    policyHeadlineCount: number;
+    asOf: string;
+  }> {
+    const res = await apiRequest("GET", "/api/policy/news-intensity");
+    return res.json();
+  },
+
   // MODULE F: Market Regime Engine
   async getMarketRegimeSnapshot(): Promise<MarketRegimeSnapshot> {
     const res = await apiRequest("GET", "/api/regime/snapshot");
+    return res.json();
+  },
+
+  async getMarketVolatility(days = 30): Promise<{ vix: number | null; spyDailyCloses: number[] | null; asOf: string }> {
+    const res = await apiRequest("GET", `/api/market/volatility?days=${days}`);
+    return res.json();
+  },
+
+  async getCrossAssetRegime(): Promise<CrossAssetRegimeResponse> {
+    const res = await apiRequest("GET", "/api/regime/cross-asset");
     return res.json();
   },
 

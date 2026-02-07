@@ -5,8 +5,8 @@ import type { Alert } from "@shared/schema";
 // Alert evaluator that checks for triggered alerts
 export class AlertEvaluator {
   private lastPolicyData: {
-    trumpZScore: number;
-    fedspeakTone: string;
+    trumpZScore?: number;
+    fedspeakTone?: string;
   } | null = null;
 
   async evaluateAlerts(): Promise<void> {
@@ -53,8 +53,8 @@ export class AlertEvaluator {
       message = `Trump Index moved below ${alert.threshold.toFixed(2)}σ (current: ${currentZScore.toFixed(2)}σ)`;
     } else if (alert.direction === "crosses") {
       // Check if we have previous data to compare
-      if (this.lastPolicyData && this.lastPolicyData.trumpZScore !== currentZScore) {
-        const prevZScore = this.lastPolicyData.trumpZScore;
+      const prevZScore = this.lastPolicyData?.trumpZScore;
+      if (prevZScore !== undefined && prevZScore !== currentZScore) {
         const crossed =
           (prevZScore < alert.threshold && currentZScore >= alert.threshold) ||
           (prevZScore > alert.threshold && currentZScore <= alert.threshold);
@@ -76,7 +76,7 @@ export class AlertEvaluator {
     }
 
     // Update last policy data for next evaluation
-    this.lastPolicyData = { ...this.lastPolicyData, trumpZScore: currentZScore };
+    this.lastPolicyData = { ...this.lastPolicyData ?? {}, trumpZScore: currentZScore };
   }
 
   private async evaluateFedspeakRegimeAlert(alert: Alert): Promise<void> {
@@ -114,7 +114,7 @@ export class AlertEvaluator {
     }
 
     // Update last policy data
-    this.lastPolicyData = { ...this.lastPolicyData, fedspeakTone: currentTone };
+    this.lastPolicyData = { ...this.lastPolicyData ?? {}, fedspeakTone: currentTone };
   }
 
   async startEvaluationLoop(intervalMinutes: number = 5): Promise<void> {

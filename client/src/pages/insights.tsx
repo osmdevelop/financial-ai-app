@@ -74,10 +74,11 @@ export default function Insights() {
     onSuccess: (data) => {
       setInsights(data);
     },
-    onError: () => {
+    onError: (err: unknown) => {
+      const isTimeout = err instanceof Error && err.name === "AbortError";
       toast({
         title: "Failed to generate insights",
-        description: "Please try again later.",
+        description: isTimeout ? "Request took too long. Try again or use a shorter question." : "Please try again later.",
         variant: "destructive",
       });
     },
@@ -334,13 +335,13 @@ export default function Insights() {
                       variant="outline" 
                       className="text-xs"
                     >
-                      {driver.label}: {driver.value}
+                      {driver.label}: {driver.weight != null ? driver.weight : driver.explanation}
                     </Badge>
                   ))}
                 </div>
                 
                 <p className="text-xs text-muted-foreground mt-2">
-                  Updated: {new Date(marketSentiment.as_of || Date.now()).toLocaleTimeString()}
+                  Updated: {new Date(marketSentiment.lastUpdated || marketSentiment.timestamp || Date.now()).toLocaleTimeString()}
                 </p>
               </CardContent>
             </Card>
@@ -467,9 +468,9 @@ export default function Insights() {
                     )}
                   </span>
                   <Button 
+                    variant="default"
                     onClick={handleExplain}
                     disabled={insightsMutation.isPending}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
                     data-testid="button-explain"
                   >
                     <Sparkles className="mr-2 h-4 w-4" />

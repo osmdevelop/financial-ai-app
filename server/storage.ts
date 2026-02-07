@@ -84,6 +84,11 @@ export interface IStorage {
   getFocusAssets(profileId?: string): Promise<FocusAsset[]>;
   addFocusAsset(asset: InsertFocusAsset, profileId?: string): Promise<FocusAsset>;
   removeFocusAsset(symbol: string, profileId?: string): Promise<void>;
+
+  // Portfolio (stub – no DB backing yet)
+  getPortfolios(): Promise<{ id: string }[]>;
+  getPortfolioSummary(portfolioId: string): Promise<{ totalValue: number; dailyPnL: number; dailyPnLPercent: number; topMover?: { symbol: string; change: number; changePercent: number } }>;
+  getPortfolioPositionsWithPrices(portfolioId: string): Promise<{ symbol: string; assetType: string }[]>;
   
   // Initialize sample data
   initializeSampleData(): Promise<void>;
@@ -665,6 +670,18 @@ export class DatabaseStorage implements IStorage {
     if (index !== -1) {
       this.focusAssets.splice(index, 1);
     }
+  }
+
+  async getPortfolios(): Promise<{ id: string }[]> {
+    return [];
+  }
+
+  async getPortfolioSummary(_portfolioId: string): Promise<{ totalValue: number; dailyPnL: number; dailyPnLPercent: number; topMover?: { symbol: string; change: number; changePercent: number } }> {
+    return { totalValue: 0, dailyPnL: 0, dailyPnLPercent: 0 };
+  }
+
+  async getPortfolioPositionsWithPrices(_portfolioId: string): Promise<{ symbol: string; assetType: string }[]> {
+    return [];
   }
 
   async initializeSampleData(): Promise<void> {

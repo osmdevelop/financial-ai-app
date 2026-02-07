@@ -7,7 +7,7 @@ import {
 import { AlertTriangle, CheckCircle, Clock, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type DataStatus = "live" | "cached" | "mock" | "partial" | "unavailable";
+export type DataStatus = "live" | "cached" | "mock" | "partial" | "unavailable" | "demo";
 
 interface DataStatusBadgeProps {
   status: DataStatus;
@@ -48,6 +48,11 @@ const statusConfig: Record<
     label: "Unavailable",
     icon: <AlertTriangle className="h-3 w-3" />,
     className: "bg-red-500/10 text-red-600 border-red-500/30",
+  },
+  demo: {
+    label: "Demo",
+    icon: <Database className="h-3 w-3" />,
+    className: "bg-amber-500/10 text-amber-600 border-amber-500/30",
   },
 };
 

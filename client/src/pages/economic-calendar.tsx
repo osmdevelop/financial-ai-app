@@ -10,9 +10,11 @@ import { Calendar, AlertTriangle, TrendingUp, Globe } from "lucide-react";
 import { format } from "date-fns";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { DataStatusBadge } from "@/components/ui/data-status-badge";
+import { useDataModeContext } from "@/components/providers/data-mode-provider";
 
 export default function EconomicCalendar() {
   const [timeframe, setTimeframe] = useState<string>("7");
+  const { dataMode } = useDataModeContext();
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["/api/econ/upcoming", timeframe],
@@ -51,6 +53,16 @@ export default function EconomicCalendar() {
     }
   };
 
+  type ImpactPreviewItem = { assetId: string; meanMovePct: number; percentile10Pct?: number; percentile90Pct?: number; horizonHours: number };
+  const formatImpactPreview = (item: ImpactPreviewItem) => {
+    const sign = item.meanMovePct >= 0 ? "+" : "";
+    const band =
+      item.percentile10Pct != null && item.percentile90Pct != null
+        ? ` (${item.percentile10Pct.toFixed(1)}% to ${item.percentile90Pct.toFixed(1)}%)`
+        : "";
+    return `${item.assetId} ${sign}${item.meanMovePct.toFixed(1)}%${band} over ${item.horizonHours}h`;
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header 
@@ -79,7 +91,7 @@ export default function EconomicCalendar() {
             Refresh
           </Button>
           
-          {isMock && (
+          {dataMode === "demo" && isMock && (
             <Badge
               variant="outline"
               className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30"
@@ -123,9 +135,20 @@ export default function EconomicCalendar() {
               </Card>
             ))}
           </div>
+        ) : dataMode === "live" && isMock ? (
+          <EmptyStateCard
+            title="No data available"
+            description="Sample calendar data is not shown in Live mode. Switch to Demo in Settings or try Refresh."
+            actionLabel="Refresh"
+            onAction={() => refetch()}
+            icon={<Calendar className="h-10 w-10 text-muted-foreground" />}
+            data-testid="economic-empty-live"
+          />
         ) : (
           <div className="space-y-4">
-            {events.map((event) => (
+            {events.map((event) => {
+              const impactPreview = (event as { impactPreview?: ImpactPreviewItem[] }).impactPreview;
+              return (
               <Card key={event.id} className="hover:shadow-md transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
@@ -176,22 +199,26 @@ export default function EconomicCalendar() {
                     </div>
                   )}
 
-                  {/* Impact Analysis Placeholder */}
-                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <div className="text-sm font-medium mb-2">Market Impact Analysis</div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      AI-powered impact analysis coming soon for this {event.importance}-impact event.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline" className="text-xs">Equities</Badge>
-                      <Badge variant="outline" className="text-xs">Bonds</Badge>
-                      <Badge variant="outline" className="text-xs">USD</Badge>
-                      <Badge variant="outline" className="text-xs">Commodities</Badge>
+                  {/* Historical impact (48h) when available */}
+                  {impactPreview?.length ? (
+                    <div className="p-3 bg-muted/30 rounded-lg border border-border">
+                      <div className="text-xs font-medium text-muted-foreground mb-1">Historically (48h)</div>
+                      <ul className="text-sm text-foreground space-y-0.5">
+                        {impactPreview.map((item: ImpactPreviewItem) => (
+                          <li key={item.assetId}>{formatImpactPreview(item)}</li>
+                        ))}
+                      </ul>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-3 bg-muted/20 rounded-lg">
+                      <div className="text-sm text-muted-foreground">
+                        No historical impact stats for this event type.
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            ))}
+            );})}
           </div>
         )}
         

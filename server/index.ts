@@ -1,6 +1,16 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+
+// Prevent unhandled 'error' events (e.g. from streams/OpenAI client) from crashing the process
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception (server will keep running):", err?.message ?? err);
+  if (err instanceof Error && err.stack) console.error(err.stack);
+});
+process.on("unhandledRejection", (reason, promise) => {
+  console.warn("Unhandled rejection at:", promise, "reason:", reason);
+});
 
 const app = express();
 app.use(express.json());
@@ -61,10 +71,11 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
+  const host = process.env.HOST || "0.0.0.0";
   server.listen({
     port,
-    host: "0.0.0.0",
-    reusePort: true,
+    host,
+    ...(process.env.NODE_ENV === "production" && { reusePort: true }),
   }, () => {
     log(`serving on port ${port}`);
   });

@@ -86,9 +86,9 @@ export function DailyBriefShareCard({ data }: DailyBriefShareCardProps) {
             variant="outline" 
             className={`text-xs px-2 py-0.5 ${getTradeLevelBadge(data.marketCall.level)}`}
           >
-            {data.marketCall.level === "Green" && "Favorable Conditions"}
-            {data.marketCall.level === "Yellow" && "Mixed Conditions"}
-            {data.marketCall.level === "Red" && "Elevated Caution"}
+            {data.marketCall.level === "Green" && "Selective Risk"}
+            {data.marketCall.level === "Yellow" && "Trade Light"}
+            {data.marketCall.level === "Red" && "Stand Down"}
           </Badge>
         </div>
       </div>

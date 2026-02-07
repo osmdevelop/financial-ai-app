@@ -22,14 +22,20 @@ import {
 import { formatPercent } from "@/lib/constants";
 import { format } from "date-fns";
 import type { MarketRecap, MarketRecapSummary } from "@shared/schema";
+import { useDataModeContext } from "@/components/providers/data-mode-provider";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { DataStatusBadge } from "@/components/ui/data-status-badge";
+import { useToast } from "@/hooks/use-toast";
 
 export default function MarketRecap() {
   const [aiSummary, setAiSummary] = useState<MarketRecapSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const queryClient = useQueryClient();
+  const { dataMode } = useDataModeContext();
+  const { toast } = useToast();
 
   const { 
-    data: recap, 
+    data: recapResponse, 
     isLoading, 
     error,
     refetch 
@@ -38,6 +44,9 @@ export default function MarketRecap() {
     queryFn: () => api.getMarketRecap(),
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   });
+
+  const recap = recapResponse?.data;
+  const isMock = recapResponse?.meta?.isMock ?? false;
 
   const handleGetSummary = async () => {
     if (!recap) return;
@@ -48,6 +57,7 @@ export default function MarketRecap() {
       setAiSummary(summary);
     } catch (error) {
       console.error("Failed to get AI summary:", error);
+      toast({ title: "Analysis failed", description: "Could not generate market brief. Try again.", variant: "destructive" });
     } finally {
       setLoadingSummary(false);
     }
@@ -84,7 +94,7 @@ export default function MarketRecap() {
                 There was an error loading today's market recap data.
               </p>
               <Button 
-                onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/recap/daily"] })} 
+                onClick={() => refetch()} 
                 variant="outline"
                 data-testid="button-retry-recap"
               >
@@ -109,6 +119,15 @@ export default function MarketRecap() {
               </Card>
             ))}
           </div>
+        ) : dataMode === "live" && isMock ? (
+          <EmptyStateCard
+            title="No data available"
+            description="Sample recap is not shown in Live mode. Switch to Demo in Settings or try Refresh."
+            actionLabel="Refresh"
+            onAction={() => refetch()}
+            icon={<BarChart3 className="h-10 w-10 text-muted-foreground" />}
+            data-testid="recap-empty-live"
+          />
         ) : recap ? (
           <>
             {/* Controls */}
@@ -118,9 +137,12 @@ export default function MarketRecap() {
                 <span className="text-sm text-muted-foreground">
                   {format(new Date(recap.as_of), "EEEE, MMMM do, yyyy")}
                 </span>
+                {dataMode === "demo" && isMock && (
+                  <DataStatusBadge status="demo" details="Sample data" />
+                )}
               </div>
               <Button 
-                onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/recap/daily"] })} 
+                onClick={() => refetch()} 
                 variant="outline" 
                 size="sm"
                 data-testid="button-refresh-recap"
@@ -346,17 +368,14 @@ export default function MarketRecap() {
           </div>
           </>
         ) : (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <div className="text-muted-foreground">
-                <Globe className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                <h3 className="font-medium mb-2">No Market Data</h3>
-                <p className="text-sm">
-                  Market recap data is currently unavailable. Please try again later.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <EmptyStateCard
+            title="No market data"
+            description="Market recap is currently unavailable. Try again later or switch to Demo in Settings."
+            actionLabel="Refresh"
+            onAction={() => refetch()}
+            icon={<Globe className="h-10 w-10 text-muted-foreground" />}
+            data-testid="recap-no-data"
+          />
         )}
       </main>
     </div>

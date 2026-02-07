@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from "@/components/providers/theme-provider";
-import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, Sun, Target, RotateCcw, History, Download, Trash2 } from "lucide-react";
+import { Settings as SettingsIcon, Key, Database, Palette, Bell, Monitor, Moon, Sun, Target, RotateCcw, History, Download, Trash2, DatabaseIcon } from "lucide-react";
 import { useFocusAssets } from "@/hooks/useFocusAssets";
 import { AssetPickerModal } from "@/components/trader-lens/AssetPickerModal";
 import { useOnboardingState } from "@/components/onboarding/OnboardingLiteModal";
 import { useLocation } from "wouter";
+import { useDataModeContext } from "@/components/providers/data-mode-provider";
+import type { DataMode } from "@/lib/data-mode";
 import { getAllSnapshots, clearAllSnapshots, DailySnapshot } from "@/lib/history-storage";
 import {
   AlertDialog,
@@ -129,7 +131,9 @@ function HistorySection() {
 export default function Settings() {
   const { theme, setTheme, actualTheme } = useTheme();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const { dataMode, setDataMode } = useDataModeContext();
   const { focusAssets, maxAssets } = useFocusAssets();
+  const handleDataModeChange = (mode: DataMode) => setDataMode(mode);
   const { resetOnboarding } = useOnboardingState(focusAssets.length);
   const [, setLocation] = useLocation();
 
@@ -217,6 +221,36 @@ export default function Settings() {
             </CardContent>
           </Card>
           
+          {/* Data Mode Section */}
+          <Card data-testid="settings-data-mode">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DatabaseIcon className="h-5 w-5" />
+                Data Mode
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium">Mode</h3>
+                  <Badge variant="secondary">{dataMode === "live" ? "Live" : "Demo"}</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Live: only real data; no sample content. Demo: allows sample datasets and sample news for exploration.
+                </p>
+                <Select value={dataMode} onValueChange={(v) => handleDataModeChange(v as DataMode)}>
+                  <SelectTrigger className="w-full max-w-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="live">Live (default)</SelectItem>
+                    <SelectItem value="demo">Demo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* API Keys Section */}
           <Card>
             <CardHeader>

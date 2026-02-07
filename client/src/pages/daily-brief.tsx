@@ -49,6 +49,8 @@ import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useToast } from "@/hooks/use-toast";
 import { useEvidenceMode } from "@/hooks/useEvidenceMode";
+import { useEventImpact } from "@/hooks/useEventImpact";
+import { getEventTypeFromEventName } from "@/utils/eventImpact";
 import { EvidenceToggle, EvidencePanel, SourceChip } from "@/components/evidence";
 import type { EvidenceItem, EvidenceMeta } from "@/components/evidence";
 import {
@@ -60,6 +62,11 @@ import {
   type CaptureContext,
 } from "@/lib/history-storage";
 import { DailyBriefShareCard, generateTextSummary, type ShareCardData } from "@/components/daily-brief/DailyBriefShareCard";
+import { computeActionLens, getRequiredMissing, type ActionLensInput } from "@/lib/action-lens";
+import { computeVolatilityLevel } from "@/lib/volatility";
+import { computePolicyRisk } from "@/lib/policy-risk";
+import { computeBiggestMistake, getHeroCopy } from "@/lib/biggest-mistake";
+import { useDataModeContext } from "@/components/providers/data-mode-provider";
 import { toPng } from "html-to-image";
 
 interface DailySummaryResponse {
@@ -128,6 +135,39 @@ export default function DailyBrief() {
     refetchInterval: 5 * 60 * 1000,
   });
 
+  const { data: policyNewsData } = useQuery({
+    queryKey: ["/api/policy/news-intensity"],
+    queryFn: () => api.getPolicyNewsIntensity(),
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const { data: volData } = useQuery({
+    queryKey: ["/api/market/volatility"],
+    queryFn: () => api.getMarketVolatility(30),
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const { dataMode } = useDataModeContext();
+
+  const volatilityResultForCall = useMemo(
+    () =>
+      computeVolatilityLevel({
+        vix: volData?.vix ?? null,
+        spyDailyCloses: volData?.spyDailyCloses ?? null,
+        asOf: volData?.asOf ?? null,
+      }),
+    [volData]
+  );
+
+  const policyRiskResult = useMemo(
+    () =>
+      computePolicyRisk({
+        trumpZ: trumpIndex?.zScore ?? null,
+        policyNewsIntensity: policyNewsData?.policyNewsIntensity ?? null,
+      }),
+    [trumpIndex?.zScore, policyNewsData?.policyNewsIntensity]
+  );
+
   const {
     data: headlines,
     isLoading: headlinesLoading,
@@ -189,9 +229,8 @@ export default function DailyBrief() {
     }
 
     const regime = regimeSnapshot?.regime || sentiment?.regime || "Neutral";
-    const volatility = sentiment?.score !== undefined 
-      ? (sentiment.score > 60 ? "low" : sentiment.score > 40 ? "normal" : "elevated")
-      : "unknown";
+    const volLevel = volatilityResultForCall.level;
+    const volatility = volLevel === "low" ? "low" : volLevel === "high" ? "elevated" : volLevel === "medium" ? "normal" : "unknown";
     const policyRisk = trumpIndex?.zScore !== undefined
       ? (trumpIndex.zScore > 1.5 ? "high" : trumpIndex.zScore > 0.5 ? "moderate" : "low")
       : "unknown";
@@ -226,11 +265,33 @@ export default function DailyBrief() {
     }
 
     return { text, level };
-  }, [regimeSnapshot, sentiment, trumpIndex]);
+  }, [regimeSnapshot, sentiment, trumpIndex, volatilityResultForCall]);
 
   const generateMarketCallText = generateMarketCall.text;
   const generateMarketCallLevel = generateMarketCall.level;
   const hasEssentialData = !!generateMarketCallText && generateMarketCallText !== "Market conditions are being assessed.";
+
+  const heroCopy = useMemo(
+    () =>
+      getHeroCopy({
+        regime: regimeSnapshot?.regime,
+        volatility:
+          volatilityResultForCall.level === "unknown"
+            ? undefined
+            : (volatilityResultForCall.level as "low" | "medium" | "high"),
+        policyRisk:
+          policyRiskResult.level === "unknown"
+            ? undefined
+            : (policyRiskResult.level as "low" | "medium" | "high"),
+        level: generateMarketCall.level,
+      }),
+    [
+      regimeSnapshot?.regime,
+      volatilityResultForCall.level,
+      policyRiskResult.level,
+      generateMarketCall.level,
+    ]
+  );
 
   // Build current snapshot for comparison
   const currentTodaySnapshot = useMemo((): DailySnapshot | null => {
@@ -242,10 +303,10 @@ export default function DailyBrief() {
       id: todayStr,
       date: todayStr,
       createdAt: now.toISOString(),
-      dailyCall: generateMarketCallText,
+      dailyCall: heroCopy.primaryLine,
       shouldTradeToday: {
         level: generateMarketCallLevel,
-        reason: generateMarketCallText,
+        reason: heroCopy.primaryLine,
       },
       regime: regimeSnapshot ? {
         regime: regimeSnapshot.regime,
@@ -276,7 +337,7 @@ export default function DailyBrief() {
         missingInputs: lensContext.meta.missing || [],
       },
     };
-  }, [generateMarketCallText, generateMarketCallLevel, regimeSnapshot, trumpIndex, fedspeak, sentiment, isMockData, lensContext.meta.missing]);
+  }, [generateMarketCallText, generateMarketCallLevel, heroCopy.primaryLine, regimeSnapshot, trumpIndex, fedspeak, sentiment, isMockData, lensContext.meta.missing]);
 
   // Compare yesterday to today for "What Changed" section
   const historyDelta = useMemo(() => {
@@ -290,10 +351,10 @@ export default function DailyBrief() {
     if (snapshotSaved) return;
 
     const context: CaptureContext = {
-      dailyCall: generateMarketCallText,
+      dailyCall: heroCopy.primaryLine,
       shouldTradeToday: {
         level: generateMarketCallLevel,
-        reason: generateMarketCallText,
+        reason: heroCopy.primaryLine,
       },
       focusAssets: focusAssets.map(a => ({
         symbol: a.symbol,
@@ -329,17 +390,17 @@ export default function DailyBrief() {
     if (captured) {
       setSnapshotSaved(true);
     }
-  }, [isLoading, generateMarketCallText, generateMarketCallLevel, snapshotSaved, focusAssets, regimeSnapshot, trumpIndex, fedspeak, sentiment, isMockData, lensContext.meta.missing]);
+  }, [isLoading, generateMarketCallText, generateMarketCallLevel, heroCopy.primaryLine, snapshotSaved, focusAssets, regimeSnapshot, trumpIndex, fedspeak, sentiment, isMockData, lensContext.meta.missing]);
 
   // Manual save handler
   const handleManualSave = () => {
     if (!generateMarketCallText) return;
 
     const context: CaptureContext = {
-      dailyCall: generateMarketCallText,
+      dailyCall: heroCopy.primaryLine,
       shouldTradeToday: {
         level: generateMarketCallLevel,
-        reason: generateMarketCallText,
+        reason: heroCopy.primaryLine,
       },
       focusAssets: focusAssets.map(a => ({
         symbol: a.symbol,
@@ -451,25 +512,31 @@ export default function DailyBrief() {
     }
     if (events.length === 0) return null;
 
+    const eventDate = (e: any) => new Date(e.timestamp ?? e.date);
     const upcoming = events
-      .filter((e: any) => new Date(e.date) > new Date())
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .filter((e: any) => eventDate(e) > new Date())
+      .sort((a: any, b: any) => eventDate(a).getTime() - eventDate(b).getTime());
 
     if (upcoming.length === 0) return null;
 
     const event = upcoming[0];
-    const isToday = new Date(event.date).toDateString() === new Date().toDateString();
-    const isTomorrow = new Date(event.date).toDateString() === 
-      new Date(Date.now() + 86400000).toDateString();
+    const d = eventDate(event);
+    const isToday = d.toDateString() === new Date().toDateString();
+    const isTomorrow = d.toDateString() === new Date(Date.now() + 86400000).toDateString();
 
-    const timeLabel = isToday ? "Today" : isTomorrow ? "Tomorrow" : format(new Date(event.date), "EEE");
+    const timeLabel = isToday ? "Today" : isTomorrow ? "Tomorrow" : format(d, "EEE");
+    const title = event.event || event.name || "Economic event";
+    const eventType = getEventTypeFromEventName(title, event.category);
     
     return {
-      title: event.event || event.name || "Economic event",
+      title,
       time: timeLabel,
       impact: event.importance || event.impact || "medium",
+      eventType: eventType ?? undefined,
     };
   }, [econEvents]);
+
+  const { data: watchNextImpact } = useEventImpact(watchNext?.eventType, 48);
 
   const getHeadlineCategory = (headline: any): string => {
     const title = (headline.title || "").toLowerCase();
@@ -496,14 +563,72 @@ export default function DailyBrief() {
     return styles[level];
   };
 
+  const actionLensInput = useMemo((): ActionLensInput => {
+    const fedTone =
+      fedspeak?.currentTone != null
+        ? (fedspeak.currentTone.toLowerCase() as "dovish" | "neutral" | "hawkish")
+        : "unknown";
+    const missing = getRequiredMissing({
+      regime: regimeSnapshot?.regime,
+      regimeConfidence: regimeSnapshot?.confidence,
+      policyRisk: policyRiskResult.level as ActionLensInput["policyRisk"],
+      volatility: { level: volatilityResultForCall.level },
+    });
+    return {
+      regime: regimeSnapshot?.regime,
+      regimeConfidence: regimeSnapshot?.confidence,
+      policyRisk: policyRiskResult.level as ActionLensInput["policyRisk"],
+      fedTone: fedTone as ActionLensInput["fedTone"],
+      volatility: {
+        level: volatilityResultForCall.level,
+        basis: volatilityResultForCall.basis,
+        vix: volData?.vix ?? null,
+      },
+      dataStatus: {
+        isMock: !!isMockData,
+        isPartial: (lensContext.meta.missing?.length ?? 0) > 0,
+        missing: lensContext.meta.missing ?? [],
+      },
+      dataMode,
+      missing: missing.length > 0 ? missing : undefined,
+    };
+  }, [regimeSnapshot, trumpIndex, fedspeak, isMockData, lensContext.meta.missing, dataMode, volatilityResultForCall, policyRiskResult, volData]);
+
+  const actionLensResult = useMemo(() => computeActionLens(actionLensInput), [actionLensInput]);
+
+  const biggestMistakeResult = useMemo(
+    () =>
+      computeBiggestMistake({
+        regime: regimeSnapshot?.regime,
+        volatility:
+          volatilityResultForCall.level === "unknown"
+            ? undefined
+            : (volatilityResultForCall.level as "low" | "medium" | "high"),
+        policyRisk:
+          policyRiskResult.level === "unknown"
+            ? undefined
+            : (policyRiskResult.level as "low" | "medium" | "high"),
+        fedTone: fedspeak?.currentTone,
+        baseConfidence: actionLensResult.confidence,
+        missing: actionLensInput.missing,
+      }),
+    [
+      regimeSnapshot?.regime,
+      volatilityResultForCall.level,
+      policyRiskResult.level,
+      fedspeak?.currentTone,
+      actionLensResult.confidence,
+      actionLensInput.missing,
+    ]
+  );
+
   const shareCardData = useMemo((): ShareCardData => {
     const now = new Date();
     const dataStatus = isMockData ? "mock" : (lensContext.meta.missing?.length > 0 ? "partial" : "live");
-    
     return {
       date: now,
       marketCall: {
-        text: generateMarketCall.text,
+        text: heroCopy.primaryLine,
         level: generateMarketCall.level,
       },
       whatChanged: whatChanged,
@@ -519,7 +644,7 @@ export default function DailyBrief() {
         ? format(new Date(sentiment.as_of), "MMM d, h:mm a")
         : format(now, "MMM d, h:mm a"),
     };
-  }, [generateMarketCall, whatChanged, lensExposures, focusSymbols, lensHeadlines, watchNext, isMockData, lensContext.meta.missing, sentiment, getHeadlineCategory]);
+  }, [heroCopy.primaryLine, generateMarketCall.level, whatChanged, lensExposures, focusSymbols, lensHeadlines, watchNext, isMockData, lensContext.meta.missing, sentiment, getHeadlineCategory]);
 
   const handleExportImage = async () => {
     if (!shareCardRef.current) return;
@@ -576,10 +701,13 @@ export default function DailyBrief() {
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header
         title="Daily Brief"
-        subtitle={format(new Date(), "EEEE, MMMM d, yyyy")}
+        subtitle="Your daily market playbook — when markets move, know exactly why"
       />
 
       <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 max-w-4xl mx-auto w-full">
+        <p className="text-xs text-muted-foreground -mt-2 mb-1">
+          {format(new Date(), "EEEE, MMMM d, yyyy")}
+        </p>
         {/* Informational Banner - Subtle */}
         <div className="flex items-center justify-between" data-testid="info-banner">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -634,8 +762,8 @@ export default function DailyBrief() {
           </div>
         </div>
 
-        {/* SECTION 1: Today's Market Call (HERO) */}
-        <section data-testid="daily-call">
+        {/* SECTION 1: Today's Market Call (HERO) — regret-focused */}
+        <section data-testid="daily-call" className="animate-slide-up stagger-0">
           <Card className="border-2 bg-card/50">
             <CardContent className="p-6">
               {isLoading ? (
@@ -644,23 +772,72 @@ export default function DailyBrief() {
                   <Skeleton className="h-6 w-24" />
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <h2 className="text-2xl lg:text-3xl font-semibold leading-tight">
-                    {generateMarketCall.text}
+                    {heroCopy.primaryLine}
                   </h2>
-                  <Badge 
-                    variant="outline" 
-                    className={`text-sm px-3 py-1 ${getTradeLevelBadge(generateMarketCall.level)}`}
-                    data-testid="trade-level-badge"
-                  >
-                    {generateMarketCall.level === "Green" && "Favorable conditions"}
-                    {generateMarketCall.level === "Yellow" && "Mixed conditions"}
-                    {generateMarketCall.level === "Red" && "Elevated caution"}
-                  </Badge>
+                  <p className="text-sm text-muted-foreground">
+                    {heroCopy.secondaryLine}
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge
+                      variant="outline"
+                      className={`text-sm px-3 py-1 ${getTradeLevelBadge(generateMarketCall.level)}`}
+                      data-testid="trade-level-badge"
+                    >
+                      {heroCopy.badgeBehavioral}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground/80">
+                      Informational context only. Not investment advice.
+                    </span>
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
+
+          {/* Today's Biggest Mistake — immediately under hero */}
+          {!isLoading && hasEssentialData && (
+            <Card className="mt-3 border border-amber-500/20 bg-amber-500/5">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2">
+                  <span className="text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" aria-hidden>
+                    ⚠
+                  </span>
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Today's Biggest Mistake
+                    </p>
+                    <p className="text-sm font-medium text-foreground">
+                      {biggestMistakeResult.headline}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {biggestMistakeResult.explanation}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground pt-1">
+                      Severity: {biggestMistakeResult.severity.charAt(0).toUpperCase() + biggestMistakeResult.severity.slice(1)}
+                      {" · "}
+                      Confidence: {biggestMistakeResult.confidence >= 60 ? "Moderate" : biggestMistakeResult.confidence >= 40 ? "Low" : "Limited"}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {evidenceEnabled && !isLoading && hasEssentialData && (
+            <EvidencePanel
+              title="Biggest Mistake — Drivers"
+              data-testid="daily-brief-evidence-mistake"
+              items={[
+                { kind: "input", label: "Regime", value: biggestMistakeResult.drivers.regime ?? "—" },
+                { kind: "input", label: "Volatility", value: biggestMistakeResult.drivers.volatility ?? "—" },
+                { kind: "input", label: "Policy risk", value: biggestMistakeResult.drivers.policyRisk ?? "—" },
+                { kind: "input", label: "Fed tone", value: biggestMistakeResult.drivers.fedTone ?? "—" },
+              ] as EvidenceItem[]}
+              meta={{ asOf: volData?.asOf ?? sentiment?.as_of ? format(new Date(volData?.asOf ?? sentiment?.as_of!), "h:mm a") : undefined }}
+              className="mt-2"
+            />
+          )}
           
           {/* Evidence Panel for Market Call */}
           {evidenceEnabled && !isLoading && (
@@ -684,8 +861,105 @@ export default function DailyBrief() {
           )}
         </section>
 
+        {/* Action Lens */}
+        <section data-testid="action-lens-card" className="animate-slide-up stagger-1">
+          <Card className="border border-border bg-card/50">
+            <CardContent className="p-4">
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-muted-foreground">Action Lens</span>
+                    <Badge
+                      variant={actionLensResult.posture === "aggressive" ? "default" : actionLensResult.posture === "defensive" ? "destructive" : "secondary"}
+                      className="text-xs font-normal"
+                      data-testid="action-lens-posture"
+                    >
+                      {actionLensResult.posture.charAt(0).toUpperCase() + actionLensResult.posture.slice(1)}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs font-normal" data-testid="action-lens-playbook">
+                      {actionLensResult.playbook === "event-risk" ? "Event Risk" : actionLensResult.playbook.charAt(0).toUpperCase() + actionLensResult.playbook.slice(1)}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs font-normal" data-testid="action-lens-leverage">
+                      {actionLensResult.leverage.charAt(0).toUpperCase() + actionLensResult.leverage.slice(1)}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-foreground">{actionLensResult.summary}</p>
+                  <ul className="space-y-1">
+                    {actionLensResult.bullets.map((b, i) => (
+                      <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
+                        <span className="text-primary mt-0.5">•</span>
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {(actionLensResult.insufficientData || actionLensResult.confidence < 50 || actionLensResult.isDemoContext || (lensContext.meta.missing?.length ?? 0) > 0) && (
+                    <div className="pt-1 flex items-center gap-1 flex-wrap">
+                      {actionLensResult.isDemoContext && (
+                        <DataStatusBadge status="demo" details="Demo context" data-testid="action-lens-data-status" />
+                      )}
+                      {!actionLensResult.isDemoContext && (isMockData || (lensContext.meta.missing?.length ?? 0) > 0) && (
+                        <DataStatusBadge
+                          status={isMockData ? "mock" : "partial"}
+                          details={lensContext.meta.missing?.length ? `Missing: ${lensContext.meta.missing.join(", ")}` : undefined}
+                          data-testid="action-lens-data-status"
+                        />
+                      )}
+                      {(actionLensResult.insufficientData || actionLensResult.confidence < 50) && (
+                        <span className="text-[10px] text-muted-foreground">Insufficient data — defaulting to risk control.</span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground">Informational only. Not investment advice.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          {evidenceEnabled && !isLoading && (
+            <EvidencePanel
+              title="Action Lens Evidence"
+              data-testid="daily-brief-evidence-action-lens"
+              items={[
+                { kind: "input", label: "Regime", value: regimeSnapshot ? `${regimeSnapshot.regime} (${regimeSnapshot.confidence}% confidence)` : "Unavailable" },
+                { kind: "input", label: "Confidence", value: `${actionLensResult.confidence}%` },
+                {
+                  kind: "input",
+                  label: "Volatility",
+                  value:
+                    actionLensInput.volatility?.basis === "vix"
+                      ? `VIX: ${volData?.vix?.toFixed(1) ?? "—"} (${actionLensInput.volatility?.level ?? "unknown"})`
+                      : actionLensInput.volatility?.basis === "realized"
+                        ? `Realized Vol (20d): ${volatilityResultForCall.value != null ? (volatilityResultForCall.value * 100).toFixed(1) + "%" : "—"} (${actionLensInput.volatility?.level ?? "unknown"})`
+                        : "Volatility unavailable",
+                },
+                {
+                  kind: "input",
+                  label: "Policy risk",
+                  value:
+                    trumpIndex != null && trumpIndex.zScore != null
+                      ? `Trump Z: ${trumpIndex.zScore.toFixed(2)} (${actionLensInput.policyRisk})${policyRiskResult.basis.news ? ", News" : ""}`
+                      : "Unavailable",
+                },
+                { kind: "input", label: "Fed tone", value: fedspeak ? `${fedspeak.currentTone} (${actionLensInput.fedTone})` : "Unavailable" },
+                { kind: "timestamp", label: "As of", value: volData?.asOf ?? sentiment?.as_of ? format(new Date(volData?.asOf ?? sentiment?.as_of!), "MMM d, h:mm a") : "N/A" },
+              ] as EvidenceItem[]}
+              meta={{
+                asOf: volData?.asOf ?? sentiment?.as_of ? format(new Date(volData?.asOf ?? sentiment?.as_of!), "h:mm a") : undefined,
+                isMock: !!isMockData,
+                missingInputs: lensContext.meta.missing || [],
+                dataStatus: actionLensResult.isDemoContext ? "demo" : actionLensResult.insufficientData ? "partial" : undefined,
+              } as EvidenceMeta}
+              className="mt-2"
+            />
+          )}
+        </section>
+
         {/* SECTION 2: What Changed (or Didn't) */}
-        <section data-testid="daily-changes">
+        <section data-testid="daily-changes" className="animate-slide-up stagger-2">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
               What Changed
@@ -753,7 +1027,7 @@ export default function DailyBrief() {
         </section>
 
         {/* SECTION 3: Your Lens Impact */}
-        <section data-testid="lens-impact">
+        <section data-testid="lens-impact" className="animate-slide-up stagger-3">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
             Your Lens Impact
           </h3>
@@ -800,7 +1074,7 @@ export default function DailyBrief() {
         </section>
 
         {/* SECTION 4: Headlines That Matter (Max 3) */}
-        <section data-testid="lens-headlines">
+        <section data-testid="lens-headlines" className="animate-slide-up stagger-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
               Headlines That Matter
@@ -902,7 +1176,7 @@ export default function DailyBrief() {
         </section>
 
         {/* SECTION 5: What to Watch Next */}
-        <section data-testid="watch-next">
+        <section data-testid="watch-next" className="animate-slide-up stagger-5">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
             What to Watch Next
           </h3>
@@ -919,11 +1193,24 @@ export default function DailyBrief() {
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <Clock className="w-4 h-4 text-primary" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{watchNext.title}</p>
                     <p className="text-xs text-muted-foreground">
                       {watchNext.time} — {watchNext.impact} impact expected
                     </p>
+                    {watchNextImpact?.stats && watchNextImpact.stats.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border">
+                        Historically (48h):{" "}
+                        {watchNextImpact.stats.slice(0, 4).map((s) => {
+                          const sign = s.meanMovePct >= 0 ? "+" : "";
+                          const band =
+                            s.percentile10Pct != null && s.percentile90Pct != null
+                              ? ` (${s.percentile10Pct.toFixed(1)}–${s.percentile90Pct.toFixed(1)}%)`
+                              : "";
+                          return `${s.assetId} ${sign}${s.meanMovePct.toFixed(1)}%${band}`;
+                        }).join(", ")}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -949,7 +1236,7 @@ export default function DailyBrief() {
         </section>
 
         {/* SECTION 6: AI Summary (Collapsible, Collapsed by Default) */}
-        <section data-testid="ai-summary">
+        <section data-testid="ai-summary" className="animate-slide-up stagger-6">
           <Collapsible open={aiSummaryOpen} onOpenChange={setAiSummaryOpen}>
             <Card>
               <CollapsibleTrigger asChild>

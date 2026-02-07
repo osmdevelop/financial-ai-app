@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Clock,
   ExternalLink,
@@ -15,129 +16,131 @@ import {
   RefreshCcw,
   AlertTriangle,
 } from "lucide-react";
+import type { Headline } from "@shared/schema";
 import type { ClusteredHeadline, NewsStreamResponse } from "@shared/schema";
 import {
   getImpactColor,
   getImpactIcon,
   TimeAgo,
   safeFormat,
+  formatTimelineDate,
+  toDate,
 } from "@/lib/news-utils";
+import { format, isValid } from "date-fns";
 import { useEvidenceMode } from "@/hooks/useEvidenceMode";
+import { useDataModeContext } from "@/components/providers/data-mode-provider";
 import { EvidenceToggle, SourceChip } from "@/components/evidence";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { DataStatusBadge } from "@/components/ui/data-status-badge";
 
+const POLL_HEADLINES_MS = 30_000;
 const POLL_NEWS_MS = 30_000;
 
-// News cluster component
-function NewsClusterCard({ cluster, evidenceEnabled }: { cluster: NewsStreamResponse['clusters'][0]; evidenceEnabled?: boolean }) {
+const groupHeadlinesByDate = (headlines: Headline[]) => {
+  const grouped = headlines.reduce(
+    (acc, headline) => {
+      const d = toDate((headline as any)?.published);
+      const key = d && isValid(d) ? format(d, "yyyy-MM-dd") : "Unknown";
+      (acc[key] ||= []).push(headline);
+      return acc;
+    },
+    {} as Record<string, Headline[]>,
+  );
+  return Object.entries(grouped).sort(([a], [b]) => {
+    if (a === "Unknown") return 1;
+    if (b === "Unknown") return -1;
+    return b.localeCompare(a);
+  });
+};
+
+type NewsCluster = NewsStreamResponse["clusters"] extends (infer C)[] ? C : never;
+
+function NewsClusterCard({
+  cluster,
+  evidenceEnabled,
+}: {
+  cluster: NewsCluster;
+  evidenceEnabled?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
-  
   const visibleHeadlines = expanded ? cluster.headlines : cluster.headlines.slice(0, 3);
   const remainingCount = cluster.headlines.length - 3;
 
   return (
-    <Card className="border-l-4 border-l-blue-500 mb-6">
-      <CardContent className="p-6">
-        {/* Cluster header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/20 rounded-full">
-              <Users className="h-4 w-4 text-blue-600" />
-              <span className="font-semibold text-blue-600">
-                {cluster.topic}
-              </span>
-            </div>
+    <Card className="border-l-4 border-l-border mb-4">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span className="font-semibold text-foreground">{cluster.topic}</span>
             <Badge variant="secondary" className="text-xs">
               {cluster.headlines.length} articles
             </Badge>
           </div>
-          <div className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             <TimeAgo date={cluster.headlines[0]?.published} />
-          </div>
+          </span>
         </div>
-
-        {/* Impact summary if available */}
         {cluster.description && (
-          <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Target className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">Cluster Summary</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {cluster.description}
-            </p>
+          <div className="mb-3 p-3 bg-muted/50 rounded-md">
+            <p className="text-sm text-muted-foreground">{cluster.description}</p>
           </div>
         )}
-
-        {/* Headlines in cluster */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           {visibleHeadlines.map((headline: ClusteredHeadline, index: number) => (
-            <div 
+            <div
               key={headline.id}
-              className={`p-3 rounded-lg border ${index === 0 ? 'bg-primary/5 border-primary/20' : 'bg-muted/20'}`}
-              data-testid={`cluster-headline-${headline.id}`}
+              className={`p-3 rounded-md border ${index === 0 ? "bg-muted/30 border-border" : "bg-muted/10 border-border/50"}`}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <h4 className="font-semibold text-foreground leading-tight">
-                      {headline.title}
-                    </h4>
+                    <h4 className="font-medium text-foreground leading-tight">{headline.title}</h4>
                     {evidenceEnabled && headline.source && (
                       <SourceChip label={headline.source} href={headline.url} />
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 flex-wrap">
-                    <span className="font-medium">{headline.source}</span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                    <span>{headline.source}</span>
                     <span>•</span>
                     <TimeAgo date={headline.published} />
-                    {evidenceEnabled && headline.symbols && headline.symbols.length > 0 && (
+                    {evidenceEnabled && headline.symbols?.length ? (
                       <>
                         <span>•</span>
-                        <span className="text-primary">Matched: {headline.symbols.slice(0, 3).join(", ")}</span>
+                        <span>Matched: {headline.symbols.slice(0, 3).join(", ")}</span>
                       </>
-                    )}
+                    ) : null}
                   </div>
                   {headline.summary && (
-                    <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
-                      {headline.summary}
-                    </p>
+                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{headline.summary}</p>
                   )}
                   {headline.symbols && headline.symbols.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {headline.symbols.slice(0, 3).map((symbol: string) => (
-                        <Badge key={symbol} variant="outline" className="text-xs">
-                          {symbol}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {headline.symbols.slice(0, 3).map((s: string) => (
+                        <Badge key={s} variant="outline" className="text-xs">
+                          {s}
                         </Badge>
                       ))}
                       {headline.symbols.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{headline.symbols.length - 3} more
-                        </Badge>
+                        <Badge variant="outline" className="text-xs">+{headline.symbols.length - 3}</Badge>
                       )}
                     </div>
                   )}
-                  {/* Impact Badge */}
-                  {headline.impactLevel && (
-                    <div className="mt-2">
-                      <Badge 
-                        className={`text-xs ${getImpactColor(headline.impactLevel)}`}
-                        variant="secondary"
-                        data-testid={`badge-impact-${headline.id}`}
-                      >
-                        <span className="flex items-center gap-1">
-                          {getImpactIcon(headline.impactLevel)}
-                          {headline.impactLevel.toUpperCase()} IMPACT
-                        </span>
-                      </Badge>
-                    </div>
-                  )}
+                  {headline.impactLevel ? (
+                    <Badge
+                      className={`text-xs mt-2 ${getImpactColor(headline.impactLevel)}`}
+                      variant="secondary"
+                    >
+                      {getImpactIcon(headline.impactLevel)} {headline.impactLevel.toUpperCase()} IMPACT
+                    </Badge>
+                  ) : null}
                 </div>
                 {headline.url && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="shrink-0"
-                    onClick={() => window.open(headline.url, '_blank')}
+                    onClick={() => window.open(headline.url, "_blank")}
                   >
                     <ExternalLink className="h-4 w-4" />
                   </Button>
@@ -146,367 +149,414 @@ function NewsClusterCard({ cluster, evidenceEnabled }: { cluster: NewsStreamResp
             </div>
           ))}
         </div>
-
-        {/* Expand/collapse button */}
         {cluster.headlines.length > 3 && (
-          <div className="mt-4 text-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExpanded(!expanded)}
-              className="text-primary"
-            >
-              {expanded 
-                ? 'Show Less' 
-                : `Show ${remainingCount} More Article${remainingCount > 1 ? 's' : ''}`
-              }
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3 w-full"
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? "Show less" : `Show ${remainingCount} more`}
+          </Button>
         )}
       </CardContent>
     </Card>
   );
 }
 
-export default function NewsStream() {
+export default function NewsPage() {
+  const [activeTab, setActiveTab] = useState<"timeline" | "clusters">("timeline");
   const [scope, setScope] = useState<"all" | "focus" | "watchlist">("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [policyFilter, setPolicyFilter] = useState<"all" | "policy">("all");
   const { enabled: evidenceEnabled, toggle: toggleEvidence } = useEvidenceMode();
+  const { dataMode } = useDataModeContext();
 
-  // Watchlist for filtering
+  const { data: focusData } = useQuery({
+    queryKey: ["/api/focus-assets"],
+    queryFn: () => api.getFocusAssets(),
+  });
+  const focusAssets = focusData?.items ?? [];
   const { data: watchlist = [] } = useQuery({
     queryKey: ["/api/watchlist"],
     queryFn: () => api.getWatchlist(),
   });
+  const focusSymbols = useMemo(() => focusAssets.map((fa: any) => fa.symbol), [focusAssets]);
+  const watchlistSymbols = useMemo(() => watchlist?.map((w: any) => w.symbol) ?? [], [watchlist]);
+  const activeSymbols: string[] | undefined = useMemo(() => {
+    if (scope === "focus") return focusSymbols;
+    if (scope === "watchlist") return watchlistSymbols;
+    return undefined;
+  }, [scope, focusSymbols, watchlistSymbols]);
 
-  const watchlistSymbols = useMemo(
-    () => watchlist.map((item: { symbol: string }) => item.symbol),
-    [watchlist],
+  const {
+    data: headlines = [],
+    isLoading: timelineLoading,
+    isFetching: timelineFetching,
+    error: timelineError,
+    refetch: refetchTimeline,
+    dataUpdatedAt: timelineUpdatedAt,
+  } = useQuery({
+    queryKey: ["/api/headlines/timeline", scope, activeSymbols, dataMode],
+    queryFn: () =>
+      api.getHeadlinesTimeline(activeSymbols, scope, 100, { forceReal: dataMode === "live", noCache: true }),
+    enabled: scope === "all" || (Array.isArray(activeSymbols) && activeSymbols.length > 0),
+    refetchInterval: POLL_HEADLINES_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+  });
+
+  const filteredTimeline = useMemo(
+    () =>
+      (headlines as Headline[]).filter((h: any) => {
+        const matchSearch =
+          !searchTerm ||
+          h.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          h.summary?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchPolicy = policyFilter === "all" || h.isPolicy === true;
+        return matchSearch && matchPolicy;
+      }),
+    [headlines, searchTerm, policyFilter],
   );
+  const groupedTimeline = useMemo(() => groupHeadlinesByDate(filteredTimeline), [filteredTimeline]);
 
-  // Enhanced News Stream with clustering
   const {
     data: newsResponse,
-    isLoading,
-    isFetching,
-    refetch,
-    dataUpdatedAt,
+    isLoading: clustersLoading,
+    isFetching: clustersFetching,
+    refetch: refetchClusters,
+    dataUpdatedAt: clustersUpdatedAt,
   } = useQuery({
     queryKey: ["/api/news/stream", scope],
     queryFn: () => api.getNewsStream(scope, 50),
     refetchInterval: POLL_NEWS_MS,
     refetchIntervalInBackground: true,
-    refetchOnReconnect: true,
-    refetchOnWindowFocus: false,
-    placeholderData: (previousData) => previousData,
+    placeholderData: (prev) => prev,
     staleTime: 0,
   });
 
   const clusters = newsResponse?.data?.clusters || [];
-  const headlines = newsResponse?.data?.headlines || [];
-  const isMock = newsResponse?.meta?.isMock ?? false;
-
-  // Filter clusters and headlines by search term
+  const clusterHeadlines = newsResponse?.data?.headlines || [];
   const filteredClusters = useMemo(
     () =>
-      clusters.filter((cluster) =>
-        !searchTerm ||
-        cluster.topic?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cluster.headlines.some((h) =>
-          h.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          h.summary?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
+      clusters.filter(
+        (c: any) =>
+          !searchTerm ||
+          c.topic?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          c.headlines?.some(
+            (h: any) =>
+              h.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              h.summary?.toLowerCase().includes(searchTerm.toLowerCase()),
+          ),
       ),
     [clusters, searchTerm],
   );
-
-  const filteredHeadlines = useMemo(
+  const filteredClusterHeadlines = useMemo(
     () =>
-      headlines.filter((h) =>
-        !searchTerm ||
-        h.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        h.summary?.toLowerCase().includes(searchTerm.toLowerCase())
+      clusterHeadlines.filter(
+        (h: any) =>
+          !searchTerm ||
+          h.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          h.summary?.toLowerCase().includes(searchTerm.toLowerCase()),
       ),
-    [headlines, searchTerm],
+    [clusterHeadlines, searchTerm],
   );
+
+  const isMock = newsResponse?.meta?.isMock ?? false;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header
-        title="News Stream"
-        subtitle="Real-time news clustering with AI-powered impact analysis"
-      />
+      <Header title="News & Headlines" subtitle="Live headlines and topic clusters — stop avoiding red folder news, start trading it" />
 
-      {/* Live indicator */}
-      <div className="px-4 md:px-6 pt-2 flex items-center gap-2">
-        {!isLoading && (
-          <>
-            <span className="text-[11px] text-muted-foreground">
-              {isFetching ? "Updating…" : isMock ? "Sample Data" : "Live"} • Last update{" "}
-              {safeFormat(new Date(), "h:mm:ss a")}
-            </span>
-            {isMock && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0 text-muted-foreground border-muted-foreground/30"
-                data-testid="badge-mock-news"
-              >
-                Sample Data
-              </Badge>
-            )}
-          </>
-        )}
+      <div className="px-4 md:px-6 pt-2 flex items-center justify-between gap-2 flex-wrap">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "timeline" | "clusters")}>
+          <TabsList className="bg-muted">
+            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="clusters">Clusters</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="flex items-center gap-2">
+          <EvidenceToggle enabled={evidenceEnabled} onToggle={toggleEvidence} />
+          <span className="text-[11px] text-muted-foreground">
+            {activeTab === "timeline"
+              ? timelineFetching
+                ? "Updating…"
+                : `Updated ${timelineUpdatedAt ? safeFormat(new Date(timelineUpdatedAt), "h:mm a") : "—"}`
+              : clustersFetching
+                ? "Updating…"
+                : isMock
+                  ? "Sample"
+                  : `Updated ${clustersUpdatedAt ? safeFormat(new Date(clustersUpdatedAt), "h:mm a") : "—"}`}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => (activeTab === "timeline" ? refetchTimeline() : refetchClusters())}
+            disabled={activeTab === "timeline" ? timelineFetching : clustersFetching}
+          >
+            <RefreshCcw className={`h-4 w-4 mr-1 ${activeTab === "timeline" ? timelineFetching : clustersFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
-        {/* Search and Filters */}
-        <div className="space-y-4 mb-6">
-          {/* Top row: search + manual refresh */}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="space-y-4 mb-4">
+          <div className="flex flex-wrap gap-2">
             <Input
-              placeholder="Search news topics and headlines..."
+              placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-md"
-              data-testid="input-search"
+              className="max-w-xs h-9"
             />
-            <div className="flex items-center gap-3">
-              <EvidenceToggle enabled={evidenceEnabled} onToggle={toggleEvidence} />
+            <div className="flex gap-1">
               <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                disabled={isFetching}
-                aria-label="Refresh news stream"
-                data-testid="button-refresh"
-              >
-                <RefreshCcw
-                  className={`h-4 w-4 mr-1 ${isFetching ? "animate-spin" : ""}`}
-                />
-                {isFetching ? "Refreshing…" : "Refresh"}
-              </Button>
-              {!!dataUpdatedAt && (
-                <span className="text-xs text-muted-foreground">
-                  Updated {safeFormat(new Date(dataUpdatedAt), "h:mm:ss a")}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Scope buttons */}
-          <div className="flex flex-wrap gap-2">
-            <div className="flex gap-2">
-              <Button
-                data-testid="scope-all"
                 variant={scope === "all" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setScope("all")}
-                className="h-8"
+                className="h-9"
               >
-                All Markets
+                All
               </Button>
               <Button
-                data-testid="scope-watchlist"
+                variant={scope === "focus" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setScope("focus")}
+                className="h-9"
+                disabled={!focusSymbols.length}
+              >
+                Focus ({focusSymbols.length})
+              </Button>
+              <Button
                 variant={scope === "watchlist" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setScope("watchlist")}
-                className="h-8"
+                className="h-9"
                 disabled={!watchlistSymbols.length}
               >
                 Watchlist ({watchlistSymbols.length})
               </Button>
             </div>
-          </div>
-
-          {/* Active scope chips */}
-          {scope === "watchlist" && watchlistSymbols.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <span className="text-sm text-muted-foreground mr-2">
-                Watchlist:
-              </span>
-              {watchlistSymbols.map((symbol: string) => (
-                <Badge
-                  key={symbol}
-                  variant="secondary"
-                  className="text-xs"
-                  data-testid={`badge-${symbol}`}
+            {activeTab === "timeline" && (
+              <div className="flex gap-1 border-l border-border pl-3">
+                <Button
+                  variant={policyFilter === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setPolicyFilter("all")}
+                  className="h-9"
                 >
-                  {symbol}
-                </Badge>
-              ))}
-            </div>
-          )}
+                  All
+                </Button>
+                <Button
+                  variant={policyFilter === "policy" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setPolicyFilter("policy")}
+                  className="h-9"
+                >
+                  Policy
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* News Content */}
-        {isLoading ? (
-          <div className="space-y-6">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Card key={i} className="animate-pulse border-l-4 border-l-muted">
-                <CardContent className="p-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-6 bg-muted rounded-full w-32"></div>
-                      <div className="h-4 bg-muted rounded w-16"></div>
+        {activeTab === "timeline" && (
+          <>
+            {timelineLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i} className="animate-pulse">
+                    <CardContent className="p-4">
+                      <div className="h-4 bg-muted rounded w-3/4 mb-2" />
+                      <div className="h-3 bg-muted rounded w-1/2" />
+                      <div className="h-3 bg-muted rounded w-full mt-2" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : timelineError ? (
+              <EmptyStateCard
+                title="Could not load headlines"
+                description={dataMode === "live" ? "Rate limit or provider error. Try again or switch to Demo." : "Headlines could not be loaded. Try again."}
+                actionLabel="Retry"
+                onAction={() => refetchTimeline()}
+                variant="error"
+                icon={<Newspaper className="h-10 w-10 text-muted-foreground" />}
+                data-testid="news-timeline-error"
+              />
+            ) : groupedTimeline.length > 0 ? (
+              <div className="space-y-8">
+                {groupedTimeline.map(([dateKey, dateHeadlines]) => (
+                  <div key={dateKey}>
+                    <div className="flex items-center gap-2 pb-3 border-b border-border">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-foreground">
+                        {formatTimelineDate((dateHeadlines as Headline[])[0]?.published)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {(dateHeadlines as Headline[]).length} headlines
+                      </span>
                     </div>
-                    <div className="space-y-3">
-                      {Array.from({ length: 2 }).map((_, j) => (
-                        <div key={j} className="p-3 rounded-lg bg-muted/20">
-                          <div className="space-y-2">
-                            <div className="h-4 bg-muted rounded w-3/4"></div>
-                            <div className="h-3 bg-muted rounded w-1/2"></div>
-                            <div className="h-3 bg-muted rounded w-full"></div>
-                          </div>
-                        </div>
+                    <div className="space-y-3 mt-3">
+                      {(dateHeadlines as Headline[]).map((headline) => (
+                        <Card key={(headline as any).id} className="border-l-2 border-l-border">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <h3 className="font-medium text-foreground leading-tight">{headline.title}</h3>
+                                  {evidenceEnabled && (headline as any).source && (
+                                    <SourceChip
+                                      label={(headline as any).source}
+                                      href={(headline as any).url}
+                                    />
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                                  <span>{(headline as any).source}</span>
+                                  <span>•</span>
+                                  <TimeAgo date={headline.published} />
+                                </div>
+                                {headline.summary && (
+                                  <p className="text-sm text-muted-foreground mt-2">{headline.summary}</p>
+                                )}
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                  {(headline as any).symbols?.slice(0, 4).map((s: string) => (
+                                    <Badge key={s} variant="secondary" className="text-xs">
+                                      {s}
+                                    </Badge>
+                                  ))}
+                                  {(headline as any).url && (
+                                    <Button variant="ghost" size="sm" asChild className="h-8">
+                                      <a href={(headline as any).url} target="_blank" rel="noopener noreferrer">
+                                        Read more <ExternalLink className="h-3 w-3 ml-1" />
+                                      </a>
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
                       ))}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Disclaimer */}
-            <div className="bg-muted/50 border border-muted rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Information Only</span>
+                ))}
               </div>
-              <p className="text-xs text-muted-foreground">
-                This news analysis is for informational purposes only and should not be considered as financial advice. 
-                Impact analysis is AI-generated and may not reflect actual market conditions.
-              </p>
-            </div>
-
-            {/* Clustered News */}
-            {filteredClusters.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Users className="h-5 w-5 text-primary" />
-                  <h2 className="text-lg font-semibold">Trending Topics</h2>
-                  <Badge variant="secondary">{filteredClusters.length}</Badge>
-                </div>
-                <div className="space-y-4">
-                  {filteredClusters.map((cluster, index) => (
-                    <NewsClusterCard key={index} cluster={cluster} evidenceEnabled={evidenceEnabled} />
-                  ))}
-                </div>
-              </div>
+            ) : (
+              <EmptyStateCard
+                title={dataMode === "live" ? "No data available" : "No headlines"}
+                description={
+                  dataMode === "live"
+                    ? "No headlines returned. Try Refresh or switch to Demo mode for sample data."
+                    : scope === "focus" || scope === "watchlist"
+                      ? "No recent news for selected scope. Try All or add assets."
+                      : "No headlines match your filters."
+                }
+                actionLabel="Refresh"
+                onAction={() => refetchTimeline()}
+                icon={<Newspaper className="h-10 w-10 text-muted-foreground" />}
+              />
             )}
+          </>
+        )}
 
-            {/* Individual Headlines (unclustered) */}
-            {filteredHeadlines.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Newspaper className="h-5 w-5 text-primary" />
-                  <h2 className="text-lg font-semibold">Latest Headlines</h2>
-                  <Badge variant="secondary">{filteredHeadlines.length}</Badge>
-                </div>
-                <div className="space-y-4">
-                  {filteredHeadlines.map((headline) => (
-                    <Card key={headline.id} className="hover:shadow-md transition-all duration-200" data-testid={`news-headline-${headline.id}`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <h3 className="font-semibold text-foreground leading-tight">
-                                {headline.title}
-                              </h3>
-                              {evidenceEnabled && headline.source && (
-                                <SourceChip label={headline.source} href={headline.url} />
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 flex-wrap">
-                              <span className="font-medium">{headline.source}</span>
-                              <span>•</span>
-                              <TimeAgo date={headline.published} />
-                              {evidenceEnabled && headline.symbols && headline.symbols.length > 0 && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-primary">Matched: {headline.symbols.slice(0, 3).join(", ")}</span>
-                                </>
-                              )}
-                            </div>
-                            {headline.summary && (
-                              <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                                {headline.summary}
-                              </p>
-                            )}
-                            {headline.symbols && headline.symbols.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {headline.symbols.slice(0, 5).map((symbol: string) => (
-                                  <Badge key={symbol} variant="outline" className="text-xs">
-                                    {symbol}
-                                  </Badge>
-                                ))}
-                                {headline.symbols.length > 5 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    +{headline.symbols.length - 5} more
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                            {/* Impact Badge */}
-                            {headline.impactLevel && (
-                              <div className="mt-2">
-                                <Badge 
-                                  className={`text-xs ${getImpactColor(headline.impactLevel)}`}
-                                  variant="secondary"
-                                  data-testid={`badge-impact-${headline.id}`}
-                                >
-                                  <span className="flex items-center gap-1">
-                                    {getImpactIcon(headline.impactLevel)}
-                                    {headline.impactLevel.toUpperCase()} IMPACT
-                                  </span>
-                                </Badge>
-                              </div>
-                            )}
-                          </div>
-                          {headline.url && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="shrink-0"
-                              onClick={() => window.open(headline.url, '_blank')}
-                              data-testid={`button-external-${headline.id}`}
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+        {activeTab === "clusters" && (
+          <>
+            {clustersLoading ? (
+              <div className="space-y-4">
+                {[1, 2].map((i) => (
+                  <Card key={i} className="animate-pulse border-l-4 border-l-border">
+                    <CardContent className="p-4">
+                      <div className="h-5 bg-muted rounded w-32 mb-3" />
+                      <div className="space-y-2">
+                        <div className="h-4 bg-muted rounded w-full" />
+                        <div className="h-4 bg-muted rounded w-4/5" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            )}
-
-            {/* Empty state */}
-            {filteredClusters.length === 0 && filteredHeadlines.length === 0 && !isLoading && (
-              <div className="text-center py-12">
-                <Newspaper className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">
-                  {searchTerm ? 'No matching news found' : 'No news available'}
-                </h3>
-                <p className="text-muted-foreground mb-4">
-                  {searchTerm 
-                    ? 'Try adjusting your search terms or clearing the search.'
-                    : 'Check back soon for the latest market news and analysis.'
-                  }
-                </p>
-                {searchTerm && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setSearchTerm("")}
-                    data-testid="button-clear-search"
-                  >
-                    Clear Search
-                  </Button>
+            ) : dataMode === "live" && isMock ? (
+              <EmptyStateCard
+                title="No data available"
+                description="Sample data is not shown in Live mode. Switch to Demo in Settings to see sample clusters, or wait for live data."
+                actionLabel="Refresh"
+                onAction={() => refetchClusters()}
+                icon={<Newspaper className="h-10 w-10 text-muted-foreground" />}
+                data-testid="news-clusters-empty-live"
+              />
+            ) : (
+              <>
+                <div className="mb-4 p-3 bg-muted/50 rounded-md border border-border">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Information only</span>
+                    {dataMode === "demo" && isMock && (
+                      <DataStatusBadge status="demo" details="Sample data" />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    News analysis is for informational purposes. Impact is AI-generated.
+                  </p>
+                </div>
+                {filteredClusters.length > 0 && (
+                  <div className="space-y-4">
+                    <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Topics
+                      <Badge variant="secondary">{filteredClusters.length}</Badge>
+                    </h2>
+                    {filteredClusters.map((cluster, idx) => (
+                      <NewsClusterCard key={idx} cluster={cluster} evidenceEnabled={evidenceEnabled} />
+                    ))}
+                  </div>
                 )}
-              </div>
+                {filteredClusterHeadlines.length > 0 && (
+                  <div className="mt-6">
+                    <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+                      <Newspaper className="h-4 w-4" />
+                      Latest
+                      <Badge variant="secondary">{filteredClusterHeadlines.length}</Badge>
+                    </h2>
+                    <div className="space-y-3">
+                      {filteredClusterHeadlines.slice(0, 10).map((headline: any) => (
+                        <Card key={headline.id} className="border-l-2 border-l-border">
+                          <CardContent className="p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-medium text-foreground leading-tight">{headline.title}</h3>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {headline.source} • <TimeAgo date={headline.published} />
+                                </div>
+                              </div>
+                              {headline.url && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="shrink-0"
+                                  onClick={() => window.open(headline.url, "_blank")}
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {filteredClusters.length === 0 && filteredClusterHeadlines.length === 0 && !clustersLoading && (
+                  <EmptyStateCard
+                    title={searchTerm ? "No matching news" : "No news available"}
+                    description={searchTerm ? "Try different search terms." : "Check back later."}
+                    icon={<Newspaper className="h-10 w-10 text-muted-foreground" />}
+                  />
+                )}
+              </>
             )}
-          </div>
+          </>
         )}
       </main>
     </div>

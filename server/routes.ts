@@ -60,6 +60,16 @@ const earningsPredictSchema = z.object({
   symbol: z.string(),
 });
 
+const earningsAnalyzeTranscriptSchema = z.object({
+  symbol: z.string().optional(),
+  transcriptText: z.string().min(1),
+  date: z.string().optional(),
+});
+
+const optionsSignalsSchema = z.object({
+  symbol: z.string().min(1),
+});
+
 // Schema for economic impact analysis
 const econAnalyzeSchema = z.object({
   event: z.string(),
@@ -110,6 +120,13 @@ const assetOverviewSchema = z.object({
   symbol: z.string(),
   assetType: z.enum(["equity", "etf", "crypto", "fx", "commodity"]),
   frames: z.string().optional().default("1h,1d,1w,1m,3m,1y"),
+});
+
+const assetNarrativeSchema = z.object({
+  symbol: z.string().min(1),
+  days: z.string().optional().default("7").transform((v) => parseInt(v, 10)),
+  changePct: z.string().optional().transform((v) => (v ? parseFloat(v) : undefined)),
+  period: z.string().optional(),
 });
 
 const assetOverviewExplainSchema = z.object({
@@ -164,6 +181,16 @@ const eventsUpcomingSchema = z.object({
   days: z.string().optional().default("14").transform(val => parseInt(val)),
 });
 
+const eventsImpactSchema = z.object({
+  eventType: z.string().optional(),
+  horizon: z.string().optional().default("48").transform(val => parseInt(val, 10)),
+});
+
+const eventsImpactForAssetSchema = z.object({
+  symbol: z.string().min(1),
+  horizon: z.string().optional().default("48").transform(val => parseInt(val, 10)),
+});
+
 const eventsStudiesSchema = z.object({
   event: z.string(),
 });
@@ -196,7 +223,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const watchlist = await storage.getWatchlist();
       res.json(watchlist);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch watchlist" });
+      console.warn("Watchlist fetch failed (DB may be unavailable), returning empty list:", error instanceof Error ? error.message : error);
+      res.json([]);
     }
   });
 
@@ -453,105 +481,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Insights route (updated with context including policy data)
   app.post("/api/insights/explain", async (req, res) => {
     try {
-      const { text } = insightsSchema.parse(req.body);
-
-      // Get fresh context for AI insights
-      let contextInfo = "";
-      try {
-        // Get market sentiment
-        const sentimentResponse = await fetch(
-          "http://localhost:5000/api/sentiment",
-        );
-        if (sentimentResponse.ok) {
-          const sentimentData = await sentimentResponse.json();
-          contextInfo += `Market Sentiment (${sentimentData.lastUpdated}):\n`;
-          contextInfo += `- Sentiment Score: ${sentimentData.score}/100\n`;
-          contextInfo += `- Key Drivers:\n`;
-          sentimentData.drivers.forEach((driver: any) => {
-            contextInfo += `  • ${driver.label}: ${driver.explanation}\n`;
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch context:", error);
-        contextInfo = "Context unavailable at this time.";
+      const parsed = insightsSchema.safeParse(req.body ?? {});
+      const text = parsed.success ? parsed.data.text : String((req.body && (req.body as any).text) ?? "No question provided.");
+      if (!text?.trim()) {
+        return res.status(400).json({ error: "Missing or empty text. Please enter a question." });
       }
 
-      // Get policy context (Trump Index and Fedspeak)
-      let policyContext = "";
+      // Get fresh context for AI insights (with timeouts so we never hang)
+      let contextInfo = "";
+      const SENTIMENT_FETCH_MS = 5000;
+      const POLICY_CONTEXT_MS = 12000;
+
       try {
-        const { policyService } = await import("./policy");
-        
-        // Fetch Trump Index
-        const trumpIndex = await policyService.getTrumpIndex();
-        policyContext += `\nPolicy Context:\n`;
-        policyContext += `- Trump Policy Index z-score: ${trumpIndex.zScore.toFixed(2)} (${trumpIndex.zScore > 0.75 ? "High Policy Risk" : trumpIndex.zScore < -0.75 ? "Muted Policy Risk" : "Normal"}), as of ${new Date(trumpIndex.lastUpdated).toLocaleString()}\n`;
-        policyContext += `- 7-day change: ${trumpIndex.change7d > 0 ? '+' : ''}${trumpIndex.change7d.toFixed(2)}\n`;
-        
-        // Top policy-sensitive assets (with null safety)
-        if (trumpIndex.sensitiveAssets && Array.isArray(trumpIndex.sensitiveAssets)) {
-          const topAssets = trumpIndex.sensitiveAssets
-            .filter(a => a.sensitivity === "High" || a.sensitivity === "Moderate")
-            .slice(0, 3);
-          if (topAssets.length > 0) {
-            policyContext += `- Top policy-sensitive assets:\n`;
-            topAssets.forEach(asset => {
-              policyContext += `  • ${asset.symbol} (${asset.name}): ${asset.sensitivity} sensitivity, correlation ${asset.correlation.toFixed(2)}, ${asset.changePct > 0 ? '+' : ''}${asset.changePct.toFixed(2)}% today\n`;
+        const baseUrl = process.env.API_BASE_URL || `http://127.0.0.1:${process.env.PORT || 5000}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), SENTIMENT_FETCH_MS);
+        const sentimentResponse = await fetch(`${baseUrl}/api/sentiment`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (sentimentResponse.ok) {
+          const sentimentData = await sentimentResponse.json();
+          contextInfo += `Market Sentiment (${sentimentData.lastUpdated || "N/A"}):\n`;
+          contextInfo += `- Sentiment Score: ${sentimentData.score ?? "N/A"}/100\n`;
+          if (Array.isArray(sentimentData.drivers)) {
+            contextInfo += `- Key Drivers:\n`;
+            sentimentData.drivers.forEach((driver: any) => {
+              contextInfo += `  • ${driver.label || "—"}: ${driver.explanation || "—"}\n`;
             });
           }
         }
-
-        // Fetch Fedspeak (with null safety)
-        const fedspeak = await policyService.getFedspeak();
-        policyContext += `- Fedspeak tone: ${fedspeak.currentTone} (score ${fedspeak.toneScore.toFixed(2)}), as of ${new Date(fedspeak.lastUpdated).toLocaleString()}\n`;
-        
-        // Recent Fed quote
-        if (fedspeak.recentQuotes && Array.isArray(fedspeak.recentQuotes) && fedspeak.recentQuotes.length > 0) {
-          const firstQuote = fedspeak.recentQuotes[0];
-          policyContext += `- Recent Fed communication: "${firstQuote.text.substring(0, 150)}..." — ${firstQuote.speaker}\n`;
-        }
-
-        // Add policy context to main context
-        contextInfo += policyContext;
       } catch (error) {
-        console.error("Failed to fetch policy context:", error);
-        // Continue without policy context - it's optional
+        if ((error as any)?.name === "AbortError") {
+          console.warn("Insights: sentiment fetch timed out, proceeding without it.");
+        } else {
+          console.error("Failed to fetch sentiment context:", error);
+        }
+        contextInfo = contextInfo || "Context unavailable at this time.";
       }
 
-      // Check if OpenAI API key is available
-      if (!process.env.OPENAI_API_KEY) {
-        // Return mock response with context
-        const mockResponse = {
-          summary: `Based on current context: ${contextInfo.slice(0, 200)}... Market analysis indicates mixed signals with defensive rotation patterns emerging. Your portfolio's diversification across equity, ETF, and crypto assets provides balanced exposure to different market segments.`,
-          whyThisMatters: [
-            "Fresh Data Integration: Analysis uses live portfolio P&L and current market sentiment scores rather than historical patterns.",
-            "Real-time Context: Current holdings performance and sentiment drivers provide actionable insights for today's market conditions.",
-            "Dynamic Assessment: Live volatility indicators and yield movements inform immediate risk positioning decisions.",
-          ],
-        };
-        return res.json(mockResponse);
-      }
+      // Get policy context (Trump Index and Fedspeak) with null safety and timeout
+      let policyContext = "";
+      await Promise.race([
+        (async () => {
+          try {
+            const { policyService } = await import("./policy");
+            const trumpIndex = await policyService.getTrumpIndex();
+            const zScore = trumpIndex?.zScore ?? 0;
+            const change7d = trumpIndex?.change7d ?? 0;
+            policyContext += `\nPolicy Context:\n`;
+            policyContext += `- Trump Policy Index z-score: ${Number(zScore).toFixed(2)} (${zScore > 0.75 ? "High Policy Risk" : zScore < -0.75 ? "Muted Policy Risk" : "Normal"}), as of ${trumpIndex?.lastUpdated ? new Date(trumpIndex.lastUpdated).toLocaleString() : "N/A"}\n`;
+            policyContext += `- 7-day change: ${change7d > 0 ? "+" : ""}${Number(change7d).toFixed(2)}\n`;
 
-      // Use real OpenAI API with fresh context
-      // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are a cross-asset analyst. Today's date is ${new Date().toLocaleDateString()}. Incorporate the provided policy context (Trump Index and Fedspeak tone) when relevant to the user's query, but DO NOT invent policy data that is not in the context. If policy context is missing, don't speculate. Only use the supplied context data and today's date for your analysis. If data is missing from the context, explicitly state 'not available in current context'. Respond with JSON in this format: { 'summary': string, 'whyThisMatters': string[] }`,
-          },
-          {
-            role: "user",
-            content: `Current Context:\n${contextInfo}\n\nUser Query: ${text}\n\nProvide analysis using ONLY the context data above and today's date. Reference specific numbers and data points from the context. When policy data is provided, incorporate it into your analysis where relevant.`,
-          },
+            if (trumpIndex?.sensitiveAssets && Array.isArray(trumpIndex.sensitiveAssets)) {
+              const topAssets = trumpIndex.sensitiveAssets
+                .filter((a: any) => a.sensitivity === "High" || a.sensitivity === "Moderate")
+                .slice(0, 3);
+              if (topAssets.length > 0) {
+                policyContext += `- Top policy-sensitive assets:\n`;
+                topAssets.forEach((asset: any) => {
+                  const corr = asset.correlation != null ? Number(asset.correlation).toFixed(2) : "—";
+                  const pct = asset.changePct != null ? `${asset.changePct > 0 ? "+" : ""}${Number(asset.changePct).toFixed(2)}%` : "—";
+                  policyContext += `  • ${asset.symbol || "—"} (${asset.name || "—"}): ${asset.sensitivity} sensitivity, correlation ${corr}, ${pct} today\n`;
+                });
+              }
+            }
+
+            const fedspeak = await policyService.getFedspeak();
+            const toneScore = fedspeak?.toneScore ?? 0;
+            policyContext += `- Fedspeak tone: ${fedspeak?.currentTone ?? "N/A"} (score ${Number(toneScore).toFixed(2)}), as of ${fedspeak?.lastUpdated ? new Date(fedspeak.lastUpdated).toLocaleString() : "N/A"}\n`;
+
+            if (fedspeak?.recentQuotes?.length) {
+              const firstQuote = fedspeak.recentQuotes[0];
+              const quoteText = firstQuote?.text ? firstQuote.text.substring(0, 150) + "..." : "—";
+              policyContext += `- Recent Fed communication: "${quoteText}" — ${firstQuote?.speaker ?? "N/A"}\n`;
+            }
+
+            contextInfo += policyContext;
+          } catch (policyErr) {
+            console.error("Failed to fetch policy context:", policyErr);
+          }
+        })(),
+        new Promise<void>((resolve) => setTimeout(resolve, POLICY_CONTEXT_MS)),
+      ]);
+
+      const buildFallbackResponse = () => ({
+        summary: `Based on current context: ${contextInfo.slice(0, 200)}... Market analysis indicates mixed signals with defensive rotation patterns emerging. Your portfolio's diversification across equity, ETF, and crypto assets provides balanced exposure to different market segments.`,
+        whyThisMatters: [
+          "Fresh Data Integration: Analysis uses live portfolio P&L and current market sentiment scores rather than historical patterns.",
+          "Real-time Context: Current holdings performance and sentiment drivers provide actionable insights for today's market conditions.",
+          "Dynamic Assessment: Live volatility indicators and yield movements inform immediate risk positioning decisions.",
         ],
-        response_format: { type: "json_object" },
       });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
-      res.json(result);
+      if (!process.env.OPENAI_API_KEY?.trim()) {
+        return res.json(buildFallbackResponse());
+      }
+
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: `You are a cross-asset analyst. Today's date is ${new Date().toLocaleDateString()}. Incorporate the provided policy context (Trump Index and Fedspeak tone) when relevant to the user's query, but DO NOT invent policy data that is not in the context. If policy context is missing, don't speculate. Only use the supplied context data and today's date for your analysis. If data is missing from the context, explicitly state 'not available in current context'. Respond with JSON in this format: { 'summary': string, 'whyThisMatters': string[] }`,
+            },
+            {
+              role: "user",
+              content: `Current Context:\n${contextInfo}\n\nUser Query: ${text}\n\nProvide analysis using ONLY the context data above and today's date. Reference specific numbers and data points from the context. When policy data is provided, incorporate it into your analysis where relevant.`,
+            },
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        const rawContent = response.choices?.[0]?.message?.content;
+        if (!rawContent?.trim()) {
+          console.warn("Insights: empty OpenAI response, returning fallback");
+          return res.json(buildFallbackResponse());
+        }
+        let result: { summary?: string; whyThisMatters?: string[] };
+        try {
+          result = JSON.parse(rawContent);
+        } catch (parseErr) {
+          console.warn("Insights: invalid JSON from OpenAI, returning fallback", parseErr);
+          return res.json(buildFallbackResponse());
+        }
+        if (!result.summary || !Array.isArray(result.whyThisMatters)) {
+          result = {
+            summary: result.summary || "Analysis completed.",
+            whyThisMatters: Array.isArray(result.whyThisMatters) ? result.whyThisMatters : ["Context-based analysis delivered."],
+          };
+        }
+        return res.json(result);
+      } catch (openaiError) {
+        console.error("Insights OpenAI error (returning fallback):", openaiError);
+        return res.json(buildFallbackResponse());
+      }
     } catch (error) {
-      res.status(500).json({ error: "Failed to generate insights" });
+      console.error("Insights explain error:", error);
+      const message = error instanceof Error ? error.message : "Failed to generate insights";
+      res.status(500).json({ error: "Failed to generate insights", details: process.env.NODE_ENV === "development" ? message : undefined });
     }
   });
 
@@ -648,7 +715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             contextInfo += `- Top Mover: ${summary.topMover.symbol} ${summary.topMover.change >= 0 ? "+" : ""}$${summary.topMover.change.toLocaleString()} (${summary.topMover.changePercent.toFixed(2)}%)\n`;
           }
 
-          contextInfo += `- Holdings: ${positions.map((p) => `${p.symbol} (${p.assetType})`).join(", ")}\n\n`;
+          contextInfo += `- Holdings: ${positions.map((p: { symbol: string; assetType: string }) => `${p.symbol} (${p.assetType})`).join(", ")}\n\n`;
         }
 
         // Get market sentiment
@@ -1000,6 +1067,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/earnings/analyze-transcript — transcript summary, tone, risk language
+  app.post("/api/earnings/analyze-transcript", async (req, res) => {
+    try {
+      const parsed = earningsAnalyzeTranscriptSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() });
+      }
+      const { symbol, transcriptText, date } = parsed.data;
+      const { earningsTranscriptService } = await import("./earnings-transcript-service");
+      const summary = await earningsTranscriptService.analyzeTranscript(
+        transcriptText,
+        symbol,
+        date
+      );
+      res.json(summary);
+    } catch (error) {
+      console.error("Earnings analyze-transcript error:", error);
+      res.status(500).json({ error: "Failed to analyze transcript" });
+    }
+  });
+
+  // GET /api/earnings/transcript-summary?symbol=AAPL — mock/sample summary for symbol (for UI without paste)
+  app.get("/api/earnings/transcript-summary", async (req, res) => {
+    try {
+      const symbol = (req.query.symbol as string)?.trim();
+      if (!symbol) {
+        return res.status(400).json({ error: "symbol query is required" });
+      }
+      const { earningsTranscriptService } = await import("./earnings-transcript-service");
+      const summary = earningsTranscriptService.getMockSummary(symbol);
+      res.json(summary);
+    } catch (error) {
+      console.error("Earnings transcript-summary error:", error);
+      res.status(500).json({ error: "Failed to get transcript summary" });
+    }
+  });
+
+  // GET /api/options/signals?symbol=TSLA — options signal lite: OI, IV, put/call, unusual + AI explanation
+  app.get("/api/options/signals", async (req, res) => {
+    try {
+      const parsed = optionsSignalsSchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid query", details: parsed.error.flatten() });
+      }
+      const { symbol } = parsed.data;
+      const { optionsSignalsService } = await import("./options-signals-service");
+      const result = await optionsSignalsService.getSignals(symbol);
+      res.json(result);
+    } catch (error) {
+      console.error("Options signals error:", error);
+      res.status(500).json({ error: "Failed to get options signals" });
+    }
+  });
+
+  // GET /api/crypto/onchain-signals — decision signals (exchange inflow, dormant wallet, stablecoin delta, etc.)
+  app.get("/api/crypto/onchain-signals", async (req, res) => {
+    try {
+      const { onChainSignalsService } = await import("./onchain-signals-service");
+      const result = await onChainSignalsService.getSignals();
+      res.json(result);
+    } catch (error) {
+      console.error("On-chain signals error:", error);
+      res.status(500).json({ error: "Failed to get on-chain signals" });
+    }
+  });
+
   app.post("/api/earnings/predict", async (req, res) => {
     try {
       const { symbol } = earningsPredictSchema.parse(req.body);
@@ -1065,8 +1198,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return eventDate >= now && eventDate <= cutoff;
       });
 
+      // Attach event impact preview (Historically: X% over 48h) per event
+      const { getEventTypeFromEvent, getImpactPreview } = await import("./event-impact-engine.js");
+      const eventsWithImpact = filteredEvents.map((event: any) => {
+        const eventType = getEventTypeFromEvent(event.event, event.category);
+        const impactPreview = eventType ? getImpactPreview(eventType, 48, 3) : undefined;
+        return { ...event, eventType: eventType ?? undefined, impactPreview };
+      });
+
       res.json({
-        events: filteredEvents,
+        events: eventsWithImpact,
         meta: {
           isMock: true,
           source: "Sample Data",
@@ -1287,21 +1428,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Market Recap (daily)
+  // Market Recap (daily). Returns { data, meta: { isMock } } for Data Mode awareness.
   app.get("/api/recap/daily", async (req, res) => {
     try {
-      // Try real data first
       try {
         const { marketRecapService } = await import("./market-recap");
         const recap = await marketRecapService.getDailyRecap();
-        res.json(recap);
+        res.json({ data: recap, meta: { isMock: false } });
       } catch (apiError) {
         console.warn(
           "Market recap API error, falling back to mock data:",
           apiError,
         );
         const recap = await storage.getMarketRecap();
-        res.json(recap);
+        res.json({ data: recap, meta: { isMock: true } });
       }
     } catch (error) {
       console.error("Market recap error:", error);
@@ -1480,11 +1620,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { SentimentAnalyzer } = await import("./sentiment");
     const { createLiveFreshness, createFallbackFreshness } = await import("./freshness");
 
-    try {
-      if (useMock) {
-        throw new Error("Mock mode requested");
-      }
+    if (useMock) {
+      return {
+        data: {
+          overallIndex: 65,
+          regime: "Risk-On",
+          change: 3,
+          subscores: [
+            { name: "Risk Appetite", score: 72, weight: 0.4, change: 5, trend: "up" },
+            { name: "Credit Conditions", score: 58, weight: 0.25, change: -2, trend: "down" },
+            { name: "Volatility Environment", score: 63, weight: 0.35, change: 1, trend: "neutral" }
+          ],
+          drivers: [
+            { label: "Equity Performance", value: 1.2, contribution: 29, note: "SPY: +1.1%, QQQ: +1.4%, IWM: +1.0%" },
+            { label: "Credit Conditions", value: -0.3, contribution: 15, note: "HYG underperformance vs LQD: -0.3%" },
+            { label: "Market Volatility", value: 18.5, contribution: 22, note: "10-day realized volatility: 18.5% (lower is better)" }
+          ],
+          as_of: new Date().toISOString()
+        },
+        freshness: createFallbackFreshness("Mock mode"),
+      };
+    }
 
+    try {
       // Use the sentiment analyzer as the market drivers system
       const sentimentAnalyzer = new SentimentAnalyzer();
       const marketIndex = await sentimentAnalyzer.calculateSentimentIndex();
@@ -1708,12 +1866,56 @@ Provide response in JSON format: { "summary": "...", "keyHighlights": ["...", ".
         
         freshness = createLiveFreshness("Mock Economic Calendar", 60); // 1 hour cache
       }
-      
-      res.json(withFreshness(eventsData, freshness));
+
+      // Event Impact Engine: attach eventType + impactPreview per event
+      const { getEventTypeFromEvent, getImpactPreview } = await import("./event-impact-engine.js");
+      const eventsWithImpact = eventsData.map((event: any) => {
+        const eventType = getEventTypeFromEvent(event.event, event.category);
+        const impactPreview = eventType ? getImpactPreview(eventType, 48, 3) : undefined;
+        return { ...event, eventType: eventType ?? undefined, impactPreview };
+      });
+
+      res.json(withFreshness(eventsWithImpact, freshness));
       
     } catch (error) {
       console.error("Events upcoming error:", error);
       res.status(500).json({ error: "Failed to fetch upcoming events" });
+    }
+  });
+
+  // GET /api/events/impact?eventType=cpi_yoy_us&horizon=48
+  app.get("/api/events/impact", async (req, res) => {
+    try {
+      const parsed = eventsImpactSchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid query", details: parsed.error.flatten() });
+      }
+      const { eventType, horizon } = parsed.data;
+      const { getImpactStats } = await import("./event-impact-engine.js");
+      const stats = eventType
+        ? getImpactStats(eventType, horizon)
+        : []; // no eventType = return empty; could alternatively return all
+      res.json({ stats, horizon });
+    } catch (error) {
+      console.error("Events impact error:", error);
+      res.status(500).json({ error: "Failed to fetch event impact" });
+    }
+  });
+
+  // GET /api/events/impact/for-asset?symbol=BTC&horizon=48
+  app.get("/api/events/impact/for-asset", async (req, res) => {
+    try {
+      const parsed = eventsImpactForAssetSchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid query", details: parsed.error.flatten() });
+      }
+      const { symbol, horizon } = parsed.data;
+      const { getImpactForAsset } = await import("./event-impact-engine.js");
+      const stats = getImpactForAsset(symbol, horizon);
+      res.json({ symbol, horizon, stats });
+    } catch (error) {
+      console.error("Events impact for-asset error:", error);
+      res.status(500).json({ error: "Failed to fetch event impact for asset" });
     }
   });
 
@@ -2037,6 +2239,56 @@ Provide response in JSON format: {
     }
   });
 
+  // GET /api/asset/narrative?symbol=TSLA&days=7&changePct=-3.1&period=7d (AI Market Narratives: why price moved)
+  app.get("/api/asset/narrative", async (req, res) => {
+    try {
+      const parsed = assetNarrativeSchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid query", details: parsed.error.flatten() });
+      }
+      const { symbol, days, changePct, period } = parsed.data;
+
+      let headlines: { title: string; summary?: string; source?: string }[] = [];
+      try {
+        const { headlinesService } = await import("./headlines");
+        const timeline = await headlinesService.getTimeline({
+          tickers: [symbol],
+          limit: 15,
+          allowMock: true,
+        });
+        headlines = timeline.map((h) => ({
+          title: h.title,
+          summary: h.summary,
+          source: h.source,
+        }));
+      } catch (e) {
+        const fallback = await storage.getHeadlinesTimeline([symbol], 15);
+        headlines = fallback.map((h: any) => ({
+          title: h.title || "",
+          summary: h.summary,
+          source: h.source,
+        }));
+      }
+
+      const { assetNarrativeService } = await import("./asset-narrative-service");
+      const priceContext =
+        changePct != null && period
+          ? { changePct, period }
+          : changePct != null
+            ? { changePct, period: `${days}d` }
+            : undefined;
+      const narrative = await assetNarrativeService.generateNarrative(
+        symbol,
+        headlines,
+        priceContext
+      );
+      res.json(narrative);
+    } catch (error) {
+      console.error("Asset narrative error:", error);
+      res.status(500).json({ error: "Failed to generate asset narrative" });
+    }
+  });
+
   // MODULE E: Policy & Political Indexes API
   app.get("/api/policy/trump-index", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -2066,6 +2318,37 @@ Provide response in JSON format: {
     }
   });
 
+  // Policy news intensity (0–100) from recent headlines for aggregated policy risk
+  app.get("/api/policy/news-intensity", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const asOf = new Date().toISOString();
+    try {
+      const { headlinesService } = await import("./headlines");
+      const headlines = await headlinesService.getTimeline({ limit: 50, allowMock: true });
+      const enriched = headlines.map((h: any) => {
+        const { isPolicy, policyTopics, policyIntensity } = classifyPolicyRelevance(h);
+        return { ...h, isPolicy, policyTopics, policyIntensity };
+      });
+      const policyHeadlines = enriched.filter((h: any) => h.isPolicy);
+      const policyNewsIntensity =
+        policyHeadlines.length === 0
+          ? 0
+          : Math.round(
+              (policyHeadlines.reduce((s: number, h: any) => s + h.policyIntensity, 0) /
+                policyHeadlines.length) *
+                100
+            );
+      res.json({
+        policyNewsIntensity: Math.min(100, policyNewsIntensity),
+        policyHeadlineCount: policyHeadlines.length,
+        asOf,
+      });
+    } catch (error) {
+      console.warn("Policy news intensity fallback:", error);
+      res.json({ policyNewsIntensity: 0, policyHeadlineCount: 0, asOf });
+    }
+  });
+
   // MODULE F: Market Regime Engine API
   app.get("/api/regime/snapshot", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -2078,6 +2361,53 @@ Provide response in JSON format: {
     } catch (error) {
       console.error("Regime snapshot API error:", error);
       res.status(500).json({ error: "Failed to get regime snapshot" });
+    }
+  });
+
+  app.get("/api/regime/cross-asset", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      const { crossAssetRegimeService } = await import("./cross-asset-regime-service");
+      const result = await crossAssetRegimeService.getCrossAssetRegime();
+      res.json(result);
+    } catch (error) {
+      console.error("Cross-asset regime API error:", error);
+      res.status(500).json({ error: "Failed to get cross-asset regime" });
+    }
+  });
+
+  // Market volatility: VIX and/or SPY daily closes for real vol proxy
+  app.get("/api/market/volatility", async (req, res) => {
+    try {
+      const days = Math.min(30, Math.max(20, parseInt(String(req.query.days), 10) || 30));
+      const { alphaVantage } = await import("./alpha");
+      const asOf = new Date().toISOString();
+
+      let vix: number | undefined;
+      try {
+        const vixData = await alphaVantage.getDailyAdjusted("VIX");
+        if (vixData?.length > 0 && typeof vixData[0].close === "number") {
+          vix = vixData[0].close;
+        }
+      } catch {
+        // VIX not always available from Alpha Vantage; ignore
+      }
+
+      let spyDailyCloses: number[] = [];
+      try {
+        const spyData = await alphaVantage.getDailyAdjusted("SPY");
+        if (Array.isArray(spyData) && spyData.length >= 2) {
+          const closes = spyData.slice(0, days).map((d: { close: number }) => d.close).filter((c: number) => Number.isFinite(c));
+          spyDailyCloses = closes.reverse();
+        }
+      } catch (e) {
+        console.warn("SPY history for volatility failed:", e);
+      }
+
+      res.json({ vix: vix ?? null, spyDailyCloses: spyDailyCloses.length >= 2 ? spyDailyCloses : null, asOf });
+    } catch (error) {
+      console.error("Market volatility API error:", error);
+      res.status(500).json({ error: "Failed to get volatility data" });
     }
   });
 

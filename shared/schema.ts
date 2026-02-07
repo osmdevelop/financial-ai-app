@@ -387,6 +387,27 @@ export type EconomicImpact = {
   as_of: string;
 };
 
+// Event Impact Engine: historical impact stats per (eventType, asset, horizon)
+export type EventImpactStats = {
+  eventType: string;
+  assetId: string;
+  horizonHours: number;
+  meanMovePct: number;
+  stdDevPct?: number;
+  percentile10Pct?: number;
+  percentile90Pct?: number;
+  sampleCount: number;
+  lastUpdated: string;
+};
+
+export type EventImpactPreviewItem = {
+  assetId: string;
+  meanMovePct: number;
+  percentile10Pct?: number;
+  percentile90Pct?: number;
+  horizonHours: number;
+};
+
 // New types for transaction-based features
 
 export type AssetSearchResult = {
@@ -798,6 +819,77 @@ export const assetBriefRequestSchema = z.object({
   overviewPayload: assetOverviewResponseSchema,
 });
 
+// AI Market Narrative (per-asset: why price moved)
+export type AssetNarrativeCitation = {
+  source: string;
+  label: string;
+  value?: string;
+};
+
+export type AssetNarrativeResponse = {
+  summary: string;
+  drivers: string[];
+  citations?: AssetNarrativeCitation[];
+  priceContext?: { changePct: number; period: string };
+  as_of: string;
+};
+
+// Earnings call & filing: transcript summary, tone, risk language
+export type EarningsTranscriptSummary = {
+  symbol: string;
+  date?: string;
+  summary: string;
+  toneScore: number; // 1–10, higher = more confident
+  toneLabel: "cautious" | "neutral" | "confident";
+  riskPhrases: string[];
+  riskLevel: "low" | "medium" | "high";
+  previousToneScore?: number; // for "tone change over time"
+  as_of: string;
+};
+
+// Options signal lite (not full flow): OI change, IV spike, put/call shift, unusual flag + AI explanation
+export type OptionsSignalType = "oi_change" | "iv_spike" | "put_call_shift" | "unusual";
+
+export type OptionsSignalLite = {
+  symbol: string;
+  signalType: OptionsSignalType;
+  label: string;
+  value: number;
+  unit?: string;
+  percentileOrFlag?: string; // e.g. "unusual for this ticker", "90th %ile"
+  as_of: string;
+};
+
+export type OptionsSignalsResponse = {
+  symbol: string;
+  signals: OptionsSignalLite[];
+  explanation?: string;
+  as_of: string;
+};
+
+// Crypto on-chain decision signals (actionable, not raw metrics)
+export type OnChainSignalType =
+  | "exchange_inflow_spike"
+  | "exchange_outflow_spike"
+  | "dormant_wallet_activation"
+  | "stablecoin_supply_delta"
+  | "whale_accumulation";
+
+export type OnChainSignal = {
+  signalType: OnChainSignalType;
+  label: string;
+  implication: string;
+  suggestedAction: string;
+  severity: "info" | "warning" | "alert";
+  as_of: string;
+};
+
+export type OnChainSignalsResponse = {
+  signals: OnChainSignal[];
+  summary?: string;
+  as_of: string;
+};
+
 // Price Alert Creation
 export const priceAlertCreateSchema = z.object({
   symbol: z.string(),
@@ -987,3 +1079,15 @@ export const marketRegimeSnapshotSchema = z.object({
 
 export type RegimeDriver = z.infer<typeof regimeDriverSchema>;
 export type MarketRegimeSnapshot = z.infer<typeof marketRegimeSnapshotSchema>;
+
+// Cross-asset risk gauge: single view of regime across equities, crypto, bonds + AI insight when conflicted
+export type AssetClassRegime = "Risk-On" | "Neutral" | "Risk-Off";
+
+export type CrossAssetRegimeResponse = {
+  equities: { regime: AssetClassRegime; label?: string };
+  crypto: { regime: AssetClassRegime; label?: string };
+  bonds: { regime: AssetClassRegime; tightening: boolean; label?: string };
+  conflict: boolean;
+  aiInsight?: string;
+  as_of: string;
+};

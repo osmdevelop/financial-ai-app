@@ -43,8 +43,10 @@ export function EvidencePanel({
     }
   };
 
-  const getDataStatus = (): "live" | "mock" | "partial" | "unavailable" => {
+  const getDataStatus = (): "live" | "mock" | "partial" | "unavailable" | "demo" => {
     if (!meta) return "live";
+    if (meta.dataStatus === "demo" || meta.dataStatus === "unavailable") return meta.dataStatus;
+    if (meta.dataStatus === "cached" || meta.dataStatus === "partial") return meta.dataStatus;
     if (meta.isMock) return "mock";
     if (meta.missingInputs && meta.missingInputs.length > 0) return "partial";
     return "live";

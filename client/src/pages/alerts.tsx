@@ -54,7 +54,7 @@ export default function Alerts() {
     <div className="flex-1 flex flex-col overflow-hidden" data-testid="alerts-page">
       <Header
         title="Alerts"
-        subtitle="Configure in-app notifications for market changes"
+        subtitle="Avoid getting stopped out — instant alerts for Trump headlines, regime shifts, and Fedspeak"
       />
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6">

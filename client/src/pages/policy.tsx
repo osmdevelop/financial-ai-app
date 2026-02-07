@@ -108,16 +108,16 @@ export default function Policy() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {focusAssets.map(asset => {
-                  const sensitivity = trumpIndex.sensitivities?.find(
-                    (s: PolicySensitivity) => s.symbol.toLowerCase() === asset.symbol.toLowerCase()
+                  const sensitiveAsset = trumpIndex.sensitiveAssets?.find(
+                    (s) => s.symbol.toLowerCase() === asset.symbol.toLowerCase()
                   );
-                  const hasSensitivity = !!sensitivity;
+                  const hasSensitivity = !!sensitiveAsset;
                   const zScore = trumpIndex.zScore;
                   
                   let impactLevel = "Low";
                   let impactColor = "text-green-600";
                   if (hasSensitivity) {
-                    const beta = Math.abs(sensitivity.trumpBeta || 0);
+                    const beta = Math.abs(sensitiveAsset.correlation ?? sensitiveAsset.rollingImpact ?? 0);
                     if (beta > 0.5 && Math.abs(zScore) > 1) {
                       impactLevel = "High";
                       impactColor = "text-red-600";
@@ -131,9 +131,9 @@ export default function Policy() {
                     <div key={asset.id} className="flex items-center justify-between p-2 bg-card rounded-lg border">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="font-medium">{asset.symbol}</Badge>
-                        {sensitivity && (
+                        {sensitiveAsset && (
                           <span className="text-xs text-muted-foreground">
-                            Beta: {sensitivity.trumpBeta?.toFixed(2) || "N/A"}
+                            Corr: {(sensitiveAsset.correlation ?? sensitiveAsset.rollingImpact ?? 0).toFixed(2)}
                           </span>
                         )}
                       </div>

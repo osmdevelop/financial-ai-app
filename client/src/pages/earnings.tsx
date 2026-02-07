@@ -1,20 +1,32 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, TrendingUp, TrendingDown, DollarSign, Target, Lightbulb } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Calendar, TrendingUp, TrendingDown, DollarSign, Target, Lightbulb, FileText, ChevronDown, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/constants";
 import { format, addDays, subDays } from "date-fns";
 import { useFocusAssets } from "@/hooks/useFocusAssets";
+import { useEarningsTranscriptSummary } from "@/hooks/useEarningsTranscriptSummary";
 import { Link } from "wouter";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Earnings() {
   const [timeframe, setTimeframe] = useState<string>("this_week");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteSymbol, setPasteSymbol] = useState("");
+  const [pasteText, setPasteText] = useState("");
+  const { toast } = useToast();
   const { focusAssets } = useFocusAssets();
   const focusSymbols = focusAssets.map(a => a.symbol);
 
@@ -22,6 +34,24 @@ export default function Earnings() {
     queryKey: ["/api/earnings/upcoming"],
     queryFn: () => api.getUpcomingEarnings(),
   });
+
+  const transcriptSymbol = focusSymbols[0] ?? earnings?.[0]?.symbol;
+  const { data: transcriptSummary, isLoading: transcriptLoading } = useEarningsTranscriptSummary(
+    transcriptSymbol ?? undefined
+  );
+
+  const analyzeMutation = useMutation({
+    mutationFn: (opts: { symbol?: string; transcriptText: string; date?: string }) =>
+      api.analyzeEarningsTranscript(opts),
+    onSuccess: (data) => {
+      setAnalyzedSummary(data);
+      toast({ title: "Transcript analyzed", description: `Tone: ${data.toneLabel}, Risk: ${data.riskLevel}` });
+    },
+    onError: () => toast({ title: "Analysis failed", variant: "destructive" }),
+  });
+  const [analyzedSummary, setAnalyzedSummary] = useState<typeof transcriptSummary | null>(null);
+
+  const displaySummary = analyzedSummary ?? transcriptSummary;
 
   const getTimeframeLabel = (tf: string) => {
     switch (tf) {
@@ -155,7 +185,100 @@ export default function Earnings() {
             ))}
           </div>
         )}
-        
+
+        {/* Transcript insights: summary, tone, risk language */}
+        {(transcriptSymbol || displaySummary) && (
+          <Card className="mt-6" data-testid="card-transcript-insights">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Transcript Insights
+                {transcriptSymbol && (
+                  <Badge variant="secondary" className="font-normal">{transcriptSymbol}</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {transcriptLoading && !displaySummary ? (
+                <div className="h-20 bg-muted/30 rounded animate-pulse" />
+              ) : displaySummary ? (
+                <>
+                  <p className="text-sm text-foreground">{displaySummary.summary}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">
+                      Tone: {displaySummary.toneLabel} ({displaySummary.toneScore}/10)
+                    </Badge>
+                    {displaySummary.previousToneScore != null && (
+                      <Badge variant="secondary">
+                        Prior quarter: {displaySummary.previousToneScore}/10
+                      </Badge>
+                    )}
+                    <Badge
+                      variant={displaySummary.riskLevel === "high" ? "destructive" : displaySummary.riskLevel === "medium" ? "default" : "secondary"}
+                    >
+                      Risk: {displaySummary.riskLevel}
+                    </Badge>
+                  </div>
+                  {displaySummary.riskPhrases && displaySummary.riskPhrases.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Risk language detected
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {displaySummary.riskPhrases.map((p, i) => (
+                          <Badge key={i} variant="outline" className="text-xs font-normal">
+                            {p}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    As of {displaySummary.as_of ? format(new Date(displaySummary.as_of), "PPp") : "—"}
+                  </p>
+                </>
+              ) : null}
+
+              <Collapsible open={pasteOpen} onOpenChange={setPasteOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-1 -ml-2">
+                    <ChevronDown className={`h-4 w-4 transition-transform ${pasteOpen ? "rotate-180" : ""}`} />
+                    Paste transcript to analyze
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-3 space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Symbol (e.g. AAPL)"
+                    value={pasteSymbol}
+                    onChange={(e) => setPasteSymbol(e.target.value)}
+                    className="flex h-9 w-32 rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                  />
+                  <Textarea
+                    placeholder="Paste earnings call transcript text..."
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    className="min-h-[120px] text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!pasteText.trim() || analyzeMutation.isPending}
+                    onClick={() =>
+                      analyzeMutation.mutate({
+                        symbol: pasteSymbol.trim() || undefined,
+                        transcriptText: pasteText.trim(),
+                      })
+                    }
+                  >
+                    {analyzeMutation.isPending ? "Analyzing…" : "Analyze"}
+                  </Button>
+                </CollapsibleContent>
+              </Collapsible>
+            </CardContent>
+          </Card>
+        )}
+
         {earnings?.length === 0 && !isLoading && (
           <EmptyStateCard
             title="No earnings reports scheduled"

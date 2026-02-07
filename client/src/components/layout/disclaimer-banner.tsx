@@ -2,12 +2,13 @@ import { AlertTriangle } from "lucide-react";
 
 export function DisclaimerBanner() {
   return (
-    <div className="bg-yellow-50 dark:bg-yellow-900/20 border-t border-yellow-200 dark:border-yellow-800 px-4 py-2">
+    <div className="bg-muted/80 dark:bg-muted/40 border-t border-border px-4 py-2 shrink-0">
       <div className="max-w-7xl mx-auto">
-        <p className="text-yellow-800 dark:text-yellow-200 text-sm text-center flex items-center justify-center gap-2">
-          <AlertTriangle className="w-4 h-4" />
+        <p className="text-muted-foreground text-xs text-center flex items-center justify-center gap-2 flex-wrap">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span>
-            <strong>Disclaimer:</strong> Informational purposes only. Not investment advice. No brokerage services.
+            MRKT is a market intelligence platform. We are not a brokerage, investment advisor, or financial institution.
+            All analysis is for informational purposes only. Not investment advice. No brokerage services.
           </span>
         </p>
       </div>

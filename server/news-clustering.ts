@@ -305,7 +305,9 @@ Consider factors like:
         embeddingCache.set(text, embedding);
         embeddings.push(embedding);
       } catch (error) {
-        console.error("Embedding error for text:", text.substring(0, 50));
+        if (process.env.NODE_ENV !== "test") {
+          console.warn("Embedding skipped (missing OPENAI_API_KEY or API error), using fallback for:", text.substring(0, 50));
+        }
         // Use zero vector as fallback
         embeddings.push(new Array(1536).fill(0));
       }

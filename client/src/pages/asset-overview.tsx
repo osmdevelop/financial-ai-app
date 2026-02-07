@@ -54,6 +54,9 @@ import type {
 } from "@shared/schema";
 import { PolicyImpactPanel } from "@/components/asset/PolicyImpactPanel";
 import { useWatchlist } from "@/hooks/useWatchlist";
+import { useEventImpactForAsset } from "@/hooks/useEventImpact";
+import { useAssetNarrative } from "@/hooks/useAssetNarrative";
+import { EVENT_TYPE_LABELS } from "@/utils/eventImpact";
 
 export default function AssetOverview() {
   const { toast } = useToast();
@@ -70,6 +73,8 @@ export default function AssetOverview() {
   });
   const [showStats, setShowStats] = useState(true);
   const { isInWatchlist, addToWatchlist, removeFromWatchlist, isFull } = useWatchlist();
+
+  const { data: eventImpactData } = useEventImpactForAsset(selectedAsset?.symbol, 48);
 
   // Asset search query
   const { data: searchResults = [] } = useQuery({
@@ -94,6 +99,12 @@ export default function AssetOverview() {
     enabled: !!selectedAsset,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
+
+  const { data: narrative, isLoading: narrativeLoading } = useAssetNarrative(
+    selectedAsset?.symbol,
+    7,
+    overview ? { changePct: overview.changePct, period: "7d" } : undefined
+  );
 
   // Set default asset
   useEffect(() => {
@@ -406,6 +417,91 @@ export default function AssetOverview() {
               symbol={overview.symbol}
               assetName={selectedAsset?.name || overview.symbol}
             />
+
+            {/* Event Impact: events that historically move this asset */}
+            {eventImpactData?.stats && eventImpactData.stats.length > 0 && (
+              <Card data-testid="card-event-impact">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Events That Historically Move {overview.symbol}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Mean % move over 48h after release (with 10th–90th percentile band).
+                  </p>
+                  <ul className="space-y-2">
+                    {eventImpactData.stats.slice(0, 6).map((s) => {
+                      const label = EVENT_TYPE_LABELS[s.eventType] ?? s.eventType;
+                      const sign = s.meanMovePct >= 0 ? "+" : "";
+                      const band =
+                        s.percentile10Pct != null && s.percentile90Pct != null
+                          ? ` (${s.percentile10Pct.toFixed(1)}% to ${s.percentile90Pct.toFixed(1)}%)`
+                          : "";
+                      return (
+                        <li
+                          key={`${s.eventType}-${s.assetId}`}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <span className="font-medium">{label}</span>
+                          <span className="tabular-nums text-muted-foreground">
+                            {sign}{s.meanMovePct.toFixed(1)}%{band} · n={s.sampleCount}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Why it moved: AI Market Narrative (per-asset) */}
+            {selectedAsset && (narrativeLoading || narrative) && (
+              <Card data-testid="card-why-it-moved">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Brain className="h-5 w-5" />
+                    Why It Moved
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {narrativeLoading && !narrative ? (
+                    <Skeleton className="h-4 w-full" />
+                  ) : narrative ? (
+                    <>
+                      <p className="text-sm text-foreground">{narrative.summary}</p>
+                      {narrative.drivers && narrative.drivers.length > 0 && (
+                        <ul className="space-y-1 text-sm text-muted-foreground">
+                          {narrative.drivers.map((d, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="w-1 h-1 bg-primary rounded-full mt-2 shrink-0" />
+                              {d}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {narrative.citations && narrative.citations.length > 0 && (
+                        <div className="pt-2 border-t border-border">
+                          <p className="text-xs font-medium text-muted-foreground mb-1">Evidence</p>
+                          <ul className="text-xs text-muted-foreground space-y-0.5">
+                            {narrative.citations.slice(0, 5).map((c, i) => (
+                              <li key={i}>
+                                {c.label}
+                                {c.value ? `: ${c.value}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground pt-1">
+                        As of {new Date(narrative.as_of).toLocaleString()}
+                      </p>
+                    </>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Multi-Timeframe Charts */}
             <Card>
